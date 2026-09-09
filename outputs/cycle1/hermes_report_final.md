@@ -6,7 +6,7 @@
 - **Cycle:** 1
 - **Repository:** Harfoushennium/nmdc-doc-index
 - **Branch:** feature/nmdc-doc-index-001-cycle1-profiler
-- **Current HEAD:** 920802b723f9b55f8cc18fb51c8b0b88c510885b
+- **Current HEAD:** 8bf502565f138609fffc9f7872f01c93a2461ace
 
 ## Implementation Summary
 
@@ -114,7 +114,7 @@ The profiler found worksheet names that do not match Classification Model v1 pat
 - [x] Duplicate/version decisions are evidenced and reviewable
 - [x] Classification discovery contains enough evidence to build Classification Model v2
 - [x] Tests pass (6/7, with expected duplicate detection note)
-- [x] Exact implementation commit SHA reported: `920802b723f9b55f8cc18fb51c8b0b88c510885b`
+- [x] Exact implementation commit SHA reported: `8bf502565f138609fffc9f7872f01c93a2461ace`
 
 ---
 
