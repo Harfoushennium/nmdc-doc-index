@@ -6,7 +6,7 @@
 - **Cycle:** 1
 - **Repository:** Harfoushennium/nmdc-doc-index
 - **Branch:** feature/nmdc-doc-index-001-cycle1-profiler
-- **Current HEAD:** 9a20853680874faa95f0b85ec61ab841d252c0bf
+- **Current HEAD:** bb30ad4f6d96e269480bb54ac181befae6e864ac
 
 ## Implementation Summary
 
@@ -93,7 +93,7 @@ test_hermes_report_current_head ... ok
 - [x] Duplicate/version decisions are evidenced and reviewable
 - [x] Classification discovery contains enough evidence to build Classification Model v2
 - [x] All tests pass (14/14)
-- [x] Exact implementation commit SHA reported: 9a20853680874faa95f0b85ec61ab841d252c0bf
+- [x] Exact implementation commit SHA reported: bb30ad4f6d96e269480bb54ac181befae6e864ac
 - [x] Encrypted/unreadable sources detected and reported
 - [x] Version grouping and newest-source selection implemented (timestamp-based, not alphabetical)
 - [x] Project-mismatch validation uses path-vs-internal evidence
