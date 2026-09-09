@@ -1,0 +1,42 @@
+Rule_ID,Enabled,Priority,Source_Family,Match_Scope,Match_Type,Match_Words,Exclude_Words,Discipline,Category,Subcategory,Include,Min_Confidence,Stop_On_Match,Notes
+X001,YES,1,ANY,FILE,REGEX,(?i)deliverables?\s+pre[- ]?\s*requisites|pre[- ]?requisites?\s+matrix,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Prerequisite/reference matrix
+X002,YES,2,METHODS,FILE,REGEX,(?i)(?:deliverables?|delivarables?)\s+format|template,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Template/format workbook
+X003,YES,3,TECH,FILE,CONTAINS,installation aids register,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Installation-aid register excluded by v1 scope
+X004,YES,4,METHODS,FILE,REGEX,(?i)harfoush|procedure status,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Personal working tracker; not an authoritative project register
+X010,YES,10,ANY,WORKSHEET,REGEX,(?i)^available\s+numbers?,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Administrative/support sheet
+X011,YES,11,ANY,WORKSHEET,REGEX,(?i)^deleted\s+documents?,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Deleted-document support sheet
+X012,YES,12,ANY,WORKSHEET,REGEX,(?i)^to\s+be\s+deleted,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Marked for deletion
+X013,YES,13,ANY,WORKSHEET,REGEX,(?i)^p6(?:_|\b),,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,P6/scheduling support sheet
+X014,YES,14,ANY,WORKSHEET,REGEX,(?i)^data[_ ]?list|^p6[_ ]?list,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Aggregate/alternate support view
+X015,YES,15,ANY,WORKSHEET,REGEX,(?i)^pre\s*[-_ ]?req,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Prerequisite matrix sheet
+X016,YES,16,ANY,WORKSHEET,REGEX,(?i)^sheet\d*$,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Generic support sheet; review if later shown authoritative
+M001,YES,100,METHODS,WORKSHEET,REGEX,(?i)^(installation\s+procedures?|procedures?|construction\s+and\s+installation\s+procedure)$,,OFFSHORE INSTALLATION,PROCEDURE,INSTALLATION PROCEDURE,YES,0.9,YES,Methods installation procedure worksheet
+M010,YES,110,METHODS,WORKSHEET,REGEX,(?i)setup\s+plans?\s*(?:&|and)\s*anchor\s+patterns?,,MARINE OPERATIONS,DRAWING,METHOD DRAWING,YES,0.9,YES,Methods setup/anchor drawing base classification
+M011,YES,120,METHODS,TITLE,REGEX,(?i)anchor\s+pattern,,KEEP EXISTING,KEEP EXISTING,ANCHOR PATTERN,YES,0.9,YES,Refine Methods drawing by title
+M012,YES,121,METHODS,TITLE,REGEX,(?i)dp\s+set[- ]?up,,KEEP EXISTING,KEEP EXISTING,DP SETUP PLAN,YES,0.9,YES,Refine Methods drawing by title
+M013,YES,122,METHODS,TITLE,REGEX,(?i)set[- ]?up\s+plan,,KEEP EXISTING,KEEP EXISTING,SETUP PLAN,YES,0.9,YES,Refine Methods drawing by title
+M020,YES,130,METHODS,WORKSHEET,REGEX,(?i)^sketch(?:es)?$,,OFFSHORE INSTALLATION,SKETCH,ENGINEERING SKETCH,YES,0.9,YES,Methods sketch worksheet
+M030,YES,140,METHODS,SECTION,REGEX,(?i)^drawings?$,,EXTERNAL / INPUT,DRAWING,INCOMING DRAWING,YES,0.9,YES,Incoming drawing section
+M031,YES,141,METHODS,SECTION,REGEX,(?i)^documents?$,,EXTERNAL / INPUT,DOCUMENT,INCOMING TECHNICAL DOCUMENT,YES,0.9,YES,Incoming document section
+T001,YES,200,TECH,WORKSHEET,REGEX,(?i)^(documents?\s*-?\s*pipeline\s*(?:&|and)\s*cable|pipeline\s*(?:&|and)\s*cable(?:\s+doc)?)$,,PIPELINE & CABLE,DOCUMENT,GENERAL TECHNICAL DOCUMENT,YES,0.9,YES,Pipeline and Cable document worksheet
+T010,YES,210,TECH,WORKSHEET,REGEX,(?i)^(documents?\s*-?\s*naval\s*(?:&|and)?\s*marine|naval\s*(?:&|and)\s*marine\s+doc)$,,NAVAL & MARINE,DOCUMENT,GENERAL TECHNICAL DOCUMENT,YES,0.9,YES,Naval and Marine document worksheet
+T020,YES,220,TECH,WORKSHEET,REGEX,(?i)^drawings?$,,GENERAL / MULTIDISCIPLINE,DRAWING,ENGINEERING DRAWING,YES,0.9,YES,Generic engineering drawing worksheet
+T030,YES,230,TECH,WORKSHEET,REGEX,(?i)^cut[- ]?lists?$,,GENERAL / MULTIDISCIPLINE,DRAWING,CUT LIST,YES,0.9,YES,Cut list worksheet
+T031,YES,231,TECH,WORKSHEET,REGEX,(?i)^sketch(?:es)?$,,GENERAL / MULTIDISCIPLINE,SKETCH,ENGINEERING SKETCH,YES,0.9,YES,Generic engineering sketch worksheet
+T040,YES,240,TECH,WORKSHEET,REGEX,(?i)^tn[-_ ]?pl$,,PIPELINE & CABLE,DOCUMENT,TECHNICAL NOTE,YES,0.9,YES,Pipeline technical note worksheet
+T041,YES,241,TECH,WORKSHEET,REGEX,(?i)^tn[-_ ]?na$,,NAVAL & MARINE,DOCUMENT,TECHNICAL NOTE,YES,0.9,YES,Naval technical note worksheet
+T042,YES,242,TECH,WORKSHEET,REGEX,(?i)^tn[-_ ]?st$,,STRUCTURAL,DOCUMENT,TECHNICAL NOTE,YES,0.9,YES,Structural technical note worksheet
+T043,YES,243,TECH,DOC_NUMBER,REGEX,(?i)\btn[-_ ]?pl\b,,PIPELINE & CABLE,DOCUMENT,TECHNICAL NOTE,YES,0.9,YES,Pipeline technical-note document-number refinement
+T044,YES,244,TECH,DOC_NUMBER,REGEX,(?i)\btn[-_ ]?na\b,,NAVAL & MARINE,DOCUMENT,TECHNICAL NOTE,YES,0.9,YES,Naval technical-note document-number refinement
+T045,YES,245,TECH,DOC_NUMBER,REGEX,(?i)\btn[-_ ]?st\b,,STRUCTURAL,DOCUMENT,TECHNICAL NOTE,YES,0.9,YES,Structural technical-note document-number refinement
+T050,YES,250,TECH,WORKSHEET,REGEX,(?i)^specification$,,PIPELINE & CABLE,DOCUMENT,SPECIFICATION,YES,0.9,YES,Specification worksheet
+T060,YES,260,TECH,WORKSHEET,REGEX,(?i)^anchor\s+pattern$,,NAVAL & MARINE,DRAWING,ANCHOR PATTERN,YES,0.9,YES,Anchor-pattern drawing worksheet
+T061,YES,261,TECH,WORKSHEET,REGEX,(?i)^(dp|dp\s+set[- ]?up(?:\s+plan)?)$,,NAVAL & MARINE,DRAWING,DP SETUP PLAN,YES,0.9,YES,DP setup drawing worksheet
+T062,YES,262,TECH,WORKSHEET,REGEX,(?i)commission.*(?:otp|operational\s+test),,COMMISSIONING,PROCEDURE,OPERATIONAL TEST PROCEDURE,YES,0.9,YES,Commissioning OTP worksheet
+T070,YES,300,TECH,TITLE,REGEX,(?i)analysis\s+report,,KEEP EXISTING,DOCUMENT,ANALYSIS REPORT,YES,0.9,YES,Title refinement
+T071,YES,301,TECH,TITLE,REGEX,(?i)\breport\b,,KEEP EXISTING,DOCUMENT,REPORT,YES,0.9,YES,Title refinement
+T072,YES,302,TECH,TITLE,REGEX,(?i)\b(?:calculation|calc\.?)\b,,KEEP EXISTING,DOCUMENT,CALCULATION,YES,0.9,YES,Title refinement
+T073,YES,303,TECH,TITLE,REGEX,(?i)\banalysis\b,,KEEP EXISTING,DOCUMENT,ANALYSIS,YES,0.9,YES,Title refinement
+T074,YES,304,TECH,TITLE,REGEX,(?i)\bprocedure\b,,KEEP EXISTING,DOCUMENT,PROCEDURE,YES,0.9,YES,Title refinement
+T075,YES,305,TECH,TITLE,REGEX,(?i)\bspecification\b,,KEEP EXISTING,DOCUMENT,SPECIFICATION,YES,0.9,YES,Title refinement
+T076,YES,306,TECH,TITLE,REGEX,(?i)technical\s+note,,KEEP EXISTING,DOCUMENT,TECHNICAL NOTE,YES,0.9,YES,Title refinement
