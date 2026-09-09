@@ -1,0 +1,56 @@
+name: Cycle 1 profiler validation
+
+on:
+  push:
+    branches:
+      - feature/nmdc-doc-index-001-cycle1-profiler
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Compile profiler
+        run: python -m py_compile profiler.py nmdc_profiler/*.py tests/test_profiler.py
+
+      - name: Run Cycle 1 profiler against real DATA
+        run: python profiler.py
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Ensure source DATA was not changed
+        run: |
+          if ! git diff --quiet -- DATA; then
+            echo 'ERROR: profiler changed DATA/'
+            git diff -- DATA
+            exit 1
+          fi
+
+      - name: Commit deterministic Cycle 1 outputs
+        if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add outputs/cycle1/source_inventory.csv outputs/cycle1/workbook_profiles.json outputs/cycle1/source_selection_report.md outputs/cycle1/classification_discovery.csv
+          if git diff --cached --quiet; then
+            echo 'Outputs already current.'
+          else
+            git commit -m 'chore: regenerate Cycle 1 profiler outputs [skip ci]'
+            git push
+          fi
