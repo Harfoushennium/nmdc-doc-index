@@ -1,0 +1,85 @@
+[
+  {
+    "case_id": "M2369_PROC",
+    "data_start": 9,
+    "distinct_documents": 21,
+    "distinct_revisions": 63,
+    "event_records": 119,
+    "header_end": 8,
+    "header_start": 5,
+    "hyperlink_targets_preserved": 0,
+    "reason": "",
+    "rows_with_identity": 63,
+    "source_file": "DATA/METHODS/1 Completed Project  Deliverables/2369 - NMGL Delivarables.xlsx",
+    "status": "INCLUDE",
+    "warnings": [],
+    "worksheet": "Installation Procedures "
+  },
+  {
+    "case_id": "M2891_INCOMING",
+    "data_start": 10,
+    "distinct_documents": 15,
+    "distinct_revisions": 17,
+    "event_records": 17,
+    "header_end": 9,
+    "header_start": 5,
+    "hyperlink_targets_preserved": 1,
+    "reason": "",
+    "rows_with_identity": 17,
+    "source_file": "DATA/METHODS/1 Completed Project  Deliverables/2891- BU HASEER Delivarables.xlsx",
+    "status": "INCLUDE",
+    "warnings": [
+      "DOCUMENT_NO_FALLBACK_COMPANY"
+    ],
+    "worksheet": "Incomming DOC and DRG"
+  },
+  {
+    "case_id": "M2171_NONSTANDARD",
+    "data_start": 4,
+    "distinct_documents": 31,
+    "distinct_revisions": 103,
+    "event_records": 104,
+    "header_end": 3,
+    "header_start": 2,
+    "hyperlink_targets_preserved": 0,
+    "reason": "",
+    "rows_with_identity": 104,
+    "source_file": "DATA/METHODS/2171-2172 -Document Deliverables LATEST.xlsx",
+    "status": "INCLUDE",
+    "warnings": [
+      "DATE_TEXT_PRESERVED"
+    ],
+    "worksheet": "2171-2172"
+  },
+  {
+    "case_id": "T2820_PIPELINE",
+    "data_start": 9,
+    "distinct_documents": 86,
+    "distinct_revisions": 88,
+    "event_records": 111,
+    "header_end": 8,
+    "header_start": 5,
+    "hyperlink_targets_preserved": 30,
+    "reason": "",
+    "rows_with_identity": 88,
+    "source_file": "DATA/TECH/2820-DOCUMENT REGISTER-NEW 30-04-2026.xlsx",
+    "status": "INCLUDE",
+    "warnings": [
+      "DATE_TEXT_PRESERVED"
+    ],
+    "worksheet": "Documents - Pipeline & Cable"
+  },
+  {
+    "case_id": "T3291_CLIENT",
+    "distinct_documents": 0,
+    "distinct_revisions": 0,
+    "event_records": 0,
+    "hyperlink_targets_preserved": 0,
+    "reason": "Verified alternate client duplicate view; authoritative population is represented elsewhere in the same workbook",
+    "rows_with_identity": 0,
+    "source_file": "DATA/TECH/3291 DOCUMENT REGISTER Latest.xlsx",
+    "status": "EXCLUDED",
+    "warnings": [],
+    "worksheet": "CLIENT"
+  }
+]

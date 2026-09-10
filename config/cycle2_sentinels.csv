@@ -1,0 +1,6 @@
+Case_ID,Source_File,Worksheet,Expected_Action
+M2369_PROC,DATA/METHODS/1 Completed Project  Deliverables/2369 - NMGL Delivarables.xlsx,Installation Procedures,INCLUDE
+M2891_INCOMING,DATA/METHODS/1 Completed Project  Deliverables/2891- BU HASEER Delivarables.xlsx,Incomming DOC and DRG,INCLUDE
+M2171_NONSTANDARD,DATA/METHODS/2171-2172 -Document Deliverables LATEST.xlsx,2171-2172,INCLUDE
+T2820_PIPELINE,DATA/TECH/2820-DOCUMENT REGISTER-NEW 30-04-2026.xlsx,Documents - Pipeline & Cable,INCLUDE
+T3291_CLIENT,DATA/TECH/3291 DOCUMENT REGISTER Latest.xlsx,CLIENT,EXCLUDE
