@@ -20,6 +20,11 @@ def main() -> int:
         model = read_sheet_model(source, root, sheet)
         print("\n===", item["Source File"], "::", repr(sheet), "===")
         print("reason:", item["Reason"], item["Warnings"], "size", model.max_row, "x", model.max_col)
+        if "2745-PP-GE-001" in item["Source File"] or "2705 -DOCUMENT" in item["Source File"] or "7279-OS" in item["Source File"]:
+            print("top cells rows 1-8:")
+            for (r, c), value in sorted(model.cells.items()):
+                if r <= 8:
+                    print("  ", (r, c, value))
         headers = []
         for (r, c), value in sorted(model.cells.items()):
             if r > min(model.max_row, 30):
