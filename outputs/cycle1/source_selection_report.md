@@ -10,7 +10,7 @@
 - Superseded: **3**
 - Review required at workbook-selection level: **1**
 - Encrypted/unreadable: **1**
-- Classification rows requiring review: **34**
+- Classification rows requiring review: **0**
 
 ## Exact byte duplicate groups
 
@@ -27,8 +27,8 @@
 - `DATA/METHODS/1. Delivarables  FORMAT.xlsx` — Template/format workbook
 - `DATA/METHODS/Deliverables Pre- Requisites Matrix.xlsx` — Prerequisite/reference matrix
 - `DATA/METHODS/Harfoush/ANCHOR PATTERN Procedure status Harfoush 10-7-2026.xlsx` — Personal working tracker; not an authoritative project register
-- `DATA/TECH/2035 Installation Aids Register Sep 2024.xlsx` — Installation-aid register excluded by v1 scope
-- `DATA/TECH/2790 Installation Aids Register Sep 2024.xlsx` — Installation-aid register excluded by v1 scope
+- `DATA/TECH/2035 Installation Aids Register Sep 2024.xlsx` — Installation-aid register excluded by v2 scope
+- `DATA/TECH/2790 Installation Aids Register Sep 2024.xlsx` — Installation-aid register excluded by v2 scope
 
 ## Worksheet exclusions / support views
 
@@ -40,14 +40,14 @@
 - `DATA/METHODS/Harfoush/ANCHOR PATTERN Procedure status Harfoush 10-7-2026.xlsx :: APs DLS-4200` — Personal working tracker; not an authoritative project register
 - `DATA/METHODS/Harfoush/ANCHOR PATTERN Procedure status Harfoush 10-7-2026.xlsx :: APs SAFEEN3000` — Personal working tracker; not an authoritative project register
 - `DATA/METHODS/Harfoush/ANCHOR PATTERN Procedure status Harfoush 10-7-2026.xlsx :: PROCEDURES` — Personal working tracker; not an authoritative project register
-- `DATA/TECH/2035 Installation Aids Register Sep 2024.xlsx :: Sheet1` — Installation-aid register excluded by v1 scope
+- `DATA/TECH/2035 Installation Aids Register Sep 2024.xlsx :: Sheet1` — Installation-aid register excluded by v2 scope
 - `DATA/TECH/2207 DOCUMENT REGISTER CAMPAIGN II.xlsx :: Sheet1` — Generic support sheet; review if later shown authoritative
 - `DATA/TECH/2734-2735-DOCUMENT REGISTER.xlsx :: Sheet1` — Generic support sheet; review if later shown authoritative
 - `DATA/TECH/2745-PP-GE-001-MDR Rev_2.xlsx :: Data_List_Final_03` — Aggregate/alternate support view
 - `DATA/TECH/2745-PP-GE-001-MDR Rev_2.xlsx :: Data_List_Final_04` — Aggregate/alternate support view
 - `DATA/TECH/2745-PP-GE-001-MDR Rev_2.xlsx :: P6_Data` — P6/scheduling support sheet
 - `DATA/TECH/2745-PP-GE-001-MDR Rev_2.xlsx :: P6_List_Final` — P6/scheduling support sheet
-- `DATA/TECH/2790 Installation Aids Register Sep 2024.xlsx :: Sheet1` — Installation-aid register excluded by v1 scope
+- `DATA/TECH/2790 Installation Aids Register Sep 2024.xlsx :: Sheet1` — Installation-aid register excluded by v2 scope
 - `DATA/TECH/2820-DOCUMENT REGISTER.xlsx :: to be deleted` — Marked for deletion
 - `DATA/TECH/3262 DOCUMENT REGISTER.xlsx :: Available Numbers` — Administrative/support sheet
 - `DATA/TECH/3262 DOCUMENT REGISTER.xlsx :: Deleted Documents` — Deleted-document support sheet
@@ -59,6 +59,7 @@
 - `DATA/TECH/3278 DOCUMENT REGISTER.xlsx :: Sheet1` — Generic support sheet; review if later shown authoritative
 - `DATA/TECH/3278 DOCUMENT REGISTER.xlsx :: Sheet2` — Generic support sheet; review if later shown authoritative
 - `DATA/TECH/3278 DOCUMENT REGISTER.xlsx :: Sheet3` — Generic support sheet; review if later shown authoritative
+- `DATA/TECH/3291 DOCUMENT REGISTER Latest.xlsx :: CLIENT` — Verified alternate client duplicate view; authoritative population is represented elsewhere in the same workbook
 - `DATA/TECH/4232 DOCUMENT REGISTER-UPDATED.xlsx :: Sheet3` — Generic support sheet; review if later shown authoritative
 
 ## Project mismatches
@@ -67,37 +68,7 @@
 
 ## Unknown layouts / review required
 
-- `DATA/METHODS/1 Completed Project  Deliverables/2369 - NMGL Delivarables.xlsx`
-- `DATA/METHODS/1 Completed Project  Deliverables/2891- BU HASEER Delivarables.xlsx`
-- `DATA/METHODS/2035 - UMM Shaif Delivarables.xlsx`
-- `DATA/METHODS/2171-2172 -Document Deliverables LATEST.xlsx`
-- `DATA/METHODS/2300-2302 -CRPO 82-83 Deliveables.xlsx`
-- `DATA/METHODS/2412- 2413 -CRPO 86 Delivarables.xlsx`
-- `DATA/METHODS/2462 -TB-3 ADNOC Delivarables.xlsx`
-- `DATA/METHODS/2631 - 7 JKT ADNOC Delivarables.xlsx`
-- `DATA/METHODS/2642  -HAIL & GHASHA  Delivarables.xlsx`
-- `DATA/METHODS/2683 - 20 MOL Delivarables.xlsx`
-- `DATA/METHODS/2734 -CRPO 128 Delivarables.xlsx`
-- `DATA/METHODS/2745  -EPS-2 and PDP Delivarables.xlsx`
-- `DATA/METHODS/2790-2792 -CRPO 136-137 Delivarables.xlsx`
-- `DATA/METHODS/2800-HULRK Adnoc Delivarables.xlsx`
-- `DATA/METHODS/2820 - LOWER ZAKum LTD Deliverables.xlsx`
-- `DATA/METHODS/2913 -TAIWAN Delivarables.xlsx`
-- `DATA/METHODS/8405 -Delma Delivarables.xlsx`
-- `DATA/METHODS/E-2964-  ADNOC Delivarables.xlsx`
-- `DATA/METHODS/E-3012 - ADNOC Delivarables.xlsx`
-- `DATA/METHODS/E-3088- ADNOC Delivarables.xlsx`
-- `DATA/TECH/2642-DOCUMENT REGISTER.xlsx`
-- `DATA/TECH/2705 -DOCUMENT REGISTER.xlsx`
-- `DATA/TECH/2745-DOCUMENT REGISTER-REV-4-.xlsx`
-- `DATA/TECH/2800-DOCUMENT REGISTER.xlsx`
-- `DATA/TECH/2820-DOCUMENT REGISTER.xlsx`
-- `DATA/TECH/2913-DOCUMENT REGISTER.xlsx`
-- `DATA/TECH/3262 DOCUMENT REGISTER.xlsx`
-- `DATA/TECH/3278 DOCUMENT REGISTER.xlsx`
-- `DATA/TECH/3291 DOCUMENT REGISTER Latest.xlsx`
-- `DATA/TECH/6214 DOCUMENT REGISTER-UPDATED.xlsx`
-- `DATA/TECH/7279-OS Document register.xlsx`
+- None
 
 ## DATA integrity
 

@@ -1,9 +1,10 @@
-name: Cycle 1 profiler validation
+name: Profiler and classification validation
 
 on:
   push:
     branches:
       - feature/nmdc-doc-index-001-cycle1-profiler
+      - feature/classification-model-v2
   pull_request:
     branches:
       - master
@@ -12,7 +13,7 @@ permissions:
   contents: write
 
 jobs:
-  validate:
+  validate-linux:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -25,13 +26,49 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Compile profiler
-        run: python -m py_compile profiler.py nmdc_profiler/*.py tests/test_profiler.py
+      - name: Compile profiler and tests
+        run: python -m compileall -q profiler.py nmdc_profiler tests
 
-      - name: Run Cycle 1 profiler against real DATA
+      - name: Run profiler against real DATA
         run: python profiler.py
 
-      - name: Run tests
+      - name: Verify deterministic profiler outputs
+        run: |
+          sha256sum \
+            outputs/cycle1/source_inventory.csv \
+            outputs/cycle1/workbook_profiles.json \
+            outputs/cycle1/source_selection_report.md \
+            outputs/cycle1/classification_discovery.csv > /tmp/first.sha256
+          python profiler.py
+          sha256sum \
+            outputs/cycle1/source_inventory.csv \
+            outputs/cycle1/workbook_profiles.json \
+            outputs/cycle1/source_selection_report.md \
+            outputs/cycle1/classification_discovery.csv > /tmp/second.sha256
+          diff -u /tmp/first.sha256 /tmp/second.sha256
+
+      - name: Ensure current Classification v2 gaps are resolved
+        run: |
+          python - <<'PY'
+          import csv
+          from pathlib import Path
+
+          path = Path('outputs/cycle1/classification_discovery.csv')
+          with path.open(newline='', encoding='utf-8-sig') as f:
+              rows = list(csv.DictReader(f))
+          review = [r for r in rows if r.get('proposed_action') == 'REVIEW_REQUIRED']
+          print(f'Classification rows: {len(rows)}')
+          print(f'REVIEW_REQUIRED rows: {len(review)}')
+          if review:
+              for row in review[:50]:
+                  print(row.get('workbook_path'), '|', row.get('worksheet_name'), '|', row.get('original_section'))
+              raise SystemExit('Current real DATA still contains unresolved Classification v2 rows')
+          PY
+
+      - name: Verify real-data semantic sentinels
+        run: python tests/verify_real_data_semantics.py
+
+      - name: Run complete regression suite
         run: python -m unittest discover -s tests -v
 
       - name: Ensure no Python runtime artifacts are tracked
@@ -49,7 +86,7 @@ jobs:
             exit 1
           fi
 
-      - name: Commit deterministic Cycle 1 outputs
+      - name: Commit deterministic profiler outputs
         if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
         run: |
           git config user.name 'github-actions[bot]'
@@ -58,6 +95,72 @@ jobs:
           if git diff --cached --quiet; then
             echo 'Outputs already current.'
           else
-            git commit -m 'chore: regenerate Cycle 1 profiler outputs [skip ci]'
+            git commit -m 'chore: regenerate profiler outputs [skip ci]'
             git push
           fi
+
+  validate-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Compile profiler and tests
+        shell: pwsh
+        run: python -m compileall -q profiler.py nmdc_profiler tests
+
+      - name: Run profiler against real DATA
+        shell: pwsh
+        run: python profiler.py
+
+      - name: Ensure current Classification v2 gaps are resolved
+        shell: pwsh
+        run: |
+          python -c "import csv; from pathlib import Path; rows=list(csv.DictReader(Path('outputs/cycle1/classification_discovery.csv').open(newline='', encoding='utf-8-sig'))); review=[r for r in rows if r.get('proposed_action') == 'REVIEW_REQUIRED']; print(f'Classification rows: {len(rows)}'); print(f'REVIEW_REQUIRED rows: {len(review)}'); assert not review, f'Unresolved rows: {len(review)}'"
+
+      - name: Verify real-data semantic sentinels
+        shell: pwsh
+        run: python tests/verify_real_data_semantics.py
+
+      - name: Run complete regression suite
+        shell: pwsh
+        run: python -m unittest discover -s tests -v
+
+      - name: Ensure no Python runtime artifacts are tracked
+        shell: pwsh
+        run: |
+          $tracked = git ls-files | Select-String -Pattern '(^|/)(__pycache__/|.*\.py[cod]$)'
+          if ($tracked) {
+            $tracked
+            throw 'Python runtime artifacts must not be tracked.'
+          }
+
+      - name: Ensure source DATA was not changed
+        shell: pwsh
+        run: |
+          git diff --quiet -- DATA
+          if ($LASTEXITCODE -ne 0) {
+            git diff -- DATA
+            throw 'Profiler changed DATA/'
+          }
+
+      - name: Verify Windows output cleanliness
+        shell: pwsh
+        run: |
+          git diff --exit-code -- outputs/cycle1
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Windows profiler regeneration changed committed outputs.'
+          }
+          $status = git status --porcelain
+          if ($status) {
+            $status
+            throw 'Windows validation left a dirty working tree.'
+          }
+          Write-Host 'Windows output cleanliness: PASS'

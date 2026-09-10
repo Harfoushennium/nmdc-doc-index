@@ -1,0 +1,400 @@
+import unittest
+from pathlib import Path
+
+import nmdc_profiler as profiler
+
+
+class ClassificationV2Tests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.rules_path = Path(__file__).resolve().parents[1] / "config" / "classification_rules.csv"
+        cls.rules = profiler.load_rules(cls.rules_path)
+
+    def classify(self, family, **evidence):
+        return profiler.apply_classification(self.rules, family, evidence)
+
+    def assert_classification(self, result, discipline, category, subcategory):
+        self.assertEqual("INCLUDE", result["status"])
+        self.assertEqual(discipline, result["discipline"])
+        self.assertEqual(category, result["category"])
+        self.assertEqual(subcategory, result["subcategory"])
+
+    def discovery_row(
+        self,
+        family="TECH",
+        path="DATA/TECH/4000 DOCUMENT REGISTER.xlsx",
+        project="4000",
+        sheet_name="Documents",
+        headers=None,
+        doc_numbers=None,
+        titles=None,
+    ):
+        workbooks = [
+            {
+                "source_family": family,
+                "relative_path": path,
+                "readability_status": "READABLE",
+                "inferred_project_numbers": [project] if project else [],
+                "project_mismatch_findings": [],
+                "sheets": [
+                    {
+                        "sheet_name": sheet_name,
+                        "sections": [],
+                        "representative_header_values": headers or [],
+                        "sample_document_numbers": doc_numbers or [],
+                        "sample_titles": titles or [],
+                    }
+                ],
+            }
+        ]
+        rows = profiler.classification_rows(workbooks, self.rules)
+        self.assertEqual(1, len(rows))
+        return rows[0]
+
+    def test_01_methods_installation_procedures_trailing_space(self):
+        result = self.classify("METHODS", WORKSHEET="Installation Procedures ")
+        self.assert_classification(
+            result, "OFFSHORE INSTALLATION", "PROCEDURE", "INSTALLATION PROCEDURE"
+        )
+        self.assertIn("M001", result["rule_ids"])
+
+    def test_02_methods_verified_nonstandard_structural_exception(self):
+        result = self.classify(
+            "METHODS",
+            FILE="DATA/METHODS/2171-2172 -Document Deliverables LATEST.xlsx",
+            WORKSHEET="2171-2172",
+        )
+        self.assert_classification(
+            result, "OFFSHORE INSTALLATION", "PROCEDURE", "INSTALLATION PROCEDURE"
+        )
+        self.assertIn("M002", result["rule_ids"])
+
+    def test_03_cut_lists_trailing_space(self):
+        result = self.classify("TECH", WORKSHEET="Cut-lists ")
+        self.assert_classification(
+            result, "GENERAL / MULTIDISCIPLINE", "DRAWING", "CUT LIST"
+        )
+        self.assertIn("T030", result["rule_ids"])
+
+    def test_04_sketch_trailing_space(self):
+        result = self.classify("TECH", WORKSHEET="Sketch ")
+        self.assert_classification(
+            result, "GENERAL / MULTIDISCIPLINE", "SKETCH", "ENGINEERING SKETCH"
+        )
+        self.assertIn("T031", result["rule_ids"])
+
+    def test_05_bare_pipeline_alias(self):
+        result = self.classify("TECH", WORKSHEET="Pipeline")
+        self.assert_classification(
+            result, "PIPELINE & CABLE", "DOCUMENT", "GENERAL TECHNICAL DOCUMENT"
+        )
+        self.assertIn("T001", result["rule_ids"])
+
+    def test_06_bare_naval_marine_alias(self):
+        result = self.classify("TECH", WORKSHEET="Naval Marine")
+        self.assert_classification(
+            result, "NAVAL & MARINE", "DOCUMENT", "GENERAL TECHNICAL DOCUMENT"
+        )
+        self.assertIn("T010", result["rule_ids"])
+
+    def test_07_uppercase_naval_marine_alias(self):
+        result = self.classify("TECH", WORKSHEET="NAVAL MARINE")
+        self.assert_classification(
+            result, "NAVAL & MARINE", "DOCUMENT", "GENERAL TECHNICAL DOCUMENT"
+        )
+
+    def test_08_generic_documents_safe_fallback(self):
+        result = self.classify("TECH", WORKSHEET="Documents ")
+        self.assert_classification(
+            result,
+            "GENERAL / MULTIDISCIPLINE",
+            "DOCUMENT",
+            "GENERAL TECHNICAL DOCUMENT",
+        )
+        self.assertIn("T002", result["rule_ids"])
+
+    def test_09_row_level_generic_documents_title_refinement_preserves_discipline(self):
+        result = self.classify(
+            "TECH", WORKSHEET="Documents ", TITLE="Mooring Analysis Report for Offshore Barge"
+        )
+        self.assert_classification(
+            result, "GENERAL / MULTIDISCIPLINE", "DOCUMENT", "ANALYSIS REPORT"
+        )
+        self.assertIn("T002", result["rule_ids"])
+        self.assertIn("T070", result["rule_ids"])
+
+    def test_10_3291_client_is_scoped_exclusion(self):
+        result = self.classify(
+            "TECH",
+            FILE="DATA/TECH/3291 DOCUMENT REGISTER Latest.xlsx",
+            WORKSHEET="CLIENT",
+        )
+        self.assertEqual("EXCLUDED", result["status"])
+        self.assertEqual("EXCLUDED", result["discipline"])
+        self.assertIn("X017", result["rule_ids"])
+        self.assertIn("alternate client duplicate view", result["notes"].lower())
+
+    def test_11_unrelated_client_is_not_globally_excluded(self):
+        result = self.classify(
+            "TECH", FILE="DATA/TECH/4000 DOCUMENT REGISTER.xlsx", WORKSHEET="CLIENT"
+        )
+        self.assertEqual("UNCLASSIFIED", result["status"])
+        self.assertNotIn("X017", result["rule_ids"])
+
+    def test_12_unknown_worksheet_remains_review_required(self):
+        result = self.classify("TECH", WORKSHEET="Unknown Future Register")
+        self.assertEqual("UNCLASSIFIED", result["status"])
+        self.assertEqual("REVIEW_REQUIRED", result["discipline"])
+        self.assertEqual([], result["rule_ids"])
+
+    def test_13_original_worksheet_text_is_preserved(self):
+        row = self.discovery_row(
+            sheet_name="Cut-lists ",
+            headers=["CUT-LIST DRAWINGS"],
+            doc_numbers=["4000-NN-0001-CTL"],
+            titles=["CUT-LIST DRAWINGS"],
+        )
+        self.assertEqual("Cut-lists ", row["worksheet_name"])
+        self.assertEqual("cut lists", row["normalized_worksheet"])
+        self.assertEqual("CUT LIST", row["subcategory"])
+
+    def test_14_v1_sentinel_mappings_still_pass(self):
+        cases = [
+            (
+                "METHODS",
+                {"WORKSHEET": "Setup Plans & Anchor Patterns", "TITLE": "Anchor Pattern"},
+                ("MARINE OPERATIONS", "DRAWING", "ANCHOR PATTERN"),
+            ),
+            (
+                "TECH",
+                {"WORKSHEET": "TN-NA"},
+                ("NAVAL & MARINE", "DOCUMENT", "TECHNICAL NOTE"),
+            ),
+            (
+                "TECH",
+                {"WORKSHEET": "Drawings"},
+                ("GENERAL / MULTIDISCIPLINE", "DRAWING", "ENGINEERING DRAWING"),
+            ),
+            (
+                "TECH",
+                {"WORKSHEET": "COMMISSION  - List of OTP"},
+                ("COMMISSIONING", "PROCEDURE", "OPERATIONAL TEST PROCEDURE"),
+            ),
+            (
+                "TECH",
+                {"WORKSHEET": "Specification", "TITLE": "Pipeline Specification"},
+                ("PIPELINE & CABLE", "DOCUMENT", "SPECIFICATION"),
+            ),
+        ]
+        for family, evidence, expected in cases:
+            with self.subTest(family=family, evidence=evidence):
+                result = profiler.apply_classification(self.rules, family, evidence)
+                self.assert_classification(result, *expected)
+
+    def test_15_path_qualifier_column_loaded(self):
+        x017 = next(r for r in self.rules if r.rule_id == "X017")
+        self.assertTrue(x017.path_qualifier)
+        self.assertEqual("WORKSHEET", x017.scope)
+
+    def test_16_path_qualifier_is_case_insensitive(self):
+        result = self.classify(
+            "TECH",
+            FILE="data/tech/3291 document register latest.xlsx",
+            WORKSHEET="client",
+        )
+        self.assertEqual("EXCLUDED", result["status"])
+        self.assertIn("X017", result["rule_ids"])
+
+    def test_17_file_exclusions_still_work(self):
+        result = profiler.file_exclusion(
+            self.rules, "METHODS", "DATA/METHODS/1. Delivarables FORMAT.xlsx"
+        )
+        self.assertIsNotNone(result)
+        self.assertEqual("EXCLUDED", result["status"])
+        self.assertIn("X002", result["rule_ids"])
+
+    def test_18_row_level_generic_documents_can_refine_to_procedure_without_inventing_discipline(self):
+        result = self.classify(
+            "TECH",
+            WORKSHEET="Documents",
+            TITLE="Offshore Construction Procedure",
+        )
+        self.assert_classification(
+            result, "GENERAL / MULTIDISCIPLINE", "DOCUMENT", "PROCEDURE"
+        )
+        self.assertIn("T074", result["rule_ids"])
+
+    def test_19_methods_sketch_not_refined_to_anchor_pattern(self):
+        result = self.classify(
+            "METHODS",
+            WORKSHEET="Sketches",
+            TITLE="OFFSHORE ANCHOR PATTERN AND DP DRAWINGS | OFFSHORE Sketches",
+        )
+        self.assert_classification(
+            result, "OFFSHORE INSTALLATION", "SKETCH", "ENGINEERING SKETCH"
+        )
+        self.assertIn("M020", result["rule_ids"])
+        self.assertNotIn("M011", result["rule_ids"])
+        self.assertNotIn("M012", result["rule_ids"])
+        self.assertNotIn("M013", result["rule_ids"])
+
+    def test_20_incoming_document_not_refined_by_methods_drawing_title(self):
+        result = self.classify(
+            "METHODS",
+            WORKSHEET="Incomming DOC and DRG",
+            SECTION="DOCUMENTS",
+            TITLE="OFFSHORE ANCHOR PATTERN AND DP DRAWINGS",
+        )
+        self.assert_classification(
+            result, "EXTERNAL / INPUT", "DOCUMENT", "INCOMING TECHNICAL DOCUMENT"
+        )
+        self.assertIn("M031", result["rule_ids"])
+        self.assertNotIn("M011", result["rule_ids"])
+
+    def test_21_structural_exception_does_not_apply_to_other_methods_sheets(self):
+        result = self.classify(
+            "METHODS",
+            FILE="DATA/METHODS/2171-2172 -Document Deliverables LATEST.xlsx",
+            WORKSHEET="Sketches",
+        )
+        self.assert_classification(
+            result, "OFFSHORE INSTALLATION", "SKETCH", "ENGINEERING SKETCH"
+        )
+        self.assertIn("M020", result["rule_ids"])
+        self.assertNotIn("M002", result["rule_ids"])
+
+    def test_22_tech_drawing_title_does_not_become_document(self):
+        result = self.classify(
+            "TECH",
+            WORKSHEET="Drawings",
+            TITLE="Mooring Analysis Report drawing",
+        )
+        self.assert_classification(
+            result, "GENERAL / MULTIDISCIPLINE", "DRAWING", "ENGINEERING DRAWING"
+        )
+        self.assertIn("T020", result["rule_ids"])
+        self.assertNotIn("T070", result["rule_ids"])
+        self.assertNotIn("T073", result["rule_ids"])
+
+    def test_23_tech_sketch_title_does_not_become_procedure(self):
+        result = self.classify(
+            "TECH",
+            WORKSHEET="Sketch",
+            TITLE="Installation Procedure reference",
+        )
+        self.assert_classification(
+            result, "GENERAL / MULTIDISCIPLINE", "SKETCH", "ENGINEERING SKETCH"
+        )
+        self.assertIn("T031", result["rule_ids"])
+        self.assertNotIn("T074", result["rule_ids"])
+
+    def test_24_technical_note_doc_number_does_not_override_drawing(self):
+        result = self.classify(
+            "TECH",
+            WORKSHEET="Drawings",
+            DOC_NUMBER="3000-TN-PL-001",
+        )
+        self.assert_classification(
+            result, "GENERAL / MULTIDISCIPLINE", "DRAWING", "ENGINEERING DRAWING"
+        )
+        self.assertNotIn("T043", result["rule_ids"])
+
+    def test_25_context_guard_columns_loaded(self):
+        m011 = next(r for r in self.rules if r.rule_id == "M011")
+        t070 = next(r for r in self.rules if r.rule_id == "T070")
+        self.assertEqual("MARINE OPERATIONS", m011.requires_discipline)
+        self.assertEqual("DRAWING", m011.requires_category)
+        self.assertEqual("DOCUMENT", t070.requires_category)
+
+    def test_26_discovery_mixed_generic_titles_stays_safe_base(self):
+        row = self.discovery_row(
+            sheet_name="Documents",
+            headers=["DOCUMENT NUMBER | TITLE/DESCRIPTION"],
+            titles=["Mooring Analysis Report", "Offshore Installation Procedure"],
+        )
+        self.assertEqual("GENERAL / MULTIDISCIPLINE", row["discipline"])
+        self.assertEqual("DOCUMENT", row["category"])
+        self.assertEqual("GENERAL TECHNICAL DOCUMENT", row["subcategory"])
+        self.assertEqual("T002", row["matched_rule_ids"])
+        self.assertNotIn("T070", row["matched_rule_ids"])
+        self.assertNotIn("T074", row["matched_rule_ids"])
+        self.assertIn("Mooring Analysis Report", row["sample_title_keywords"])
+
+    def test_27_discovery_pipeline_mixed_titles_stays_base(self):
+        row = self.discovery_row(
+            sheet_name="Documents - Pipeline & Cable",
+            headers=["OFFSHORE CONSTRUCTION ENGINEERING DOCUMENTS (PIPELINE & CABLE)"],
+            titles=["Pipeline Analysis Report", "Installation Procedure", "General Note"],
+        )
+        self.assertEqual("PIPELINE & CABLE", row["discipline"])
+        self.assertEqual("DOCUMENT", row["category"])
+        self.assertEqual("GENERAL TECHNICAL DOCUMENT", row["subcategory"])
+        self.assertEqual("T001", row["matched_rule_ids"])
+
+    def test_28_discovery_sampled_tn_number_does_not_refine_entire_worksheet(self):
+        row = self.discovery_row(
+            sheet_name="Documents",
+            headers=["DOCUMENT NUMBER | TITLE/DESCRIPTION"],
+            doc_numbers=["4000-TN-PL-001", "4000-NN-RP-001"],
+            titles=["General Technical Document"],
+        )
+        self.assertEqual("GENERAL / MULTIDISCIPLINE", row["discipline"])
+        self.assertEqual("GENERAL TECHNICAL DOCUMENT", row["subcategory"])
+        self.assertEqual("T002", row["matched_rule_ids"])
+        self.assertNotIn("T043", row["matched_rule_ids"])
+        self.assertIn("4000-TN-PL-001", row["sample_document_numbers"])
+
+    def test_29_2171_discovery_uses_path_qualified_worksheet_rule(self):
+        row = self.discovery_row(
+            family="METHODS",
+            path="DATA/METHODS/2171-2172 -Document Deliverables LATEST.xlsx",
+            project="2171",
+            sheet_name="2171-2172",
+            headers=["Document No. | Issue Date"],
+            titles=["Unrelated Analysis Report", "Another Procedure"],
+        )
+        self.assertEqual("OFFSHORE INSTALLATION", row["discipline"])
+        self.assertEqual("PROCEDURE", row["category"])
+        self.assertEqual("INSTALLATION PROCEDURE", row["subcategory"])
+        self.assertEqual("M002", row["matched_rule_ids"])
+        self.assertEqual("WORKSHEET:M002", row["match_basis"])
+
+    def test_30_unknown_discovery_does_not_use_sample_title_as_fallback(self):
+        row = self.discovery_row(
+            family="METHODS",
+            path="DATA/METHODS/4000 Misc.xlsx",
+            project="4000",
+            sheet_name="Unknown Future Register",
+            headers=["Document No. | Issue Date"],
+            titles=["Construction and Installation Procedure"],
+        )
+        self.assertEqual("REVIEW_REQUIRED", row["proposed_action"])
+        self.assertEqual("REVIEW_REQUIRED", row["discipline"])
+        self.assertEqual("", row["matched_rule_ids"])
+
+    def test_31_row_level_doc_number_refinement_remains_available(self):
+        result = self.classify(
+            "TECH",
+            WORKSHEET="Documents",
+            DOC_NUMBER="4000-TN-PL-001",
+            TITLE="Pipeline Technical Note",
+        )
+        self.assert_classification(
+            result, "PIPELINE & CABLE", "DOCUMENT", "TECHNICAL NOTE"
+        )
+        self.assertIn("T002", result["rule_ids"])
+        self.assertIn("T043", result["rule_ids"])
+
+    def test_32_2171_structural_exception_is_not_global(self):
+        result = self.classify(
+            "METHODS",
+            FILE="DATA/METHODS/9999 Other Register.xlsx",
+            WORKSHEET="2171-2172",
+        )
+        self.assertEqual("UNCLASSIFIED", result["status"])
+        self.assertEqual("REVIEW_REQUIRED", result["discipline"])
+        self.assertNotIn("M002", result["rule_ids"])
+
+
+if __name__ == "__main__":
+    unittest.main()

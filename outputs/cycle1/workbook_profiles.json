@@ -30,13 +30,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -1047,10 +1047,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:T83",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -1058,9 +1056,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -2229,9 +2227,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M011",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -3134,13 +3132,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -3811,10 +3809,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:T46",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -3822,9 +3818,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -4664,18 +4660,18 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "EXTERNAL / INPUT",
-            "rule_ids": "M031;M011",
+            "rule_ids": "M031",
             "section": "DOCUMENTS",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "INCOMING TECHNICAL DOCUMENT",
             "warning_code": ""
           },
           {
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "EXTERNAL / INPUT",
-            "rule_ids": "M030;M011",
+            "rule_ids": "M030",
             "section": "DRAWINGS",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "INCOMING DRAWING",
             "warning_code": ""
           }
         ],
@@ -6597,13 +6593,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -8053,10 +8049,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:U139",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -8064,9 +8058,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -10310,13 +10304,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M002",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -11102,10 +11096,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:XFD108",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -11113,9 +11105,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M013",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "SETUP PLAN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -11541,13 +11533,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -12642,10 +12634,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:S112",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -12653,9 +12643,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -13492,9 +13482,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M013",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "SETUP PLAN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -14368,13 +14358,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -15434,10 +15424,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:T99",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -15445,9 +15433,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -16156,9 +16144,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M011",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -17033,13 +17021,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -18049,10 +18037,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:U47",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -18060,9 +18046,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -18947,9 +18933,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M011",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -19315,13 +19301,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -20332,10 +20318,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:T42",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -20343,9 +20327,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -22661,13 +22645,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -23786,10 +23770,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:U96",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -23797,9 +23779,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -24952,9 +24934,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M011",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -25785,13 +25767,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -27017,10 +26999,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:T85",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -27028,9 +27008,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -28498,13 +28478,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -29451,10 +29431,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:S64",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -29462,9 +29440,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -30139,9 +30117,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M011",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -30928,13 +30906,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -32141,10 +32119,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:T86",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -32152,9 +32128,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -33495,9 +33471,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M013",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "SETUP PLAN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -34374,13 +34350,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -35392,10 +35368,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:T91",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -35403,9 +35377,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -36016,9 +35990,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M011",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -36896,13 +36870,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -38013,10 +37987,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:U111",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -38024,9 +37996,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -39291,9 +39263,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M011",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -40121,13 +40093,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -41270,10 +41242,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:U48",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -41281,9 +41251,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -43312,13 +43282,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -43793,10 +43763,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:T43",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -43804,9 +43772,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -44196,9 +44164,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M011",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -44580,13 +44548,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -45737,10 +45705,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:T175",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -45748,9 +45714,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -47003,9 +46969,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M011",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -48485,13 +48451,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [],
@@ -48801,10 +48767,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:T40",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -48812,9 +48776,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -49447,13 +49411,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [],
@@ -49763,10 +49727,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:T40",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -49774,9 +49736,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -50430,13 +50392,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "PROCEDURE",
+            "discipline": "OFFSHORE INSTALLATION",
+            "rule_ids": "M001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "INSTALLATION PROCEDURE",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [],
@@ -50746,10 +50708,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:T40",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -50757,9 +50717,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -56481,7 +56441,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T050;T075",
+            "rule_ids": "T050",
             "section": "",
             "subcategory": "SPECIFICATION",
             "warning_code": ""
@@ -56990,9 +56950,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -59218,7 +59178,7 @@
     "relative_path": "DATA/TECH/2035 Installation Aids Register Sep 2024.xlsx",
     "selected_excluded_status": "EXCLUDED",
     "selected_replacement_file": "",
-    "selection_exclusion_reason": "Installation-aid register excluded by v1 scope",
+    "selection_exclusion_reason": "Installation-aid register excluded by v2 scope",
     "sha256": "ed48c73ef97a40d8693f89eb1f9dc73d2ce06d1e103cb07caa2c620131fb0c81",
     "shared_string_count": 46,
     "sheet_count": 1,
@@ -59745,7 +59705,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T050;T075",
+            "rule_ids": "T050",
             "section": "",
             "subcategory": "SPECIFICATION",
             "warning_code": ""
@@ -60254,9 +60214,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -68419,9 +68379,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -69859,9 +69819,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -80681,9 +80641,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -81826,9 +81786,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -86548,7 +86508,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T040;T043",
+            "rule_ids": "T040",
             "section": "",
             "subcategory": "TECHNICAL NOTE",
             "warning_code": ""
@@ -87505,9 +87465,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -89274,9 +89234,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -91873,9 +91833,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T073",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -93484,9 +93444,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T070",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -98279,13 +98239,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "DRAWING",
+            "discipline": "GENERAL / MULTIDISCIPLINE",
+            "rule_ids": "T030",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "CUT LIST",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -99589,10 +99549,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:L30",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       }
     ],
     "source_family": "TECH",
@@ -99635,7 +99593,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T050;T075",
+            "rule_ids": "T050",
             "section": "",
             "subcategory": "SPECIFICATION",
             "warning_code": ""
@@ -100190,9 +100148,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -101885,9 +101843,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -107530,9 +107488,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T073",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -109049,13 +109007,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "DRAWING",
+            "discipline": "GENERAL / MULTIDISCIPLINE",
+            "rule_ids": "T030",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "CUT LIST",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -109222,10 +109180,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:L28",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       }
     ],
     "source_family": "TECH",
@@ -109273,9 +109229,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -110600,9 +110556,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -115716,9 +115672,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -116695,9 +116651,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -118558,13 +118514,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "SKETCH",
+            "discipline": "GENERAL / MULTIDISCIPLINE",
+            "rule_ids": "T031",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "ENGINEERING SKETCH",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -119339,21 +119295,19 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:P50",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "DRAWING",
+            "discipline": "GENERAL / MULTIDISCIPLINE",
+            "rule_ids": "T030",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "CUT LIST",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -119580,10 +119534,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:L28",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       }
     ],
     "source_family": "TECH",
@@ -120378,9 +120330,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -121432,9 +121384,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -130846,9 +130798,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -132143,9 +132095,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -136620,9 +136572,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T040;T043;T073",
+            "rule_ids": "T040",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "TECHNICAL NOTE",
             "warning_code": ""
           }
         ],
@@ -137180,7 +137132,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "STRUCTURAL",
-            "rule_ids": "T042;T045",
+            "rule_ids": "T042",
             "section": "",
             "subcategory": "TECHNICAL NOTE",
             "warning_code": ""
@@ -137718,7 +137670,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T041;T044",
+            "rule_ids": "T041",
             "section": "",
             "subcategory": "TECHNICAL NOTE",
             "warning_code": ""
@@ -138278,7 +138230,7 @@
     "relative_path": "DATA/TECH/2790 Installation Aids Register Sep 2024.xlsx",
     "selected_excluded_status": "EXCLUDED",
     "selected_replacement_file": "",
-    "selection_exclusion_reason": "Installation-aid register excluded by v1 scope",
+    "selection_exclusion_reason": "Installation-aid register excluded by v2 scope",
     "sha256": "ec5e23d370f0cc1e9ece1aaf1082c058b70fbba0961eeb5eb869e763c16970df",
     "shared_string_count": 51,
     "sheet_count": 1,
@@ -138889,9 +138841,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -140332,9 +140284,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -144847,13 +144799,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "DRAWING",
+            "discipline": "GENERAL / MULTIDISCIPLINE",
+            "rule_ids": "T030",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "CUT LIST",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -146446,10 +146398,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:L72",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -146457,9 +146407,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T040;T043;T073",
+            "rule_ids": "T040",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "TECHNICAL NOTE",
             "warning_code": ""
           }
         ],
@@ -146938,9 +146888,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T073",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -147997,9 +147947,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T070",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -152839,7 +152789,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T040;T043;T076",
+            "rule_ids": "T040",
             "section": "",
             "subcategory": "TECHNICAL NOTE",
             "warning_code": ""
@@ -153245,9 +153195,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T073",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -153919,9 +153869,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -155281,13 +155231,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "SKETCH",
+            "discipline": "GENERAL / MULTIDISCIPLINE",
+            "rule_ids": "T031",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "ENGINEERING SKETCH",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -156141,21 +156091,19 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:P50",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "DRAWING",
+            "discipline": "GENERAL / MULTIDISCIPLINE",
+            "rule_ids": "T030",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "CUT LIST",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -156322,10 +156270,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:L28",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -156333,7 +156279,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T040;T043;T076",
+            "rule_ids": "T040",
             "section": "",
             "subcategory": "TECHNICAL NOTE",
             "warning_code": ""
@@ -162358,13 +162304,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "DRAWING",
+            "discipline": "GENERAL / MULTIDISCIPLINE",
+            "rule_ids": "T030",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "CUT LIST",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -162899,10 +162845,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:L28",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       }
     ],
     "source_family": "TECH",
@@ -162945,9 +162889,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T071",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -163835,9 +163779,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T070",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -166429,13 +166373,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
+            "action": "INCLUDE",
             "category": "DOCUMENT",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "T070",
+            "discipline": "GENERAL / MULTIDISCIPLINE",
+            "rule_ids": "T002",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -167636,10 +167580,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:U33",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -169990,13 +169932,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
+            "action": "INCLUDE",
             "category": "DOCUMENT",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "T073",
+            "discipline": "GENERAL / MULTIDISCIPLINE",
+            "rule_ids": "T002",
             "section": "",
-            "subcategory": "ANALYSIS",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -171535,10 +171477,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:V46",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -179505,13 +179445,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "EXCLUDE",
+            "category": "EXCLUDED",
+            "discipline": "EXCLUDED",
+            "rule_ids": "X017",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "EXCLUDED",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -181762,12 +181702,10 @@
         ],
         "sheet_name": "CLIENT",
         "state": "visible",
-        "support_admin_suspicion": false,
+        "support_admin_suspicion": true,
         "used_range": "A1:Z457",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "SUPPORT_ADMIN"
       }
     ],
     "source_family": "TECH",
@@ -186929,9 +186867,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -188673,9 +188611,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -192160,13 +192098,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "DOCUMENT",
+            "discipline": "PIPELINE & CABLE",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -192629,21 +192567,19 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:U52",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
+            "action": "INCLUDE",
             "category": "DOCUMENT",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "T073",
+            "discipline": "NAVAL & MARINE",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -193866,10 +193802,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:V135",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       },
       {
         "candidate_classifications": [
@@ -194437,9 +194371,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -195668,9 +195602,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -198026,13 +197960,13 @@
       {
         "candidate_classifications": [
           {
-            "action": "REVIEW_REQUIRED",
-            "category": "UNCLASSIFIED",
-            "discipline": "REVIEW_REQUIRED",
-            "rule_ids": "",
+            "action": "INCLUDE",
+            "category": "DOCUMENT",
+            "discipline": "NAVAL & MARINE",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "UNCLASSIFIED",
-            "warning_code": "REVIEW_REQUIRED"
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
+            "warning_code": ""
           }
         ],
         "candidate_internal_project_numbers": [
@@ -199138,10 +199072,8 @@
         "state": "visible",
         "support_admin_suspicion": false,
         "used_range": "A1:AB23",
-        "warnings": [
-          "REVIEW_REQUIRED"
-        ],
-        "worksheet_role": "REVIEW_REQUIRED"
+        "warnings": [],
+        "worksheet_role": "DOCUMENT_REGISTER"
       }
     ],
     "source_family": "TECH",
@@ -199185,9 +199117,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
