@@ -2,9 +2,9 @@
 
 ## 1. Status and purpose
 
-Classification Model v2 is the controlled taxonomy and rule-governance model derived from the approved Cycle-1 profiling evidence.
+Classification Model v2 is the controlled taxonomy and rule-governance model derived from approved Cycle-1 profiling evidence.
 
-It supersedes Classification Model v1 for classification decisions while preserving the same four normalized levels:
+It preserves the four normalized levels:
 
 ```text
 Source Family
@@ -13,9 +13,7 @@ Source Family
           -> Subcategory
 ```
 
-Cycle-1 evidence showed that the 34 `REVIEW_REQUIRED` rows could be resolved without inventing new taxonomy values. The v2 changes therefore focus on safe normalization, missing aliases, two controlled fallbacks, one narrowly scoped duplicate-view exclusion, and context-guarded refinement rules.
-
-A deeper semantic validation of the first v2 implementation also found that title refinements could cross taxonomy branches even when every row had a confident classification. For example, a Methods `SKETCH` could be incorrectly refined to the drawing-only `ANCHOR PATTERN` subcategory merely because representative title text contained that phrase. Classification Model v2 therefore requires refinement rules to respect already-established taxonomy context.
+Cycle-1 evidence showed that the 34 original classification `REVIEW_REQUIRED` rows could be resolved without inventing new taxonomy values. Version 2 therefore focuses on safe normalization, missing aliases, controlled fallbacks, narrow exclusions, context-guarded refinements, and a strict boundary between worksheet discovery and per-document refinement.
 
 This model does **not** authorize Cycle 2 extraction by itself.
 
@@ -23,18 +21,19 @@ This model does **not** authorize Cycle 2 extraction by itself.
 
 Always preserve separately from normalized classification:
 
-- `Original Worksheet`
-- `Original Section`
-- `Classification Rule ID`
-- `Classification Confidence`
-- source workbook path
-- warning/review-required state
+- original worksheet;
+- original section;
+- classification rule ID;
+- classification confidence;
+- source workbook path;
+- warning/review-required state;
+- sampled document numbers/titles used only as audit evidence during discovery.
 
 Classification normalization must never overwrite source evidence.
 
 ## 3. Source Family
 
-Allowed values remain:
+Allowed values:
 
 - `METHODS`
 - `TECH`
@@ -54,7 +53,7 @@ METHODS
         └── ENGINEERING SKETCH
 ```
 
-Supported context includes:
+Supported worksheet/header context includes:
 
 - `Installation Procedures`
 - `Installation Procedure`
@@ -63,7 +62,7 @@ Supported context includes:
 - `Sketch`
 - `Sketches`
 
-A title/content fallback may classify a nonstandard Methods worksheet as `INSTALLATION PROCEDURE` only when reliable content explicitly contains an installation-procedure phrase and the current row is still unresolved or already in the procedure branch. It must not overwrite a previously established sketch, drawing, incoming-document, or other classification.
+A structural/header fallback may classify a nonstandard Methods worksheet as `INSTALLATION PROCEDURE` only when reliable header evidence explicitly contains an installation-procedure phrase and the current classification is unresolved or already in the procedure branch. It must not overwrite an established sketch, drawing, incoming-document, or other classification.
 
 ### 4.2 MARINE OPERATIONS
 
@@ -84,9 +83,9 @@ Typical context:
 - `DP SETUP`, `DP SET-UP`, `DP SET UP`
 - `SETUP PLAN`, `SET-UP PLAN`
 
-`METHOD DRAWING` remains the controlled fallback when a valid Methods setup/anchor-plan drawing cannot be safely refined.
+`METHOD DRAWING` remains the safe worksheet-level fallback for setup/anchor-plan drawing registers.
 
-The `ANCHOR PATTERN`, `DP SETUP PLAN`, and `SETUP PLAN` title refinements are valid only after the base classification is already `MARINE OPERATIONS -> DRAWING`. They must never convert `OFFSHORE INSTALLATION -> SKETCH` or `EXTERNAL / INPUT` rows into Marine Operations drawing subcategories.
+`ANCHOR PATTERN`, `DP SETUP PLAN`, and `SETUP PLAN` title refinements are **per-document refinements** only. They may run only when the individual document row already has `MARINE OPERATIONS -> DRAWING` context. They must never convert a worksheet-wide `SKETCH` or `EXTERNAL / INPUT` classification.
 
 ### 4.3 EXTERNAL / INPUT
 
@@ -99,7 +98,7 @@ METHODS
         └── INCOMING TECHNICAL DOCUMENT
 ```
 
-Reliable internal `DRAWINGS` / `DOCUMENTS` section evidence overrides the broad mixed-sheet label. Once this section classification is established, unrelated Methods title refinements must not overwrite it.
+Reliable internal `DRAWINGS` / `DOCUMENTS` section evidence overrides the broad mixed-sheet label.
 
 ## 5. TECH hierarchy
 
@@ -132,6 +131,14 @@ Supported worksheet aliases include:
 - bare `Pipeline`
 - `TN-PL`
 
+A broad Pipeline document worksheet is discovered as:
+
+```text
+PIPELINE & CABLE -> DOCUMENT -> GENERAL TECHNICAL DOCUMENT
+```
+
+Individual document rows may later refine to REPORT / ANALYSIS / PROCEDURE / TECHNICAL NOTE, etc.
+
 ### 5.2 NAVAL & MARINE
 
 ```text
@@ -159,6 +166,8 @@ Supported worksheet aliases include:
 - bare `Naval Marine`
 - bare `NAVAL MARINE`
 - `TN-NA`
+
+A broad Naval & Marine document worksheet is discovered as `GENERAL TECHNICAL DOCUMENT`; per-document refinement happens only after row extraction.
 
 ### 5.3 STRUCTURAL
 
@@ -194,13 +203,13 @@ TECH
 
 Use this when document type is valid but engineering discipline cannot be safely established.
 
-A generic TECH worksheet named `Documents` is classified to the safe base:
+A generic TECH worksheet named `Documents` is discovered as:
 
 ```text
 GENERAL / MULTIDISCIPLINE -> DOCUMENT -> GENERAL TECHNICAL DOCUMENT
 ```
 
-Title rules may refine the subcategory without inventing a specific discipline, but only while the already-established category is `DOCUMENT`. A drawing or sketch must not become a document merely because its representative title contains words such as `report`, `analysis`, or `procedure`.
+Do not let one sampled report/procedure/analysis title collapse the whole worksheet to one subtype.
 
 ### 5.5 COMMISSIONING
 
@@ -241,7 +250,7 @@ DATA/TECH/3291 DOCUMENT REGISTER Latest.xlsx
 
 as an alternate/client duplicate view. It may therefore be excluded only by a path-qualified rule bound to that verified workbook.
 
-A `CLIENT` worksheet in any unrelated workbook must remain eligible for normal classification/review.
+A `CLIENT` worksheet in any unrelated workbook remains eligible for normal classification/review.
 
 ## 7. Configurable rule table
 
@@ -261,82 +270,52 @@ Required columns:
 | `Match_Type` | `EXACT`, `CONTAINS`, `REGEX`, `FUZZY` |
 | `Match_Words` | User-editable aliases/patterns |
 | `Exclude_Words` | Terms that invalidate the rule |
-| `Path_Qualifier` | Optional narrow source-path constraint for exceptional rules |
-| `Requires_Discipline` | Optional required current discipline before a refinement may apply; multiple allowed values use `|` |
-| `Requires_Category` | Optional required current category before a refinement may apply; multiple allowed values use `|` |
+| `Path_Qualifier` | Optional narrow source-path constraint |
+| `Requires_Discipline` | Optional required current discipline before refinement |
+| `Requires_Category` | Optional required current category before refinement |
 | `Discipline` | Normalized result or refinement instruction |
 | `Category` | Normalized result or refinement instruction |
 | `Subcategory` | Normalized result or refinement instruction |
 | `Include` | `YES` / `NO` |
-| `Min_Confidence` | Used for fuzzy rules |
+| `Min_Confidence` | Fuzzy threshold |
 | `Stop_On_Match` | Stops lower-priority rules within the same scope |
 | `Notes` | Human-readable explanation |
 
-`Path_Qualifier` must remain exceptional. Use it only where Cycle-1 evidence proves a file-specific rule is necessary and safer than a global business rule.
+`Path_Qualifier` must remain exceptional and auditable.
 
-`Requires_Discipline` and `Requires_Category` are taxonomy safety gates. Leave them blank for true base-classification rules. Use them on refinement rules whenever the refinement is valid only inside an already-established taxonomy branch. Multiple allowed contexts are separated with `|`.
+`Requires_Discipline` and `Requires_Category` are taxonomy safety gates. Leave them blank for true base-classification rules. Use them whenever a refinement is valid only inside an already-established taxonomy branch.
 
 Examples:
 
 - `M011` / `M012` / `M013` require `MARINE OPERATIONS` + `DRAWING`;
 - `T070`–`T076` require category `DOCUMENT`;
-- `T043`–`T045` require category `DOCUMENT` before a technical-note document-number refinement;
-- `M002` permits unresolved/procedure contexts so it can classify the verified nonstandard 2171-2172 procedure sheet without overwriting an established sketch or drawing.
+- `T043`–`T045` require category `DOCUMENT` before technical-note document-number refinement;
+- `M002` is a `HEADER` fallback for the verified nonstandard 2171-2172 Methods procedure sheet.
 
-## 8. Rule precedence and context safety
+## 8. Discovery classification versus per-document refinement
 
-Evaluation order remains:
+This distinction is mandatory.
+
+### 8.1 Worksheet/section discovery
+
+Cycle-1 / Classification-v2 discovery classifies source structure. It may use only:
 
 ```text
-FILE inclusion/exclusion
-  -> Source Family
-  -> WORKSHEET exact/alias rule
-  -> SECTION rule
-  -> HEADER / discipline context
-  -> DOC_NUMBER refinement
-  -> TITLE refinement
-  -> controlled FUZZY fallback
+FILE
+WORKSHEET
+SECTION
+HEADER
 ```
 
-A later refinement may narrow or clarify a valid classification, but it must not jump across taxonomy branches. Before applying a refinement, the engine evaluates any configured `Requires_Discipline` and `Requires_Category` guards against the classification already established by higher-priority evidence.
+Sample document numbers and sample titles may be displayed in discovery outputs for audit, but they must **not** be joined and passed to `DOC_NUMBER` / `TITLE` rules for worksheet-wide classification.
 
-Examples of forbidden cross-branch changes:
+Reason: a worksheet can contain many different document types. One sampled Analysis Report is not proof that every document in that worksheet is an Analysis Report.
 
-- `OFFSHORE INSTALLATION -> SKETCH -> ENGINEERING SKETCH` must not become `... -> SKETCH -> ANCHOR PATTERN` because title text happens to mention anchor patterns;
-- `EXTERNAL / INPUT -> DOCUMENT -> INCOMING TECHNICAL DOCUMENT` must not become an anchor-pattern drawing classification;
-- `GENERAL / MULTIDISCIPLINE -> DRAWING` or `SKETCH` must not become `DOCUMENT -> REPORT/ANALYSIS/PROCEDURE` merely from title words;
-- a technical-note document-number token must not convert a drawing into a document.
+### 8.2 Per-document refinement
 
-Specific refinements must preserve already-established higher-level context unless a rule is explicitly authorized to set a different context and its guards permit that transition.
+`DOC_NUMBER` and `TITLE` rules apply only when the evidence belongs to one individual document record.
 
-## 9. Whitespace and name normalization
-
-Before `WORKSHEET` and `SECTION` matching, normalize presentation-only whitespace:
-
-- trim leading/trailing whitespace;
-- collapse repeated whitespace.
-
-Preserve the original worksheet/section text separately in discovery outputs.
-
-This resolves harmless source variants such as:
-
-- `Installation Procedures `
-- `Cut-lists `
-- `Sketch `
-
-without creating workbook-specific aliases.
-
-Other controlled normalization may include:
-
-- case;
-- punctuation;
-- `&` versus `AND`;
-- selected singular/plural variants;
-- controlled abbreviations.
-
-## 10. Title/document-number refinement
-
-Title/document-number rules may refine a valid base `DOCUMENT` classification to:
+They may refine a valid base `DOCUMENT` classification to:
 
 - `REPORT`
 - `ANALYSIS`
@@ -346,9 +325,51 @@ Title/document-number rules may refine a valid base `DOCUMENT` classification to
 - `SPECIFICATION`
 - `TECHNICAL NOTE`
 
-Methods drawing title refinements may similarly refine only a valid `MARINE OPERATIONS -> DRAWING` base classification.
+Methods drawing title rules may similarly refine one individual `MARINE OPERATIONS -> DRAWING` document to `ANCHOR PATTERN`, `DP SETUP PLAN`, or `SETUP PLAN`.
 
-`KEEP EXISTING` means preserve the already-established higher-level context. It does not authorize a rule to apply outside the context declared by its guard columns.
+The current PR preserves this rule-engine capability but does not implement the row extractor. That belongs to a later authorized cycle.
+
+## 9. Rule precedence and context safety
+
+The general rule engine supports:
+
+```text
+FILE
+  -> WORKSHEET
+  -> SECTION
+  -> HEADER
+  -> DOC_NUMBER
+  -> TITLE
+```
+
+However worksheet discovery intentionally stops after `HEADER`.
+
+A later row-level refinement may narrow or clarify a valid classification, but it must not jump across taxonomy branches. Before applying a refinement, the engine evaluates configured `Requires_Discipline` / `Requires_Category` guards.
+
+Forbidden examples:
+
+- a Methods `SKETCH` becoming `ANCHOR PATTERN` because sampled title text mentions anchor pattern;
+- incoming `DOCUMENTS` / `DRAWINGS` being overwritten by unrelated title text;
+- a TECH drawing/sketch becoming `DOCUMENT -> REPORT/PROCEDURE` from one title;
+- one sampled `TN-PL` number converting an entire generic Documents worksheet to Pipeline Technical Note;
+- one sampled Analysis Report converting a mixed Pipeline/Naval/General worksheet to `ANALYSIS REPORT`.
+
+## 10. Whitespace and name normalization
+
+Before `WORKSHEET` and `SECTION` matching:
+
+- trim leading/trailing whitespace;
+- collapse repeated whitespace.
+
+Preserve the original worksheet/section text separately.
+
+This safely resolves variants such as:
+
+- `Installation Procedures `
+- `Cut-lists `
+- `Sketch `
+
+without creating workbook-specific aliases.
 
 ## 11. Fuzzy matching
 
@@ -357,7 +378,7 @@ Fuzzy matching remains a fallback, not the primary mechanism.
 Recommended defaults:
 
 - >= 90% and one unambiguous candidate -> automatic classification;
-- 80-89% -> suggestion + manual review;
+- 80–89% -> suggestion + manual review;
 - < 80% -> `UNCLASSIFIED`.
 
 Thresholds remain configurable.
@@ -369,71 +390,55 @@ Thresholds remain configurable.
 3. Preserve original worksheet and section text.
 4. Every classification must be traceable to a rule ID or explicit fallback reason.
 5. Business taxonomy belongs in configuration, not scattered Python constants.
-6. User edits to the rule table must be testable without parser-code changes.
-7. Unknown future inputs remain `UNCLASSIFIED` / `REVIEW_REQUIRED`.
-8. Generic TECH `Documents` uses `GENERAL / MULTIDISCIPLINE` rather than an invented specific discipline.
-9. File-qualified exclusions must be narrow, auditable, and regression-tested against unrelated files.
-10. Refinement rules must not cross taxonomy branches unless the transition is explicitly authorized and context-guarded.
-11. Zero `REVIEW_REQUIRED` rows is not, by itself, proof of taxonomy correctness; semantic cross-category tests are required.
+6. Unknown future inputs remain `UNCLASSIFIED` / `REVIEW_REQUIRED`.
+7. Generic TECH `Documents` uses `GENERAL / MULTIDISCIPLINE` rather than an invented discipline.
+8. File-qualified exclusions must be narrow, auditable, and regression-tested.
+9. Refinement rules must not cross taxonomy branches.
+10. Discovery must not use joined sampled rows as row-level classification evidence.
+11. Zero `REVIEW_REQUIRED` rows is necessary but not sufficient proof of taxonomy correctness.
 12. Classification work must not modify `DATA/`.
 
 ## 13. Cycle-1 discovery resolution summary
 
-The 34 Cycle-1 `REVIEW_REQUIRED` rows were grouped as follows:
-
 | Group | Rows | v2 resolution |
 |---|---:|---|
-| Methods `Installation Procedures ` | 19 | whitespace-safe matching -> Installation Procedure |
-| Methods `2171-2172` | 1 | title/content fallback -> Installation Procedure |
-| TECH `Cut-lists ` | 6 | whitespace-safe matching -> CUT LIST |
-| TECH `Sketch ` | 2 | whitespace-safe matching -> ENGINEERING SKETCH |
-| TECH generic `Documents ` | 2 | General/Multidiscipline document base + title refinement |
+| Methods `Installation Procedures ` | 19 | whitespace-safe worksheet match |
+| Methods `2171-2172` | 1 | structural/header fallback -> Installation Procedure |
+| TECH `Cut-lists ` | 6 | whitespace-safe match -> CUT LIST |
+| TECH `Sketch ` | 2 | whitespace-safe match -> ENGINEERING SKETCH |
+| TECH generic `Documents ` | 2 | safe General/Multidiscipline document base |
 | TECH `Naval Marine` / `NAVAL MARINE` | 2 | complete T010 aliases |
 | TECH bare `Pipeline` | 1 | complete T001 alias |
-| 3291 `CLIENT` | 1 | narrow path-qualified duplicate-view exclusion |
+| 3291 `CLIENT` | 1 | narrow path-qualified exclusion |
 | **Total** | **34** | **all explicitly accounted for** |
 
 No new taxonomy value was required.
 
-After these rows were resolved, semantic validation identified and corrected cross-category refinement leakage in other already-classified rows. This correction did not add taxonomy values; it tightened when existing refinement rules are allowed to run.
-
-## 14. Required Classification Model v2 regression tests
+## 14. Required regression coverage
 
 At minimum verify:
 
-1. Methods trailing-space Installation Procedures;
-2. Methods content fallback;
+1. trailing-space Methods Installation Procedures;
+2. 2171-2172 header fallback;
 3. trailing-space Cut-lists;
 4. trailing-space Sketch;
-5. bare Pipeline alias;
-6. bare Naval Marine alias;
-7. uppercase NAVAL MARINE alias;
-8. generic TECH Documents safe fallback;
-9. title refinement preserves General/Multidiscipline;
-10. 3291 CLIENT scoped exclusion;
-11. unrelated CLIENT is not globally excluded;
-12. unknown worksheet remains review-required;
-13. original worksheet evidence is preserved;
-14. v1 sentinel mappings still pass;
-15. Methods sketch does not refine to Anchor Pattern / DP Setup / Setup Plan;
-16. incoming document/drawing section classification is not overwritten by unrelated Methods title text;
-17. installation-procedure title fallback does not overwrite an established sketch;
-18. TECH drawing title does not become a document classification;
-19. TECH sketch title does not become a document/procedure classification;
-20. technical-note document-number tokens do not convert drawings into documents;
-21. context-guard columns are loaded from external configuration;
-22. `DATA/` remains read-only.
+5. Pipeline / Naval aliases;
+6. generic TECH Documents safe base;
+7. 3291 CLIENT scoped exclusion and unrelated CLIENT safety;
+8. unknown worksheet remains review-required;
+9. original worksheet evidence is preserved;
+10. context guards prevent cross-branch refinements;
+11. mixed sample titles do not refine a whole worksheet;
+12. sampled `TN-*` numbers do not refine a whole worksheet;
+13. direct per-document TITLE/DOC_NUMBER refinement still works when explicitly applied to one record;
+14. deterministic outputs;
+15. Windows/Linux LF consistency;
+16. `DATA/` remains read-only.
 
 ## 15. Version status
 
 This document is **Classification Model v2**.
 
-It is ready for independent implementation review once:
+The model is ready for independent review only after exact-head CI and Windows validation confirm the complete regression suite, deterministic outputs, zero current classification review rows, semantic mixed-sample safety, and unchanged `DATA/`.
 
-- all current 34 review rows are resolved by reproducible rules;
-- cross-category refinement guards pass their semantic regression tests;
-- old Cycle-1 regression tests still pass;
-- v2 regression tests pass;
-- real-data profiling completes deterministically;
-- `DATA/` remains unchanged;
-- no Cycle-2 extraction or final index work is introduced.
+Cycle 2 remains unauthorized until owner approval.

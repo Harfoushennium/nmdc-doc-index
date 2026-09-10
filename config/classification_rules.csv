@@ -12,11 +12,11 @@ X015,YES,15,ANY,WORKSHEET,REGEX,(?i)^pre\s*[-_ ]?req,,,,,EXCLUDED,EXCLUDED,EXCLU
 X016,YES,16,ANY,WORKSHEET,REGEX,(?i)^sheet\d*$,,,,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Generic support sheet; review if later shown authoritative
 X017,YES,17,TECH,WORKSHEET,EXACT,CLIENT,,(?:^|/)TECH/3291 DOCUMENT REGISTER Latest\.xlsx$,,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Verified alternate client duplicate view; authoritative population is represented elsewhere in the same workbook
 M001,YES,100,METHODS,WORKSHEET,REGEX,(?i)^(installation\s+procedures?|procedures?|construction\s+and\s+installation\s+procedure)$,,,,,OFFSHORE INSTALLATION,PROCEDURE,INSTALLATION PROCEDURE,YES,0.9,YES,Methods installation procedure worksheet
-M002,YES,101,METHODS,TITLE,REGEX,(?i)\b(?:offshore\s+)?(?:construction\s+and\s+)?installation\s+procedures?\b,,,REVIEW_REQUIRED|OFFSHORE INSTALLATION,UNCLASSIFIED|PROCEDURE,OFFSHORE INSTALLATION,PROCEDURE,INSTALLATION PROCEDURE,YES,0.95,YES,Methods installation-procedure content fallback
+M002,YES,101,METHODS,HEADER,REGEX,(?i)\b(?:offshore\s+)?(?:construction\s+and\s+)?installation\s+procedures?\b,,,REVIEW_REQUIRED|OFFSHORE INSTALLATION,UNCLASSIFIED|PROCEDURE,OFFSHORE INSTALLATION,PROCEDURE,INSTALLATION PROCEDURE,YES,0.95,YES,Methods installation-procedure structural/header fallback for nonstandard worksheet names
 M010,YES,110,METHODS,WORKSHEET,REGEX,(?i)setup\s+plans?\s*(?:&|and)\s*anchor\s+patterns?,,,,,MARINE OPERATIONS,DRAWING,METHOD DRAWING,YES,0.9,YES,Methods setup/anchor drawing base classification
-M011,YES,120,METHODS,TITLE,REGEX,(?i)anchor\s+pattern,,,MARINE OPERATIONS,DRAWING,KEEP EXISTING,KEEP EXISTING,ANCHOR PATTERN,YES,0.9,YES,Refine Methods drawing by title
-M012,YES,121,METHODS,TITLE,REGEX,(?i)dp\s+set[- ]?up,,,MARINE OPERATIONS,DRAWING,KEEP EXISTING,KEEP EXISTING,DP SETUP PLAN,YES,0.9,YES,Refine Methods drawing by title
-M013,YES,122,METHODS,TITLE,REGEX,(?i)set[- ]?up\s+plan,,,MARINE OPERATIONS,DRAWING,KEEP EXISTING,KEEP EXISTING,SETUP PLAN,YES,0.9,YES,Refine Methods drawing by title
+M011,YES,120,METHODS,TITLE,REGEX,(?i)anchor\s+pattern,,,MARINE OPERATIONS,DRAWING,KEEP EXISTING,KEEP EXISTING,ANCHOR PATTERN,YES,0.9,YES,Per-document Methods drawing title refinement
+M012,YES,121,METHODS,TITLE,REGEX,(?i)dp\s+set[- ]?up,,,MARINE OPERATIONS,DRAWING,KEEP EXISTING,KEEP EXISTING,DP SETUP PLAN,YES,0.9,YES,Per-document Methods drawing title refinement
+M013,YES,122,METHODS,TITLE,REGEX,(?i)set[- ]?up\s+plan,,,MARINE OPERATIONS,DRAWING,KEEP EXISTING,KEEP EXISTING,SETUP PLAN,YES,0.9,YES,Per-document Methods drawing title refinement
 M020,YES,130,METHODS,WORKSHEET,REGEX,(?i)^sketch(?:es)?$,,,,,OFFSHORE INSTALLATION,SKETCH,ENGINEERING SKETCH,YES,0.9,YES,Methods sketch worksheet
 M030,YES,140,METHODS,SECTION,REGEX,(?i)^drawings?$,,,,,EXTERNAL / INPUT,DRAWING,INCOMING DRAWING,YES,0.9,YES,Incoming drawing section
 M031,YES,141,METHODS,SECTION,REGEX,(?i)^documents?$,,,,,EXTERNAL / INPUT,DOCUMENT,INCOMING TECHNICAL DOCUMENT,YES,0.9,YES,Incoming document section
@@ -29,17 +29,17 @@ T031,YES,231,TECH,WORKSHEET,REGEX,(?i)^sketch(?:es)?$,,,,,GENERAL / MULTIDISCIPL
 T040,YES,240,TECH,WORKSHEET,REGEX,(?i)^tn[-_ ]?pl$,,,,,PIPELINE & CABLE,DOCUMENT,TECHNICAL NOTE,YES,0.9,YES,Pipeline technical note worksheet
 T041,YES,241,TECH,WORKSHEET,REGEX,(?i)^tn[-_ ]?na$,,,,,NAVAL & MARINE,DOCUMENT,TECHNICAL NOTE,YES,0.9,YES,Naval technical note worksheet
 T042,YES,242,TECH,WORKSHEET,REGEX,(?i)^tn[-_ ]?st$,,,,,STRUCTURAL,DOCUMENT,TECHNICAL NOTE,YES,0.9,YES,Structural technical note worksheet
-T043,YES,243,TECH,DOC_NUMBER,REGEX,(?i)\btn[-_ ]?pl\b,,,,DOCUMENT,PIPELINE & CABLE,DOCUMENT,TECHNICAL NOTE,YES,0.9,YES,Pipeline technical-note document-number refinement
-T044,YES,244,TECH,DOC_NUMBER,REGEX,(?i)\btn[-_ ]?na\b,,,,DOCUMENT,NAVAL & MARINE,DOCUMENT,TECHNICAL NOTE,YES,0.9,YES,Naval technical-note document-number refinement
-T045,YES,245,TECH,DOC_NUMBER,REGEX,(?i)\btn[-_ ]?st\b,,,,DOCUMENT,STRUCTURAL,DOCUMENT,TECHNICAL NOTE,YES,0.9,YES,Structural technical-note document-number refinement
+T043,YES,243,TECH,DOC_NUMBER,REGEX,(?i)\btn[-_ ]?pl\b,,,,DOCUMENT,PIPELINE & CABLE,DOCUMENT,TECHNICAL NOTE,YES,0.9,YES,Per-document Pipeline technical-note document-number refinement
+T044,YES,244,TECH,DOC_NUMBER,REGEX,(?i)\btn[-_ ]?na\b,,,,DOCUMENT,NAVAL & MARINE,DOCUMENT,TECHNICAL NOTE,YES,0.9,YES,Per-document Naval technical-note document-number refinement
+T045,YES,245,TECH,DOC_NUMBER,REGEX,(?i)\btn[-_ ]?st\b,,,,DOCUMENT,STRUCTURAL,DOCUMENT,TECHNICAL NOTE,YES,0.9,YES,Per-document Structural technical-note document-number refinement
 T050,YES,250,TECH,WORKSHEET,REGEX,(?i)^specification$,,,,,PIPELINE & CABLE,DOCUMENT,SPECIFICATION,YES,0.9,YES,Specification worksheet
 T060,YES,260,TECH,WORKSHEET,REGEX,(?i)^anchor\s+pattern$,,,,,NAVAL & MARINE,DRAWING,ANCHOR PATTERN,YES,0.9,YES,Anchor-pattern drawing worksheet
 T061,YES,261,TECH,WORKSHEET,REGEX,(?i)^(dp|dp\s+set[- ]?up(?:\s+plan)?)$,,,,,NAVAL & MARINE,DRAWING,DP SETUP PLAN,YES,0.9,YES,DP setup drawing worksheet
 T062,YES,262,TECH,WORKSHEET,REGEX,(?i)commission.*(?:otp|operational\s+test),,,,,COMMISSIONING,PROCEDURE,OPERATIONAL TEST PROCEDURE,YES,0.9,YES,Commissioning OTP worksheet
-T070,YES,300,TECH,TITLE,REGEX,(?i)analysis\s+report,,,,DOCUMENT,KEEP EXISTING,DOCUMENT,ANALYSIS REPORT,YES,0.9,YES,Title refinement
-T071,YES,301,TECH,TITLE,REGEX,(?i)\breport\b,,,,DOCUMENT,KEEP EXISTING,DOCUMENT,REPORT,YES,0.9,YES,Title refinement
-T072,YES,302,TECH,TITLE,REGEX,(?i)\b(?:calculation|calc\.?)\b,,,,DOCUMENT,KEEP EXISTING,DOCUMENT,CALCULATION,YES,0.9,YES,Title refinement
-T073,YES,303,TECH,TITLE,REGEX,(?i)\banalysis\b,,,,DOCUMENT,KEEP EXISTING,DOCUMENT,ANALYSIS,YES,0.9,YES,Title refinement
-T074,YES,304,TECH,TITLE,REGEX,(?i)\bprocedure\b,,,,DOCUMENT,KEEP EXISTING,DOCUMENT,PROCEDURE,YES,0.9,YES,Title refinement
-T075,YES,305,TECH,TITLE,REGEX,(?i)\bspecification\b,,,,DOCUMENT,KEEP EXISTING,DOCUMENT,SPECIFICATION,YES,0.9,YES,Title refinement
-T076,YES,306,TECH,TITLE,REGEX,(?i)technical\s+note,,,,DOCUMENT,KEEP EXISTING,DOCUMENT,TECHNICAL NOTE,YES,0.9,YES,Title refinement
+T070,YES,300,TECH,TITLE,REGEX,(?i)analysis\s+report,,,,DOCUMENT,KEEP EXISTING,DOCUMENT,ANALYSIS REPORT,YES,0.9,YES,Per-document title refinement
+T071,YES,301,TECH,TITLE,REGEX,(?i)\breport\b,,,,DOCUMENT,KEEP EXISTING,DOCUMENT,REPORT,YES,0.9,YES,Per-document title refinement
+T072,YES,302,TECH,TITLE,REGEX,(?i)\b(?:calculation|calc\.?)\b,,,,DOCUMENT,KEEP EXISTING,DOCUMENT,CALCULATION,YES,0.9,YES,Per-document title refinement
+T073,YES,303,TECH,TITLE,REGEX,(?i)\banalysis\b,,,,DOCUMENT,KEEP EXISTING,DOCUMENT,ANALYSIS,YES,0.9,YES,Per-document title refinement
+T074,YES,304,TECH,TITLE,REGEX,(?i)\bprocedure\b,,,,DOCUMENT,KEEP EXISTING,DOCUMENT,PROCEDURE,YES,0.9,YES,Per-document title refinement
+T075,YES,305,TECH,TITLE,REGEX,(?i)\bspecification\b,,,,DOCUMENT,KEEP EXISTING,DOCUMENT,SPECIFICATION,YES,0.9,YES,Per-document title refinement
+T076,YES,306,TECH,TITLE,REGEX,(?i)technical\s+note,,,,DOCUMENT,KEEP EXISTING,DOCUMENT,TECHNICAL NOTE,YES,0.9,YES,Per-document title refinement

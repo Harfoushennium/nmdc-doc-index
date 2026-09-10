@@ -19,6 +19,38 @@ class ClassificationV2Tests(unittest.TestCase):
         self.assertEqual(category, result["category"])
         self.assertEqual(subcategory, result["subcategory"])
 
+    def discovery_row(
+        self,
+        family="TECH",
+        path="DATA/TECH/4000 DOCUMENT REGISTER.xlsx",
+        project="4000",
+        sheet_name="Documents",
+        headers=None,
+        doc_numbers=None,
+        titles=None,
+    ):
+        workbooks = [
+            {
+                "source_family": family,
+                "relative_path": path,
+                "readability_status": "READABLE",
+                "inferred_project_numbers": [project] if project else [],
+                "project_mismatch_findings": [],
+                "sheets": [
+                    {
+                        "sheet_name": sheet_name,
+                        "sections": [],
+                        "representative_header_values": headers or [],
+                        "sample_document_numbers": doc_numbers or [],
+                        "sample_titles": titles or [],
+                    }
+                ],
+            }
+        ]
+        rows = profiler.classification_rows(workbooks, self.rules)
+        self.assertEqual(1, len(rows))
+        return rows[0]
+
     def test_01_methods_installation_procedures_trailing_space(self):
         result = self.classify("METHODS", WORKSHEET="Installation Procedures ")
         self.assert_classification(
@@ -26,11 +58,11 @@ class ClassificationV2Tests(unittest.TestCase):
         )
         self.assertIn("M001", result["rule_ids"])
 
-    def test_02_methods_installation_content_fallback(self):
+    def test_02_methods_installation_header_fallback(self):
         result = self.classify(
             "METHODS",
             WORKSHEET="2171-2172",
-            TITLE="Document No. | Construction and Installation Procedure | Issue Date",
+            HEADER="Document No. | Construction and Installation Procedure | Issue Date",
         )
         self.assert_classification(
             result, "OFFSHORE INSTALLATION", "PROCEDURE", "INSTALLATION PROCEDURE"
@@ -81,7 +113,7 @@ class ClassificationV2Tests(unittest.TestCase):
         )
         self.assertIn("T002", result["rule_ids"])
 
-    def test_09_generic_documents_title_refinement_preserves_discipline(self):
+    def test_09_row_level_generic_documents_title_refinement_preserves_discipline(self):
         result = self.classify(
             "TECH", WORKSHEET="Documents ", TITLE="Mooring Analysis Report for Offshore Barge"
         )
@@ -116,29 +148,15 @@ class ClassificationV2Tests(unittest.TestCase):
         self.assertEqual([], result["rule_ids"])
 
     def test_13_original_worksheet_text_is_preserved(self):
-        workbooks = [
-            {
-                "source_family": "TECH",
-                "relative_path": "DATA/TECH/4000 DOCUMENT REGISTER.xlsx",
-                "readability_status": "READABLE",
-                "inferred_project_numbers": ["4000"],
-                "project_mismatch_findings": [],
-                "sheets": [
-                    {
-                        "sheet_name": "Cut-lists ",
-                        "sections": [],
-                        "representative_header_values": ["CUT-LIST DRAWINGS"],
-                        "sample_document_numbers": ["4000-NN-0001-CTL"],
-                        "sample_titles": ["CUT-LIST DRAWINGS"],
-                    }
-                ],
-            }
-        ]
-        rows = profiler.classification_rows(workbooks, self.rules)
-        self.assertEqual(1, len(rows))
-        self.assertEqual("Cut-lists ", rows[0]["worksheet_name"])
-        self.assertEqual("cut lists", rows[0]["normalized_worksheet"])
-        self.assertEqual("CUT LIST", rows[0]["subcategory"])
+        row = self.discovery_row(
+            sheet_name="Cut-lists ",
+            headers=["CUT-LIST DRAWINGS"],
+            doc_numbers=["4000-NN-0001-CTL"],
+            titles=["CUT-LIST DRAWINGS"],
+        )
+        self.assertEqual("Cut-lists ", row["worksheet_name"])
+        self.assertEqual("cut lists", row["normalized_worksheet"])
+        self.assertEqual("CUT LIST", row["subcategory"])
 
     def test_14_v1_sentinel_mappings_still_pass(self):
         cases = [
@@ -195,7 +213,7 @@ class ClassificationV2Tests(unittest.TestCase):
         self.assertEqual("EXCLUDED", result["status"])
         self.assertIn("X002", result["rule_ids"])
 
-    def test_18_generic_documents_can_refine_to_procedure_without_inventing_discipline(self):
+    def test_18_row_level_generic_documents_can_refine_to_procedure_without_inventing_discipline(self):
         result = self.classify(
             "TECH",
             WORKSHEET="Documents",
@@ -233,11 +251,11 @@ class ClassificationV2Tests(unittest.TestCase):
         self.assertIn("M031", result["rule_ids"])
         self.assertNotIn("M011", result["rule_ids"])
 
-    def test_21_installation_title_fallback_does_not_overwrite_sketch(self):
+    def test_21_installation_header_fallback_does_not_overwrite_sketch(self):
         result = self.classify(
             "METHODS",
             WORKSHEET="Sketches",
-            TITLE="Construction and Installation Procedure reference",
+            HEADER="Construction and Installation Procedure reference",
         )
         self.assert_classification(
             result, "OFFSHORE INSTALLATION", "SKETCH", "ENGINEERING SKETCH"
@@ -287,6 +305,85 @@ class ClassificationV2Tests(unittest.TestCase):
         self.assertEqual("MARINE OPERATIONS", m011.requires_discipline)
         self.assertEqual("DRAWING", m011.requires_category)
         self.assertEqual("DOCUMENT", t070.requires_category)
+
+    def test_26_discovery_mixed_generic_titles_stays_safe_base(self):
+        row = self.discovery_row(
+            sheet_name="Documents",
+            headers=["DOCUMENT NUMBER | TITLE/DESCRIPTION"],
+            titles=["Mooring Analysis Report", "Offshore Installation Procedure"],
+        )
+        self.assertEqual("GENERAL / MULTIDISCIPLINE", row["discipline"])
+        self.assertEqual("DOCUMENT", row["category"])
+        self.assertEqual("GENERAL TECHNICAL DOCUMENT", row["subcategory"])
+        self.assertEqual("T002", row["matched_rule_ids"])
+        self.assertNotIn("T070", row["matched_rule_ids"])
+        self.assertNotIn("T074", row["matched_rule_ids"])
+        self.assertIn("Mooring Analysis Report", row["sample_title_keywords"])
+
+    def test_27_discovery_pipeline_mixed_titles_stays_base(self):
+        row = self.discovery_row(
+            sheet_name="Documents - Pipeline & Cable",
+            headers=["OFFSHORE CONSTRUCTION ENGINEERING DOCUMENTS (PIPELINE & CABLE)"],
+            titles=["Pipeline Analysis Report", "Installation Procedure", "General Note"],
+        )
+        self.assertEqual("PIPELINE & CABLE", row["discipline"])
+        self.assertEqual("DOCUMENT", row["category"])
+        self.assertEqual("GENERAL TECHNICAL DOCUMENT", row["subcategory"])
+        self.assertEqual("T001", row["matched_rule_ids"])
+
+    def test_28_discovery_sampled_tn_number_does_not_refine_entire_worksheet(self):
+        row = self.discovery_row(
+            sheet_name="Documents",
+            headers=["DOCUMENT NUMBER | TITLE/DESCRIPTION"],
+            doc_numbers=["4000-TN-PL-001", "4000-NN-RP-001"],
+            titles=["General Technical Document"],
+        )
+        self.assertEqual("GENERAL / MULTIDISCIPLINE", row["discipline"])
+        self.assertEqual("GENERAL TECHNICAL DOCUMENT", row["subcategory"])
+        self.assertEqual("T002", row["matched_rule_ids"])
+        self.assertNotIn("T043", row["matched_rule_ids"])
+        self.assertIn("4000-TN-PL-001", row["sample_document_numbers"])
+
+    def test_29_2171_discovery_uses_header_not_sample_title(self):
+        row = self.discovery_row(
+            family="METHODS",
+            path="DATA/METHODS/2171-2172 -Document Deliverables LATEST.xlsx",
+            project="2171",
+            sheet_name="2171-2172",
+            headers=["Document No. | Issue Date | Construction and Installation Procedure"],
+            titles=["Unrelated Analysis Report", "Another Procedure"],
+        )
+        self.assertEqual("OFFSHORE INSTALLATION", row["discipline"])
+        self.assertEqual("PROCEDURE", row["category"])
+        self.assertEqual("INSTALLATION PROCEDURE", row["subcategory"])
+        self.assertEqual("M002", row["matched_rule_ids"])
+        self.assertEqual("HEADER:M002", row["match_basis"])
+
+    def test_30_unknown_discovery_does_not_use_sample_title_as_fallback(self):
+        row = self.discovery_row(
+            family="METHODS",
+            path="DATA/METHODS/4000 Misc.xlsx",
+            project="4000",
+            sheet_name="Unknown Future Register",
+            headers=["Document No. | Issue Date"],
+            titles=["Construction and Installation Procedure"],
+        )
+        self.assertEqual("REVIEW_REQUIRED", row["proposed_action"])
+        self.assertEqual("REVIEW_REQUIRED", row["discipline"])
+        self.assertEqual("", row["matched_rule_ids"])
+
+    def test_31_row_level_doc_number_refinement_remains_available(self):
+        result = self.classify(
+            "TECH",
+            WORKSHEET="Documents",
+            DOC_NUMBER="4000-TN-PL-001",
+            TITLE="Pipeline Technical Note",
+        )
+        self.assert_classification(
+            result, "PIPELINE & CABLE", "DOCUMENT", "TECHNICAL NOTE"
+        )
+        self.assertIn("T002", result["rule_ids"])
+        self.assertIn("T043", result["rule_ids"])
 
 
 if __name__ == "__main__":
