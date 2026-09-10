@@ -1,0 +1,15 @@
+{
+  "conflict_workbooks_copied": 4,
+  "conflict_worksheets": 9,
+  "event_records": 9379,
+  "pilot_projects": [
+    "2035",
+    "2631",
+    "2705",
+    "2745"
+  ],
+  "project_assignment_note": "Pilot records show the current Cycle 3 extracted Project No. assignment. Conflicting source identities are not auto-corrected; see review/project_conflicts/conflict_manifest.csv.",
+  "revisions": 2253,
+  "source_dataset": "outputs/cycle3/full_records.csv",
+  "source_documents": 1783
+}
