@@ -25,6 +25,15 @@ class CrossPlatformOutputTests(unittest.TestCase):
             self.assertIn(b"\n", data)
             self.assertNotIn(b"\r\n", data)
 
+    def test_03_json_and_markdown_outputs_emit_lf_only(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "out"
+            profiler.write_outputs([], [], [], [], out)
+            for name in ("workbook_profiles.json", "source_selection_report.md"):
+                data = (out / name).read_bytes()
+                self.assertIn(b"\n", data, name)
+                self.assertNotIn(b"\r\n", data, name)
+
 
 if __name__ == "__main__":
     unittest.main()
