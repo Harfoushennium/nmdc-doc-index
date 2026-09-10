@@ -6,6 +6,7 @@ on:
       - feature/cycle3-full-extraction
     paths:
       - tools/prepare_user_validation_package.py
+      - tools/prepare_validation_samples.py
       - .github/workflows/prepare-user-validation.yml
 
 permissions:
@@ -25,6 +26,9 @@ jobs:
 
       - name: Prepare validation package
         run: python tools/prepare_user_validation_package.py
+
+      - name: Prepare compact validation samples
+        run: python tools/prepare_validation_samples.py
 
       - name: Confirm DATA is unchanged
         run: |
