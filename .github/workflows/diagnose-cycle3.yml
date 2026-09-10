@@ -6,6 +6,7 @@ on:
       - feature/cycle3-full-extraction
     paths:
       - tools/diagnose_cycle3_reviews.py
+      - tools/audit_cycle3_project_ids.py
       - .github/workflows/diagnose-cycle3.yml
 
 permissions:
@@ -20,3 +21,4 @@ jobs:
         with:
           python-version: '3.11'
       - run: PYTHONPATH=. python tools/diagnose_cycle3_reviews.py
+      - run: PYTHONPATH=. python tools/audit_cycle3_project_ids.py
