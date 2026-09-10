@@ -2227,9 +2227,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M011",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -4660,18 +4660,18 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "EXTERNAL / INPUT",
-            "rule_ids": "M031;M011",
+            "rule_ids": "M031",
             "section": "DOCUMENTS",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "INCOMING TECHNICAL DOCUMENT",
             "warning_code": ""
           },
           {
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "EXTERNAL / INPUT",
-            "rule_ids": "M030;M011",
+            "rule_ids": "M030",
             "section": "DRAWINGS",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "INCOMING DRAWING",
             "warning_code": ""
           }
         ],
@@ -11105,9 +11105,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M013",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "SETUP PLAN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -13482,9 +13482,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M013",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "SETUP PLAN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -16144,9 +16144,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M011",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -18933,9 +18933,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M011",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -24934,9 +24934,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M011",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -30117,9 +30117,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M011",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -33471,9 +33471,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M013",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "SETUP PLAN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -35990,9 +35990,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M011",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -39263,9 +39263,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M011",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -44164,9 +44164,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M011",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
@@ -46969,9 +46969,9 @@
             "action": "INCLUDE",
             "category": "SKETCH",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M020;M011",
+            "rule_ids": "M020",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "ENGINEERING SKETCH",
             "warning_code": ""
           }
         ],
