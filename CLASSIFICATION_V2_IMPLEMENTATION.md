@@ -95,14 +95,32 @@ Classification v2 now covers:
 - direct per-document TITLE/DOC_NUMBER refinement remaining available through `apply_classification()`;
 - Windows/Linux LF output consistency.
 
-Expected complete suite after this correction: **54 tests** (32 Classification v2 + 20 Cycle-1 profiler + 2 cross-platform output tests).
+Complete suite: **54 tests** (32 Classification v2 + 20 Cycle-1 profiler + 2 cross-platform output tests).
+
+## Validation result
+
+The semantic fix was validated on code HEAD `0cead41a6ec46f601241a0be1c5b42e0f71535b3` by GitHub Actions run `34451393027`:
+
+- Python 3.11.16;
+- 56 workbooks profiled;
+- 211 classification rows;
+- classification `REVIEW_REQUIRED`: 0;
+- deterministic output comparison: PASS;
+- 54/54 tests: PASS;
+- mixed-sample discovery regression tests: PASS;
+- Python runtime-artifact hygiene: PASS;
+- `DATA/` immutability: PASS.
+
+The workflow then regenerated deterministic outputs in commit `a755c538dfc58ddcb14fec59c12c8654cf5633af`. Those outputs show broad Pipeline/Naval/General document worksheets at safe worksheet-level base classifications and preserve per-document refinements for the future row extractor only.
+
+This documentation commit is intentionally made after output regeneration so the final PR HEAD receives a fresh exact-head CI run without changing classification behavior.
 
 ## Acceptance gate
 
-This implementation is review-ready only when exact-head CI confirms:
+This implementation is review-ready only when final exact-head CI confirms:
 
 1. profiler runs successfully against real `DATA/`;
-2. generated outputs are deterministic;
+2. generated outputs are deterministic and already current;
 3. current classification `REVIEW_REQUIRED` count is zero;
 4. all 54 tests pass;
 5. mixed-sample worksheet discovery remains at safe base classifications;
