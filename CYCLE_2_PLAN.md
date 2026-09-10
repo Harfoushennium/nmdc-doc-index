@@ -1,6 +1,6 @@
 # Cycle 2 — Sentinel Lossless Extractor Plan
 
-Status: implementation plan for `NMDC-DOC-INDEX-CYCLE2-001`.
+Status: implementation complete for `NMDC-DOC-INDEX-CYCLE2-001`; acceptance validation is automated in the Cycle 2 CI workflow.
 
 ## Objective
 
@@ -11,6 +11,16 @@ Cycle 2 proves the lossless row model:
 `PROJECT -> DOCUMENT -> REVISION -> EVENT / TRANSACTION`
 
 The canonical sentinel output uses one normalized row per event/transaction for one revision of one document.
+
+## Latest implementation hardening
+
+The implemented extractor now also handles the nonstandard 2171-2172 two-level header safely:
+
+- related Planned Date, Outgoing Reference and Actual Date columns are consolidated into one transaction group instead of being emitted as separate pseudo-events;
+- the source `#` sequence column is treated as row metadata, not a document event;
+- when both planned and actual dates exist, the actual date is used as the normalized Event Date while both source values remain preserved in Event Values JSON;
+- text accidentally present in a date column is preserved with a warning instead of being promoted to a valid date;
+- the library sentinel runner uses the canonical `Event_Key` field consistently.
 
 ## Scope
 
@@ -51,7 +61,8 @@ The initial real-data set intentionally covers difficult structural and business
    - internal `DOCUMENTS` / `DRAWINGS` sections;
    - external-input classification preservation.
 3. `DATA/METHODS/2171-2172 -Document Deliverables LATEST.xlsx` / `2171-2172`
-   - nonstandard worksheet name resolved by the approved narrow structural rule.
+   - nonstandard worksheet name resolved by the approved narrow structural rule;
+   - reversed multi-row transaction headers consolidated safely.
 4. `DATA/TECH/2820-DOCUMENT REGISTER-NEW 30-04-2026.xlsx` / `Documents - Pipeline & Cable`
    - newest selected source from a version group;
    - dense document register with native hyperlinks;
@@ -117,7 +128,7 @@ For each sentinel worksheet:
 2. identify document-title, company-document and revision columns from the multi-row header band;
 3. find the first source data row from the document/title column evidence;
 4. build a hierarchical header path for remaining transaction columns;
-5. form transaction groups from contiguous columns sharing the same deepest parent header.
+5. form transaction groups from contiguous columns sharing the same semantic parent, whether the field label is on the top or bottom row of a multi-row header.
 
 If required identity columns cannot be established, return an explicit layout warning rather than guessing.
 
@@ -131,7 +142,7 @@ Use the approved Classification v2 rule engine on one document at a time. Struct
 
 ### Dates
 
-Convert Excel serial dates only when the event leaf/header is date-like. Preserve text dates as text when safe deterministic conversion is not possible; add a warning rather than inventing a date.
+Convert Excel serial dates only when the event field/header is date-like. When several date fields belong to one transaction, prefer an actual date over a planned date for the normalized Event Date while preserving all source date values in Event Values JSON. Preserve non-date text with a warning rather than inventing a date.
 
 ### Keys and flags
 
@@ -172,7 +183,10 @@ Every sentinel document/revision row discovered by the layout must either genera
 17. all Cycle-1 / Classification-v2 tests remain green;
 18. `DATA/` remains unchanged;
 19. Cycle-2 outputs are deterministic and LF-clean on Linux and Windows;
-20. unknown/unresolved layout produces a visible warning and no guessed extraction.
+20. unknown/unresolved layout produces a visible warning and no guessed extraction;
+21. reversed two-level event headers consolidate planned/reference/actual fields into one transaction;
+22. non-date text in a date column remains visible with a warning;
+23. the library sentinel runner sorts using the canonical `Event_Key` field.
 
 ## Deliverables
 
