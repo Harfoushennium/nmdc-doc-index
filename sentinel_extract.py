@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import zipfile
 from pathlib import Path
 import xml.etree.ElementTree as ET
@@ -10,7 +11,27 @@ from nmdc_profiler.extractor import (
     read_sheet_model,
     write_cycle2_outputs,
 )
+from nmdc_profiler.ooxml import workbook_sheet_map
 from nmdc_profiler.rules import load_rules
+
+
+def _canonical_sheet_name(value: str) -> str:
+    return re.sub(r"\s+", " ", value or "").strip().casefold()
+
+
+def _resolve_sheet_name(source: Path, requested: str) -> str:
+    """Resolve harmless worksheet whitespace/case variations without guessing aliases."""
+    with zipfile.ZipFile(source) as z:
+        names = [sheet["name"] for sheet in workbook_sheet_map(z)]
+    if requested in names:
+        return requested
+    wanted = _canonical_sheet_name(requested)
+    matches = [name for name in names if _canonical_sheet_name(name) == wanted]
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        raise KeyError(f"Worksheet not found: {requested}")
+    raise KeyError(f"Worksheet name is ambiguous after whitespace normalization: {requested}")
 
 
 def main() -> int:
@@ -39,7 +60,8 @@ def main() -> int:
             }
         else:
             try:
-                model = read_sheet_model(source, root, case.worksheet)
+                actual_sheet_name = _resolve_sheet_name(source, case.worksheet)
+                model = read_sheet_model(source, root, actual_sheet_name)
                 case_records, recon = extract_model(case, model, rules)
             except (KeyError, OSError, zipfile.BadZipFile, ET.ParseError) as exc:
                 case_records = []
@@ -48,7 +70,7 @@ def main() -> int:
                     "source_file": case.source_file,
                     "worksheet": case.worksheet,
                     "status": "REVIEW_REQUIRED",
-                    "reason": f"EXTRACTION_FAILED:{exc.__class__.__name__}",
+                    "reason": f"EXTRACTION_FAILED:{exc.__class__.__name__}:{exc}",
                     "warnings": [f"EXTRACTION_FAILED:{exc.__class__.__name__}"],
                     "rows_with_identity": 0,
                     "event_records": 0,
@@ -79,7 +101,7 @@ def main() -> int:
             if status != "INCLUDE" or int(item.get("event_records", 0)) <= 0:
                 failed.append(
                     f"{case.case_id}: expected INCLUDE with events, got "
-                    f"{status} events={item.get('event_records', 0)}"
+                    f"{status} events={item.get('event_records', 0)} reason={item.get('reason', '')}"
                 )
         elif case.expected_action == "EXCLUDE" and status != "EXCLUDED":
             failed.append(f"{case.case_id}: expected EXCLUDED, got {status}")
@@ -93,7 +115,8 @@ def main() -> int:
             f"rows={item.get('rows_with_identity', 0)} "
             f"events={item.get('event_records', 0)} "
             f"docs={item.get('distinct_documents', 0)} "
-            f"revs={item.get('distinct_revisions', 0)}"
+            f"revs={item.get('distinct_revisions', 0)} "
+            f"reason={item.get('reason', '')}"
         )
     if failed:
         for msg in failed:
