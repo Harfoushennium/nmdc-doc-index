@@ -34,6 +34,13 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests -v
 
+      - name: Ensure no Python runtime artifacts are tracked
+        run: |
+          if git ls-files | grep -E '(^|/)(__pycache__/|.*\.py[cod]$)'; then
+            echo 'ERROR: Python runtime artifacts must not be tracked.'
+            exit 1
+          fi
+
       - name: Ensure source DATA was not changed
         run: |
           if ! git diff --quiet -- DATA; then
