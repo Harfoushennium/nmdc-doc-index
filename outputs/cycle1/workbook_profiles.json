@@ -33,7 +33,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -1056,9 +1056,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -3135,7 +3135,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -3818,9 +3818,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -6596,7 +6596,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -8058,9 +8058,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -11536,7 +11536,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -12643,9 +12643,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -14361,7 +14361,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -15433,9 +15433,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -17024,7 +17024,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -18046,9 +18046,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -19304,7 +19304,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -20327,9 +20327,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -22648,7 +22648,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -23779,9 +23779,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -25770,7 +25770,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -27008,9 +27008,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -28481,7 +28481,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -29440,9 +29440,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -30909,7 +30909,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -32128,9 +32128,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -34353,7 +34353,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -35377,9 +35377,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -36873,7 +36873,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -37996,9 +37996,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -40096,7 +40096,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -41251,9 +41251,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -43285,7 +43285,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -43772,9 +43772,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -44551,7 +44551,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -45714,9 +45714,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -48454,7 +48454,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -48776,9 +48776,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -49414,7 +49414,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -49736,9 +49736,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -50395,7 +50395,7 @@
             "action": "INCLUDE",
             "category": "PROCEDURE",
             "discipline": "OFFSHORE INSTALLATION",
-            "rule_ids": "M001;M002",
+            "rule_ids": "M001",
             "section": "",
             "subcategory": "INSTALLATION PROCEDURE",
             "warning_code": ""
@@ -50717,9 +50717,9 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "MARINE OPERATIONS",
-            "rule_ids": "M010;M011",
+            "rule_ids": "M010",
             "section": "",
-            "subcategory": "ANCHOR PATTERN",
+            "subcategory": "METHOD DRAWING",
             "warning_code": ""
           }
         ],
@@ -56441,7 +56441,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T050;T075",
+            "rule_ids": "T050",
             "section": "",
             "subcategory": "SPECIFICATION",
             "warning_code": ""
@@ -56950,9 +56950,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -59705,7 +59705,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T050;T075",
+            "rule_ids": "T050",
             "section": "",
             "subcategory": "SPECIFICATION",
             "warning_code": ""
@@ -60214,9 +60214,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -68379,9 +68379,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -69819,9 +69819,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -80641,9 +80641,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -81786,9 +81786,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -86508,7 +86508,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T040;T043",
+            "rule_ids": "T040",
             "section": "",
             "subcategory": "TECHNICAL NOTE",
             "warning_code": ""
@@ -87465,9 +87465,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -89234,9 +89234,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -91833,9 +91833,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T073",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -93444,9 +93444,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T070",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -99593,7 +99593,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T050;T075",
+            "rule_ids": "T050",
             "section": "",
             "subcategory": "SPECIFICATION",
             "warning_code": ""
@@ -100148,9 +100148,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -101843,9 +101843,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -107488,9 +107488,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T073",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -109229,9 +109229,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -110556,9 +110556,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -115672,9 +115672,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -116651,9 +116651,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -120330,9 +120330,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -121384,9 +121384,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -130798,9 +130798,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -132095,9 +132095,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -136572,9 +136572,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T040;T043;T073",
+            "rule_ids": "T040",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "TECHNICAL NOTE",
             "warning_code": ""
           }
         ],
@@ -137132,7 +137132,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "STRUCTURAL",
-            "rule_ids": "T042;T045",
+            "rule_ids": "T042",
             "section": "",
             "subcategory": "TECHNICAL NOTE",
             "warning_code": ""
@@ -137670,7 +137670,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T041;T044",
+            "rule_ids": "T041",
             "section": "",
             "subcategory": "TECHNICAL NOTE",
             "warning_code": ""
@@ -138841,9 +138841,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -140284,9 +140284,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -146407,9 +146407,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T040;T043;T073",
+            "rule_ids": "T040",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "TECHNICAL NOTE",
             "warning_code": ""
           }
         ],
@@ -146888,9 +146888,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T073",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -147947,9 +147947,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T070",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -152789,7 +152789,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T040;T043;T076",
+            "rule_ids": "T040",
             "section": "",
             "subcategory": "TECHNICAL NOTE",
             "warning_code": ""
@@ -153195,9 +153195,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T073",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -153869,9 +153869,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -156279,7 +156279,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T040;T043;T076",
+            "rule_ids": "T040",
             "section": "",
             "subcategory": "TECHNICAL NOTE",
             "warning_code": ""
@@ -162889,9 +162889,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T071",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -163779,9 +163779,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T070",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -166376,9 +166376,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "GENERAL / MULTIDISCIPLINE",
-            "rule_ids": "T002;T070",
+            "rule_ids": "T002",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -169935,9 +169935,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "GENERAL / MULTIDISCIPLINE",
-            "rule_ids": "T002;T073",
+            "rule_ids": "T002",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -186867,9 +186867,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -188611,9 +188611,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -192576,9 +192576,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -194371,9 +194371,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "PIPELINE & CABLE",
-            "rule_ids": "T001;T070",
+            "rule_ids": "T001",
             "section": "",
-            "subcategory": "ANALYSIS REPORT",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -195602,9 +195602,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
@@ -199117,9 +199117,9 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010;T073",
+            "rule_ids": "T010",
             "section": "",
-            "subcategory": "ANALYSIS",
+            "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
           }
         ],
