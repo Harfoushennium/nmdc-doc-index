@@ -38,7 +38,7 @@
     "data_start": 4,
     "distinct_documents": 31,
     "distinct_revisions": 103,
-    "event_records": 321,
+    "event_records": 104,
     "header_end": 3,
     "header_start": 2,
     "hyperlink_targets_preserved": 0,
@@ -46,7 +46,9 @@
     "rows_with_identity": 104,
     "source_file": "DATA/METHODS/2171-2172 -Document Deliverables LATEST.xlsx",
     "status": "INCLUDE",
-    "warnings": [],
+    "warnings": [
+      "DATE_TEXT_PRESERVED"
+    ],
     "worksheet": "2171-2172"
   },
   {
