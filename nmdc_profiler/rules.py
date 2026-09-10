@@ -19,6 +19,8 @@ class Rule:
     words: str
     exclude_words: str
     path_qualifier: str
+    requires_discipline: str
+    requires_category: str
     discipline: str
     category: str
     subcategory: str
@@ -43,6 +45,8 @@ def load_rules(path: Path) -> List[Rule]:
                 row["Match_Words"],
                 row.get("Exclude_Words", ""),
                 row.get("Path_Qualifier", "").strip(),
+                row.get("Requires_Discipline", "").strip(),
+                row.get("Requires_Category", "").strip(),
                 row["Discipline"].strip(),
                 row["Category"].strip(),
                 row["Subcategory"].strip(),
@@ -77,6 +81,20 @@ def _path_allowed(rule: Rule, evidence: Dict[str, str]) -> bool:
     if not rule.path_qualifier:
         return True
     return re.search(rule.path_qualifier, evidence.get("FILE", "") or "", flags=re.I) is not None
+
+
+def _required_value_allowed(required: str, actual: object) -> bool:
+    if not required:
+        return True
+    allowed = {norm_text(value) for value in required.split("|") if value.strip()}
+    return norm_text(str(actual)) in allowed
+
+
+def _context_allowed(rule: Rule, result: Dict[str, object]) -> bool:
+    """Allow refining rules only in the taxonomy context declared in configuration."""
+    return _required_value_allowed(rule.requires_discipline, result.get("discipline", "")) and _required_value_allowed(
+        rule.requires_category, result.get("category", "")
+    )
 
 
 def _match(rule: Rule, text: str) -> bool:
@@ -116,6 +134,8 @@ def apply_classification(rules: Sequence[Rule], family: str, evidence: Dict[str,
             if rule.scope != scope or rule.family not in {"ANY", family}:
                 continue
             if not _path_allowed(rule, evidence):
+                continue
+            if not _context_allowed(rule, result):
                 continue
             if not _match(rule, text):
                 continue
