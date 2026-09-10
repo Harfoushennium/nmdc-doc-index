@@ -1,5 +1,7 @@
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from nmdc_profiler.extractor import (
     SentinelCase,
@@ -8,6 +10,7 @@ from nmdc_profiler.extractor import (
     _normalize_date,
     discover_layout,
     extract_model,
+    run_sentinels,
 )
 from nmdc_profiler.rules import load_rules
 
@@ -49,6 +52,27 @@ def tech_model():
     }
     model = SheetModel("DATA/TECH/2820-DOCUMENT REGISTER-NEW 30-04-2026.xlsx", "TECH", "2026-09-08T09:55:51Z", "Documents - Pipeline & Cable", 4, 5, cells=cells)
     add_merge(model, 1, 1, 2, 1); add_merge(model, 1, 2, 2, 2); add_merge(model, 1, 3, 2, 3); add_merge(model, 1, 4, 1, 5)
+    return model
+
+
+def reversed_header_model():
+    cells = {
+        (1, 1): "#", (1, 2): "Document No.", (1, 3): "Document Title", (1, 4): "Revision",
+        (1, 5): "Issue Date (Planned)", (1, 6): "Outgoing Ref No.", (1, 7): "Issue Date (Actual)",
+        (2, 5): "Construction and Installation Procedure",
+        (3, 1): "1", (3, 2): "2171-2172-PP-OF-012", (3, 3): "ANCHOR HANDLING PROCEDURE FOR FLOATING BARGE",
+        (3, 4): "A1", (3, 5): "44438", (3, 6): "T-553/21", (3, 7): "44553",
+    }
+    model = SheetModel(
+        "DATA/METHODS/2171-2172 -Document Deliverables LATEST.xlsx",
+        "METHODS",
+        "2026-09-08T05:23:16Z",
+        "2171-2172",
+        3,
+        7,
+        cells=cells,
+    )
+    add_merge(model, 2, 5, 2, 7)
     return model
 
 
@@ -153,6 +177,46 @@ class ExtractorTests(unittest.TestCase):
         records, recon = extract_model(case, model, self.rules)
         self.assertEqual([], records)
         self.assertEqual("REVIEW_REQUIRED", recon["status"])
+
+    def test_14_reversed_multilevel_header_consolidates_one_transaction(self):
+        layout, warnings = discover_layout(reversed_header_model())
+        self.assertIsNotNone(layout)
+        self.assertEqual((("Construction and Installation Procedure", (5, 6, 7)),), layout.event_groups)
+        self.assertIn(1, layout.metadata_cols)
+        self.assertEqual([], warnings)
+
+    def test_15_reversed_header_uses_actual_date_and_preserves_all_fields(self):
+        case = SentinelCase("REVHDR", "x", "2171-2172", "INCLUDE")
+        records, recon = extract_model(case, reversed_header_model(), self.rules)
+        self.assertEqual("INCLUDE", recon["status"])
+        self.assertEqual(1, len(records))
+        row = records[0]
+        self.assertEqual("Construction and Installation Procedure", row["Event Type"])
+        self.assertEqual("2021-12-23", row["Event Date"])
+        self.assertEqual("T-553/21", row["Event Reference"])
+        self.assertNotEqual("#", row["Event Type"])
+        self.assertIn('"Issue Date (Planned)":"2021-08-30"', row["Event Values JSON"])
+        self.assertIn('"Issue Date (Actual)":"2021-12-23"', row["Event Values JSON"])
+
+    def test_16_non_date_text_in_date_column_is_preserved_but_not_promoted(self):
+        model = reversed_header_model()
+        model.cells[(3, 7)] = "PMT ISSUED"
+        case = SentinelCase("REVHDR", "x", "2171-2172", "INCLUDE")
+        records, _ = extract_model(case, model, self.rules)
+        self.assertEqual("2021-08-30", records[0]["Event Date"])
+        self.assertIn("DATE_TEXT_PRESERVED", records[0]["Warnings"])
+        self.assertIn('"Issue Date (Actual)":"PMT ISSUED"', records[0]["Event Values JSON"])
+
+    def test_17_run_sentinels_sorts_by_canonical_event_key(self):
+        case = SentinelCase("REVHDR", "dummy.xlsx", "2171-2172", "INCLUDE")
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "dummy.xlsx").write_bytes(b"placeholder")
+            with patch("nmdc_profiler.extractor.read_sheet_model", return_value=reversed_header_model()):
+                records, reconciliation = run_sentinels(root, [case], self.rules)
+        self.assertEqual(1, len(records))
+        self.assertTrue(records[0]["Event_Key"].startswith("EVT-"))
+        self.assertEqual("INCLUDE", reconciliation[0]["status"])
 
 
 if __name__ == "__main__":

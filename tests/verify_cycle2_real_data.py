@@ -62,6 +62,28 @@ def main() -> int:
     nonstandard = [r for r in records if r["Case ID"] == "M2171_NONSTANDARD"]
     if not nonstandard or not all("M002" in r["Classification Rule ID"].split(";") for r in nonstandard):
         fail("2171-2172 sentinel did not use scoped M002 structural classification")
+    nonstandard_recon = by_case["M2171_NONSTANDARD"]
+    if int(nonstandard_recon["event_records"]) != int(nonstandard_recon["rows_with_identity"]):
+        fail(f"2171-2172 should produce one consolidated event record per revision row: {nonstandard_recon}")
+    bad_2171_types = [
+        r["Event Type"] for r in nonstandard
+        if r["Event Type"] == "#"
+        or r["Event Type"].startswith("Issue Date")
+        or r["Event Type"].startswith("Outgoing Ref")
+    ]
+    if bad_2171_types:
+        fail(f"2171-2172 still exposes column headers as separate event types: {bad_2171_types[:5]}")
+    first_2171 = [r for r in nonstandard if r["Document No."] == "2171-2172-PP-OF-012" and r["Revision"] == "A1"]
+    if not first_2171:
+        fail("2171-2172 known A1 sentinel revision is missing")
+    first_event = first_2171[0]
+    if first_event["Event Type"] != "Construction and Installation Procedure":
+        fail(f"2171-2172 event group was not consolidated: {first_event['Event Type']}")
+    if first_event["Event Date"] != "2021-12-23" or first_event["Event Reference"] != "T-553/21":
+        fail(f"2171-2172 A1 event semantics mismatch: {first_event}")
+    values_2171 = json.loads(first_event["Event Values JSON"])
+    if values_2171.get("Issue Date (Planned)") != "2021-08-30" or values_2171.get("Issue Date (Actual)") != "2021-12-23":
+        fail(f"2171-2172 planned/actual dates were not preserved correctly: {values_2171}")
 
     # 2820 current version only; one known document must refine using its own title.
     p2820 = [r for r in records if r["Case ID"] == "T2820_PIPELINE"]

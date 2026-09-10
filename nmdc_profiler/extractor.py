@@ -231,17 +231,45 @@ def _header_path(model: SheetModel, col: int, start: int, end: int) -> Tuple[str
 
 
 def _is_static_path(path: Sequence[str]) -> bool:
+    if any(str(part).strip() == "#" for part in path):
+        return True
     n = norm_text(" ".join(path))
     return bool(re.search(r"\b(sr|serial)\s+no\b|\bclass\b|\bremarks?\b", n))
+
+
+def _event_field_kind(text: str) -> str:
+    n = norm_text(text)
+    if not n:
+        return ""
+    if n.startswith("issue date") or n in {"date", "actual date", "planned date", "response date", "approval date"}:
+        return "date"
+    if n in {"ref", "ref no", "reference", "reference no", "outgoing ref", "outgoing ref no", "transmittal", "transmittal no"}:
+        return "reference"
+    if n in {"code", "status", "response", "approval code", "comment code"}:
+        return "status"
+    return ""
+
+
+def _event_value_label(path: Sequence[str], col: int) -> str:
+    if not path:
+        return _col_letter(col)
+    if _event_field_kind(path[-1]):
+        return path[-1]
+    if len(path) > 1 and _event_field_kind(path[0]):
+        return path[0]
+    return path[-1]
 
 
 def _event_group_label(path: Sequence[str], col: int) -> str:
     if not path:
         return f"COLUMN {_col_letter(col)}"
-    leaf = norm_text(path[-1])
-    leafish = bool(re.search(r"\b(date|ref|reference|status|code|response|transmittal)\b", leaf))
-    parent = path[:-1] if leafish and len(path) > 1 else path
-    label = " > ".join(parent).strip()
+    if _event_field_kind(path[-1]) and len(path) > 1:
+        group = path[:-1]
+    elif len(path) > 1 and _event_field_kind(path[0]):
+        group = path[1:]
+    else:
+        group = path
+    label = " > ".join(group).strip()
     return label or path[-1]
 
 
@@ -339,7 +367,7 @@ def _stable_key(prefix: str, *parts: object) -> str:
 
 def _event_values(model: SheetModel, row: int, cols: Sequence[int], layout: Layout) -> Tuple[Dict[str, str], str, str, str, List[str]]:
     values: Dict[str, str] = {}
-    dates: List[str] = []
+    date_candidates: List[Tuple[int, int, str]] = []
     refs: List[str] = []
     statuses: List[str] = []
     warnings: List[str] = []
@@ -348,23 +376,26 @@ def _event_values(model: SheetModel, row: int, cols: Sequence[int], layout: Layo
         if not raw:
             continue
         path = _header_path(model, col, layout.header_start, layout.header_end)
-        leaf = path[-1] if path else _col_letter(col)
-        key = leaf if leaf not in values else f"{leaf}@{_col_letter(col)}"
-        leaf_norm = norm_text(leaf)
-        if "date" in leaf_norm:
+        field_label = _event_value_label(path, col)
+        key = field_label if field_label not in values else f"{field_label}@{_col_letter(col)}"
+        field_norm = norm_text(field_label)
+        kind = _event_field_kind(field_label)
+        if kind == "date":
             normalized, warning = _normalize_date(raw)
             values[key] = normalized
-            if normalized:
-                dates.append(normalized)
+            if normalized and not warning and re.fullmatch(r"\d{4}-\d{2}-\d{2}", normalized):
+                priority = 40 if "actual" in field_norm else 30 if any(x in field_norm for x in ("response", "approval")) else 10 if "planned" in field_norm else 20
+                date_candidates.append((priority, col, normalized))
             if warning:
                 warnings.append(warning)
         else:
             values[key] = raw
-        if re.search(r"\b(ref|reference|transmittal)\b", leaf_norm):
+        if kind == "reference" or re.fullmatch(r"(?:outgoing )?(?:ref|reference)(?: no)?", field_norm):
             refs.append(raw)
-        if re.search(r"\b(status|code|response|approval)\b", leaf_norm):
+        if kind == "status":
             statuses.append(raw)
-    return values, "; ".join(dates), "; ".join(refs), "; ".join(statuses), sorted(set(warnings))
+    event_date = max(date_candidates, default=(0, 0, ""), key=lambda item: (item[0], item[1]))[2]
+    return values, event_date, "; ".join(refs), "; ".join(statuses), sorted(set(warnings))
 
 
 def _row_metadata(model: SheetModel, row: int, layout: Layout) -> Dict[str, str]:
@@ -546,7 +577,7 @@ def run_sentinels(root: Path, cases: Sequence[SentinelCase], rules: Sequence[Rul
             records, recon = [], {"case_id": case.case_id, "source_file": case.source_file, "worksheet": case.worksheet, "status": "REVIEW_REQUIRED", "reason": f"EXTRACTION_FAILED:{exc.__class__.__name__}", "warnings": [f"EXTRACTION_FAILED:{exc.__class__.__name__}"], "rows_with_identity": 0, "event_records": 0, "distinct_documents": 0, "distinct_revisions": 0, "hyperlink_targets_preserved": 0}
         all_records.extend(records)
         reconciliation.append(recon)
-    all_records.sort(key=lambda r: (str(r["Case ID"]), str(r["Source File"]), str(r["Source Sheet"]), int(r["Source Row"]), str(r["Event Key"])))
+    all_records.sort(key=lambda r: (str(r["Case ID"]), str(r["Source File"]), str(r["Source Sheet"]), int(r["Source Row"]), str(r["Event_Key"])))
     return all_records, reconciliation
 
 
