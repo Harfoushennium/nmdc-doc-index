@@ -1,15 +1,31 @@
-# Project conflict validation package
+# Project-number conflict validation package
 
-This folder is for human validation only.
+These are unchanged copies of the original Excel registers that triggered a project-identity mismatch during Cycle 3. They are provided only for owner examination. The originals under `DATA/` remain untouched and authoritative as source evidence.
 
-- The Excel files under `files/` are exact copies of the original source workbooks.
-- The originals remain in `DATA/` and are not modified, renamed, or moved.
-- `conflict_manifest.csv` records the project-number evidence that conflicts with the filename/path project.
-- No project ownership has been automatically corrected. Every item remains `USER_VALIDATION_REQUIRED` until the owner confirms it.
+## Files and observed conflicts
 
-Project identity evidence should be considered separately:
-1. source filename/path project,
-2. explicit project number inside the workbook,
-3. document-number project prefix.
+1. `2035 DOCUMENT REGISTER.xlsx`
+   - Filename/path suggests project **2035**.
+   - Worksheet `Specification` contains document-number evidence for **2136**.
 
-If the internal project number and document-number prefix agree against the filename, the source file may simply be misnamed; this package exists so that can be confirmed before the master index is produced.
+2. `2035 Offshore Construction Engineering Register (Pipeline & Cables).xlsx`
+   - Filename/path suggests project **2035**.
+   - Worksheet `Specification` contains document-number evidence for **2136**.
+
+3. `2705 -DOCUMENT REGISTER.xlsx`
+   - Filename/path suggests project **2705**.
+   - Internal worksheet header shows **NPCC PROJECT NO. 2824** on relevant sheets.
+   - Example document evidence includes `2824-NN-0001`.
+
+4. `2745-PP-GE-001-MDR Rev_2.xlsx`
+   - Filename suggests project **2745**.
+   - Internal register explicitly shows **CONTRACTOR Project No. 8405**.
+   - Many document numbers begin `8405-...`, including anchor-pattern and DP records.
+
+## Validation rule
+
+Do not decide project ownership from the filename alone. For Cycle 3, filename/path is only one signal. Explicit internal project labels and consistent document-number patterns are stronger evidence. Until the owner validates these four registers, the conflicting worksheets must remain held for review and must not be silently reassigned.
+
+## What the owner should check
+
+Open each workbook and confirm which NMDC/NPCC project number should own the records. If a file was simply saved under the wrong filename, record the correct project number here or in the PR review. No original `DATA/` file needs to be renamed or edited for this validation.
