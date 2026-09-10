@@ -6,6 +6,7 @@ on:
       - feature/cycle2-sentinel-extractor
     paths:
       - tools/apply_cycle2_hardening.py
+      - tools/run_cycle2_hardening.trigger
 
 permissions:
   contents: write
