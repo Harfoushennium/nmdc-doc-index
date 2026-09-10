@@ -26,8 +26,11 @@ This branch implements Classification Model v2 from the approved Cycle-1 evidenc
 - Methods anchor/DP/setup title refinements restricted to `MARINE OPERATIONS -> DRAWING`;
 - TECH report/analysis/calculation/procedure/specification/technical-note title refinements restricted to category `DOCUMENT`;
 - technical-note document-number refinements restricted to category `DOCUMENT`;
-- cross-platform LF policy for generated text outputs;
-- CI checks for real-data profiling, deterministic outputs, current classification gaps, full regression suite, cache hygiene, and `DATA/` integrity.
+- strict worksheet-discovery versus per-document-refinement boundary;
+- cross-platform LF policy for CSV, JSON and Markdown generated outputs;
+- Linux and Windows CI jobs;
+- real-data semantic sentinel validation in addition to unit regression tests;
+- CI checks for real-data profiling, deterministic outputs, current classification gaps, cache hygiene, `DATA/` integrity, and Windows worktree cleanliness.
 
 ## Independent review finding: discovery sample leakage
 
@@ -64,7 +67,7 @@ TECH -> GENERAL / MULTIDISCIPLINE -> DOCUMENT -> GENERAL TECHNICAL DOCUMENT
 
 ## Verified 2171-2172 nonstandard worksheet
 
-The first implementation attempted to preserve the known 2171-2172 procedure register using a HEADER fallback. Exact-head CI showed that the profiler's structural header extraction did not expose the phrase needed for that rule, leaving exactly one real-data `REVIEW_REQUIRED` row.
+The first semantic correction attempted to preserve the known 2171-2172 procedure register using a HEADER fallback. Exact-head CI showed that the profiler's structural header extraction did not expose the phrase needed for that rule, leaving exactly one real-data `REVIEW_REQUIRED` row.
 
 Rather than reintroduce sampled-title leakage, the fix uses a narrower structural exception:
 
@@ -73,6 +76,36 @@ Rather than reintroduce sampled-title leakage, the fix uses a narrower structura
 - result: `OFFSHORE INSTALLATION -> PROCEDURE -> INSTALLATION PROCEDURE`.
 
 This exception is intentionally path-qualified and regression-tested so a worksheet with the same name in another workbook does not inherit the rule.
+
+## Cross-platform validation finding
+
+After adding an actual `windows-latest` CI job, the Windows runner exposed a second line-ending defect that the earlier CSV-only test could not see: `workbook_profiles.json` and `source_selection_report.md` were written through `Path.write_text()`, which translated `\n` to CRLF on Windows.
+
+The corrected writer now uses an explicit `newline="\n"` text path for JSON and Markdown as well as the existing CSV `lineterminator="\n"` policy. A regression test writes the real output set into a temporary directory and verifies that JSON and Markdown contain LF only.
+
+The Windows CI job now also requires:
+
+- real profiler execution against `DATA/`;
+- zero Classification-v2 `REVIEW_REQUIRED` rows;
+- real-data semantic sentinels to pass;
+- the full unit suite to pass;
+- `DATA/` to remain unchanged;
+- `git diff -- outputs/cycle1` to be empty after regeneration;
+- final `git status --porcelain` to be clean.
+
+## Real-data semantic sentinel coverage
+
+`tests/verify_real_data_semantics.py` validates the generated real-data discovery output, including:
+
+- all broad Pipeline & Cable document worksheets remain `GENERAL TECHNICAL DOCUMENT` at discovery level;
+- all broad Naval & Marine document worksheets remain `GENERAL TECHNICAL DOCUMENT` at discovery level;
+- generic TECH `Documents` remains the safe General/Multidiscipline document base;
+- METHODS Sketches remain Engineering Sketches;
+- METHODS Setup Plans & Anchor Patterns remain `METHOD DRAWING` at worksheet discovery level;
+- 2891 incoming DOCUMENTS and DRAWINGS retain their External/Input classifications;
+- the 2171-2172 exception resolves through the narrow structural M002 rule;
+- the 3291 CLIENT view is excluded only by scoped X017;
+- no discovery row uses worksheet-wide TITLE/DOC_NUMBER refinement evidence.
 
 ## Regression coverage
 
@@ -93,27 +126,39 @@ Classification v2 now covers:
 - the 2171-2172 exception not applying globally;
 - unknown discovery rows not being classified from sampled titles;
 - direct per-document TITLE/DOC_NUMBER refinement remaining available through `apply_classification()`;
-- Windows/Linux LF output consistency.
+- CSV LF output consistency;
+- JSON and Markdown LF output consistency.
 
-Complete suite: **54 tests** (32 Classification v2 + 20 Cycle-1 profiler + 2 cross-platform output tests).
+Complete unit suite: **55 tests** (32 Classification v2 + 20 Cycle-1 profiler + 3 cross-platform output tests), plus the explicit real-data semantic sentinel verifier.
 
-## Validation result
+## Current validation result
 
-The semantic fix was validated on code HEAD `0cead41a6ec46f601241a0be1c5b42e0f71535b3` by GitHub Actions run `34451393027`:
+On code HEAD `d500933ec54a1723acfb89a9670a1cdf25f7cca2`, GitHub Actions run `34452275790` completed successfully on both platforms:
 
-- Python 3.11.16;
-- 56 workbooks profiled;
-- 211 classification rows;
+### Linux
+
+- profiler: 56 workbooks / 211 classification rows;
 - classification `REVIEW_REQUIRED`: 0;
 - deterministic output comparison: PASS;
-- 54/54 tests: PASS;
-- mixed-sample discovery regression tests: PASS;
+- real-data semantic sentinels: PASS;
+- 55/55 unit tests: PASS;
 - Python runtime-artifact hygiene: PASS;
 - `DATA/` immutability: PASS.
 
-The workflow then regenerated deterministic outputs in commit `a755c538dfc58ddcb14fec59c12c8654cf5633af`. Those outputs show broad Pipeline/Naval/General document worksheets at safe worksheet-level base classifications and preserve per-document refinements for the future row extractor only.
+### Windows
 
-This documentation commit is intentionally made after output regeneration so the final PR HEAD receives a fresh exact-head CI run without changing classification behavior.
+- runner: Microsoft Windows Server 2025;
+- Python: 3.11.9;
+- profiler: 56 workbooks / 211 classification rows;
+- classification `REVIEW_REQUIRED`: 0;
+- real-data semantic sentinels: PASS;
+- 55/55 unit tests: PASS;
+- Python runtime-artifact hygiene: PASS;
+- `DATA/` immutability: PASS;
+- regenerated `outputs/cycle1`: byte-clean versus committed outputs;
+- final working tree: clean.
+
+The semantic verifier checked all 211 discovery rows and specifically confirmed 18 Pipeline broad worksheets, 24 Naval broad worksheets, 2 generic TECH Documents worksheets, 21 METHODS Sketches worksheets, and 19 METHODS setup/anchor worksheets against the safe discovery taxonomy.
 
 ## Acceptance gate
 
@@ -122,11 +167,12 @@ This implementation is review-ready only when final exact-head CI confirms:
 1. profiler runs successfully against real `DATA/`;
 2. generated outputs are deterministic and already current;
 3. current classification `REVIEW_REQUIRED` count is zero;
-4. all 54 tests pass;
-5. mixed-sample worksheet discovery remains at safe base classifications;
-6. the 2171-2172 exception resolves only the verified workbook/sheet;
-7. no Python runtime artifacts are tracked;
-8. `DATA/` is unchanged;
-9. Windows output regeneration leaves no line-ending-only dirty files.
+4. all 55 unit tests pass;
+5. real-data semantic sentinel verification passes;
+6. mixed-sample worksheet discovery remains at safe base classifications;
+7. the 2171-2172 exception resolves only the verified workbook/sheet;
+8. no Python runtime artifacts are tracked;
+9. `DATA/` is unchanged;
+10. Windows regeneration leaves `outputs/cycle1` and the worktree clean.
 
 Cycle 2 remains unauthorized until owner approval of Classification Model v2.
