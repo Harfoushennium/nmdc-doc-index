@@ -1,0 +1,7 @@
+# Keep generated and source text artifacts byte-stable across Windows and Linux.
+*.csv text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
