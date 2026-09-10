@@ -206,6 +206,88 @@ class ClassificationV2Tests(unittest.TestCase):
         )
         self.assertIn("T074", result["rule_ids"])
 
+    def test_19_methods_sketch_not_refined_to_anchor_pattern(self):
+        result = self.classify(
+            "METHODS",
+            WORKSHEET="Sketches",
+            TITLE="OFFSHORE ANCHOR PATTERN AND DP DRAWINGS | OFFSHORE Sketches",
+        )
+        self.assert_classification(
+            result, "OFFSHORE INSTALLATION", "SKETCH", "ENGINEERING SKETCH"
+        )
+        self.assertIn("M020", result["rule_ids"])
+        self.assertNotIn("M011", result["rule_ids"])
+        self.assertNotIn("M012", result["rule_ids"])
+        self.assertNotIn("M013", result["rule_ids"])
+
+    def test_20_incoming_document_not_refined_by_methods_drawing_title(self):
+        result = self.classify(
+            "METHODS",
+            WORKSHEET="Incomming DOC and DRG",
+            SECTION="DOCUMENTS",
+            TITLE="OFFSHORE ANCHOR PATTERN AND DP DRAWINGS",
+        )
+        self.assert_classification(
+            result, "EXTERNAL / INPUT", "DOCUMENT", "INCOMING TECHNICAL DOCUMENT"
+        )
+        self.assertIn("M031", result["rule_ids"])
+        self.assertNotIn("M011", result["rule_ids"])
+
+    def test_21_installation_title_fallback_does_not_overwrite_sketch(self):
+        result = self.classify(
+            "METHODS",
+            WORKSHEET="Sketches",
+            TITLE="Construction and Installation Procedure reference",
+        )
+        self.assert_classification(
+            result, "OFFSHORE INSTALLATION", "SKETCH", "ENGINEERING SKETCH"
+        )
+        self.assertIn("M020", result["rule_ids"])
+        self.assertNotIn("M002", result["rule_ids"])
+
+    def test_22_tech_drawing_title_does_not_become_document(self):
+        result = self.classify(
+            "TECH",
+            WORKSHEET="Drawings",
+            TITLE="Mooring Analysis Report drawing",
+        )
+        self.assert_classification(
+            result, "GENERAL / MULTIDISCIPLINE", "DRAWING", "ENGINEERING DRAWING"
+        )
+        self.assertIn("T020", result["rule_ids"])
+        self.assertNotIn("T070", result["rule_ids"])
+        self.assertNotIn("T073", result["rule_ids"])
+
+    def test_23_tech_sketch_title_does_not_become_procedure(self):
+        result = self.classify(
+            "TECH",
+            WORKSHEET="Sketch",
+            TITLE="Installation Procedure reference",
+        )
+        self.assert_classification(
+            result, "GENERAL / MULTIDISCIPLINE", "SKETCH", "ENGINEERING SKETCH"
+        )
+        self.assertIn("T031", result["rule_ids"])
+        self.assertNotIn("T074", result["rule_ids"])
+
+    def test_24_technical_note_doc_number_does_not_override_drawing(self):
+        result = self.classify(
+            "TECH",
+            WORKSHEET="Drawings",
+            DOC_NUMBER="3000-TN-PL-001",
+        )
+        self.assert_classification(
+            result, "GENERAL / MULTIDISCIPLINE", "DRAWING", "ENGINEERING DRAWING"
+        )
+        self.assertNotIn("T043", result["rule_ids"])
+
+    def test_25_context_guard_columns_loaded(self):
+        m011 = next(r for r in self.rules if r.rule_id == "M011")
+        t070 = next(r for r in self.rules if r.rule_id == "T070")
+        self.assertEqual("MARINE OPERATIONS", m011.requires_discipline)
+        self.assertEqual("DRAWING", m011.requires_category)
+        self.assertEqual("DOCUMENT", t070.requires_category)
+
 
 if __name__ == "__main__":
     unittest.main()
