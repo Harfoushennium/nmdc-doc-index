@@ -58,11 +58,11 @@ class ClassificationV2Tests(unittest.TestCase):
         )
         self.assertIn("M001", result["rule_ids"])
 
-    def test_02_methods_installation_header_fallback(self):
+    def test_02_methods_verified_nonstandard_structural_exception(self):
         result = self.classify(
             "METHODS",
+            FILE="DATA/METHODS/2171-2172 -Document Deliverables LATEST.xlsx",
             WORKSHEET="2171-2172",
-            HEADER="Document No. | Construction and Installation Procedure | Issue Date",
         )
         self.assert_classification(
             result, "OFFSHORE INSTALLATION", "PROCEDURE", "INSTALLATION PROCEDURE"
@@ -251,11 +251,11 @@ class ClassificationV2Tests(unittest.TestCase):
         self.assertIn("M031", result["rule_ids"])
         self.assertNotIn("M011", result["rule_ids"])
 
-    def test_21_installation_header_fallback_does_not_overwrite_sketch(self):
+    def test_21_structural_exception_does_not_apply_to_other_methods_sheets(self):
         result = self.classify(
             "METHODS",
+            FILE="DATA/METHODS/2171-2172 -Document Deliverables LATEST.xlsx",
             WORKSHEET="Sketches",
-            HEADER="Construction and Installation Procedure reference",
         )
         self.assert_classification(
             result, "OFFSHORE INSTALLATION", "SKETCH", "ENGINEERING SKETCH"
@@ -344,20 +344,20 @@ class ClassificationV2Tests(unittest.TestCase):
         self.assertNotIn("T043", row["matched_rule_ids"])
         self.assertIn("4000-TN-PL-001", row["sample_document_numbers"])
 
-    def test_29_2171_discovery_uses_header_not_sample_title(self):
+    def test_29_2171_discovery_uses_path_qualified_worksheet_rule(self):
         row = self.discovery_row(
             family="METHODS",
             path="DATA/METHODS/2171-2172 -Document Deliverables LATEST.xlsx",
             project="2171",
             sheet_name="2171-2172",
-            headers=["Document No. | Issue Date | Construction and Installation Procedure"],
+            headers=["Document No. | Issue Date"],
             titles=["Unrelated Analysis Report", "Another Procedure"],
         )
         self.assertEqual("OFFSHORE INSTALLATION", row["discipline"])
         self.assertEqual("PROCEDURE", row["category"])
         self.assertEqual("INSTALLATION PROCEDURE", row["subcategory"])
         self.assertEqual("M002", row["matched_rule_ids"])
-        self.assertEqual("HEADER:M002", row["match_basis"])
+        self.assertEqual("WORKSHEET:M002", row["match_basis"])
 
     def test_30_unknown_discovery_does_not_use_sample_title_as_fallback(self):
         row = self.discovery_row(
@@ -384,6 +384,16 @@ class ClassificationV2Tests(unittest.TestCase):
         )
         self.assertIn("T002", result["rule_ids"])
         self.assertIn("T043", result["rule_ids"])
+
+    def test_32_2171_structural_exception_is_not_global(self):
+        result = self.classify(
+            "METHODS",
+            FILE="DATA/METHODS/9999 Other Register.xlsx",
+            WORKSHEET="2171-2172",
+        )
+        self.assertEqual("UNCLASSIFIED", result["status"])
+        self.assertEqual("REVIEW_REQUIRED", result["discipline"])
+        self.assertNotIn("M002", result["rule_ids"])
 
 
 if __name__ == "__main__":

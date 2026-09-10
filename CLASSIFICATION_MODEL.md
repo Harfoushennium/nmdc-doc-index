@@ -53,16 +53,15 @@ METHODS
         └── ENGINEERING SKETCH
 ```
 
-Supported worksheet/header context includes:
+Supported worksheet context includes:
 
 - `Installation Procedures`
 - `Installation Procedure`
 - `Procedures`
-- `Construction and Installation Procedure`
 - `Sketch`
 - `Sketches`
 
-A structural/header fallback may classify a nonstandard Methods worksheet as `INSTALLATION PROCEDURE` only when reliable header evidence explicitly contains an installation-procedure phrase and the current classification is unresolved or already in the procedure branch. It must not overwrite an established sketch, drawing, incoming-document, or other classification.
+The real `2171-2172 -Document Deliverables LATEST.xlsx` workbook contains one verified nonstandard worksheet named `2171-2172` that is an installation-procedure register. Because the profiler's structural header extraction does not expose a generic procedure phrase reliably for this sheet, v2 uses one narrow path-qualified worksheet rule bound to this exact workbook and worksheet. The rule must not apply to an unrelated workbook that happens to contain a worksheet named `2171-2172`.
 
 ### 4.2 MARINE OPERATIONS
 
@@ -290,7 +289,7 @@ Examples:
 - `M011` / `M012` / `M013` require `MARINE OPERATIONS` + `DRAWING`;
 - `T070`–`T076` require category `DOCUMENT`;
 - `T043`–`T045` require category `DOCUMENT` before technical-note document-number refinement;
-- `M002` is a `HEADER` fallback for the verified nonstandard 2171-2172 Methods procedure sheet.
+- `M002` is an exceptional path-qualified `WORKSHEET` rule for the verified 2171-2172 procedure register.
 
 ## 8. Discovery classification versus per-document refinement
 
@@ -392,7 +391,7 @@ Thresholds remain configurable.
 5. Business taxonomy belongs in configuration, not scattered Python constants.
 6. Unknown future inputs remain `UNCLASSIFIED` / `REVIEW_REQUIRED`.
 7. Generic TECH `Documents` uses `GENERAL / MULTIDISCIPLINE` rather than an invented discipline.
-8. File-qualified exclusions must be narrow, auditable, and regression-tested.
+8. File-qualified exclusions/exceptions must be narrow, auditable, and regression-tested.
 9. Refinement rules must not cross taxonomy branches.
 10. Discovery must not use joined sampled rows as row-level classification evidence.
 11. Zero `REVIEW_REQUIRED` rows is necessary but not sufficient proof of taxonomy correctness.
@@ -403,7 +402,7 @@ Thresholds remain configurable.
 | Group | Rows | v2 resolution |
 |---|---:|---|
 | Methods `Installation Procedures ` | 19 | whitespace-safe worksheet match |
-| Methods `2171-2172` | 1 | structural/header fallback -> Installation Procedure |
+| Methods `2171-2172` | 1 | narrow path-qualified worksheet exception |
 | TECH `Cut-lists ` | 6 | whitespace-safe match -> CUT LIST |
 | TECH `Sketch ` | 2 | whitespace-safe match -> ENGINEERING SKETCH |
 | TECH generic `Documents ` | 2 | safe General/Multidiscipline document base |
@@ -419,21 +418,22 @@ No new taxonomy value was required.
 At minimum verify:
 
 1. trailing-space Methods Installation Procedures;
-2. 2171-2172 header fallback;
-3. trailing-space Cut-lists;
-4. trailing-space Sketch;
-5. Pipeline / Naval aliases;
-6. generic TECH Documents safe base;
-7. 3291 CLIENT scoped exclusion and unrelated CLIENT safety;
-8. unknown worksheet remains review-required;
-9. original worksheet evidence is preserved;
-10. context guards prevent cross-branch refinements;
-11. mixed sample titles do not refine a whole worksheet;
-12. sampled `TN-*` numbers do not refine a whole worksheet;
-13. direct per-document TITLE/DOC_NUMBER refinement still works when explicitly applied to one record;
-14. deterministic outputs;
-15. Windows/Linux LF consistency;
-16. `DATA/` remains read-only.
+2. verified 2171-2172 path-qualified structural exception;
+3. same worksheet name in another workbook does not inherit the exception;
+4. trailing-space Cut-lists;
+5. trailing-space Sketch;
+6. Pipeline / Naval aliases;
+7. generic TECH Documents safe base;
+8. 3291 CLIENT scoped exclusion and unrelated CLIENT safety;
+9. unknown worksheet remains review-required;
+10. original worksheet evidence is preserved;
+11. context guards prevent cross-branch refinements;
+12. mixed sample titles do not refine a whole worksheet;
+13. sampled `TN-*` numbers do not refine a whole worksheet;
+14. direct per-document TITLE/DOC_NUMBER refinement still works when explicitly applied to one record;
+15. deterministic outputs;
+16. Windows/Linux LF consistency;
+17. `DATA/` remains read-only.
 
 ## 15. Version status
 
