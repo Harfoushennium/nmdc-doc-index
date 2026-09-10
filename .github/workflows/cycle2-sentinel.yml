@@ -1,0 +1,152 @@
+name: Cycle 2 sentinel extractor validation
+
+on:
+  push:
+    branches:
+      - feature/cycle2-sentinel-extractor
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  validate-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Compile profiler extractor and tests
+        run: python -m compileall -q profiler.py sentinel_extract.py nmdc_profiler tests
+
+      - name: Run Cycle 1 profiler regression
+        run: python profiler.py
+
+      - name: Run Cycle 2 real sentinel extraction
+        run: python sentinel_extract.py
+
+      - name: Verify deterministic Cycle 2 outputs
+        run: |
+          sha256sum \
+            outputs/cycle2/sentinel_records.csv \
+            outputs/cycle2/sentinel_reconciliation.json \
+            outputs/cycle2/sentinel_report.md > /tmp/cycle2-first.sha256
+          python sentinel_extract.py
+          sha256sum \
+            outputs/cycle2/sentinel_records.csv \
+            outputs/cycle2/sentinel_reconciliation.json \
+            outputs/cycle2/sentinel_report.md > /tmp/cycle2-second.sha256
+          diff -u /tmp/cycle2-first.sha256 /tmp/cycle2-second.sha256
+
+      - name: Verify Cycle 2 against real DATA
+        run: python tests/verify_cycle2_real_data.py
+
+      - name: Run complete regression suite
+        run: python -m unittest discover -s tests -v
+
+      - name: Ensure source DATA was not changed
+        run: |
+          if ! git diff --quiet -- DATA; then
+            echo 'ERROR: extraction changed DATA/'
+            git diff -- DATA
+            exit 1
+          fi
+
+      - name: Ensure no Python runtime artifacts are tracked
+        run: |
+          if git ls-files | grep -E '(^|/)(__pycache__/|.*\.py[cod]$)'; then
+            echo 'ERROR: Python runtime artifacts must not be tracked.'
+            exit 1
+          fi
+
+      - name: Commit deterministic Cycle 2 outputs
+        if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add outputs/cycle2/sentinel_records.csv outputs/cycle2/sentinel_reconciliation.json outputs/cycle2/sentinel_report.md
+          if git diff --cached --quiet; then
+            echo 'Cycle 2 outputs already current.'
+          else
+            git commit -m 'chore: regenerate Cycle 2 sentinel outputs [skip ci]'
+            git push
+          fi
+
+  validate-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Compile profiler extractor and tests
+        shell: pwsh
+        run: python -m compileall -q profiler.py sentinel_extract.py nmdc_profiler tests
+
+      - name: Run Cycle 1 profiler regression
+        shell: pwsh
+        run: python profiler.py
+
+      - name: Run Cycle 2 real sentinel extraction
+        shell: pwsh
+        run: python sentinel_extract.py
+
+      - name: Capture first output hashes
+        shell: pwsh
+        run: |
+          Get-FileHash outputs/cycle2/sentinel_records.csv -Algorithm SHA256 | Select-Object Path,Hash | ConvertTo-Json -Compress | Set-Content first1.txt
+          Get-FileHash outputs/cycle2/sentinel_reconciliation.json -Algorithm SHA256 | Select-Object Path,Hash | ConvertTo-Json -Compress | Set-Content first2.txt
+          Get-FileHash outputs/cycle2/sentinel_report.md -Algorithm SHA256 | Select-Object Path,Hash | ConvertTo-Json -Compress | Set-Content first3.txt
+
+      - name: Regenerate Cycle 2 outputs
+        shell: pwsh
+        run: python sentinel_extract.py
+
+      - name: Verify Windows determinism and LF bytes
+        shell: pwsh
+        run: |
+          $pairs = @(
+            @('outputs/cycle2/sentinel_records.csv','first1.txt'),
+            @('outputs/cycle2/sentinel_reconciliation.json','first2.txt'),
+            @('outputs/cycle2/sentinel_report.md','first3.txt')
+          )
+          foreach ($pair in $pairs) {
+            $current = (Get-FileHash $pair[0] -Algorithm SHA256).Hash
+            $previous = ((Get-Content $pair[1] | ConvertFrom-Json).Hash)
+            if ($current -ne $previous) { throw "Non-deterministic output: $($pair[0])" }
+            $bytes = [System.IO.File]::ReadAllBytes($pair[0])
+            for ($i=0; $i -lt $bytes.Length-1; $i++) {
+              if ($bytes[$i] -eq 13 -and $bytes[$i+1] -eq 10) { throw "CRLF found: $($pair[0])" }
+            }
+          }
+          Write-Host 'Windows deterministic LF outputs: PASS'
+
+      - name: Verify Cycle 2 against real DATA
+        shell: pwsh
+        run: python tests/verify_cycle2_real_data.py
+
+      - name: Run complete regression suite
+        shell: pwsh
+        run: python -m unittest discover -s tests -v
+
+      - name: Ensure source DATA was not changed
+        shell: pwsh
+        run: |
+          git diff --quiet -- DATA
+          if ($LASTEXITCODE -ne 0) {
+            git diff -- DATA
+            throw 'Extraction changed DATA/'
+          }
