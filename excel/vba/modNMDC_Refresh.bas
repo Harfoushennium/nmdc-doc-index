@@ -70,6 +70,10 @@ Public Sub NMDC_LoadErrorCsvPreserveLocal(ByVal csvPath As String)
     Dim nextRow As Long
 
     Set ws = ThisWorkbook.Worksheets("Error Log")
+
+    ' If the engine did not produce an error exchange file, leave the existing log untouched.
+    If Len(Dir$(csvPath)) = 0 Then Exit Sub
+
     Set localRows = New Collection
 
     ' Preserve only locally-created Excel/VBA entries. Engine-exported rows can be safely refreshed.
@@ -86,27 +90,21 @@ Public Sub NMDC_LoadErrorCsvPreserveLocal(ByVal csvPath As String)
         Next r
     End If
 
-    If Len(Dir$(csvPath)) > 0 Then
-        Application.ScreenUpdating = False
-        ws.Cells.ClearContents
-        For Each qt In ws.QueryTables
-            qt.Delete
-        Next qt
+    Application.ScreenUpdating = False
+    ws.Cells.ClearContents
+    For Each qt In ws.QueryTables
+        qt.Delete
+    Next qt
 
-        Set qt = ws.QueryTables.Add(Connection:="TEXT;" & csvPath, Destination:=ws.Range("A1"))
-        With qt
-            .TextFileParseType = xlDelimited
-            .TextFileCommaDelimiter = True
-            .TextFileTextQualifier = xlTextQualifierDoubleQuote
-            .TextFilePlatform = 65001
-            .Refresh BackgroundQuery:=False
-            .Delete
-        End With
-    End If
-
-    If Len(CStr(ws.Cells(1, 1).Value)) = 0 Then
-        ws.Range("A1:H1").Value = Array("Date/Time", "Severity", "Action", "Plain-English Error", "Recommended Action", "Technical Detail", "Run ID", "Source File")
-    End If
+    Set qt = ws.QueryTables.Add(Connection:="TEXT;" & csvPath, Destination:=ws.Range("A1"))
+    With qt
+        .TextFileParseType = xlDelimited
+        .TextFileCommaDelimiter = True
+        .TextFileTextQualifier = xlTextQualifierDoubleQuote
+        .TextFilePlatform = 65001
+        .Refresh BackgroundQuery:=False
+        .Delete
+    End With
 
     For Each rowValues In localRows
         nextRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row + 1
