@@ -118,6 +118,8 @@ Preferred columns:
 
 User-facing review of the staged update before approval.
 
+**A staged update never replaces the approved master automatically.** Only the explicit **Approve Update** action may promote a staged dataset to the approved index.
+
 Columns:
 
 - Change Type (`ADDED`, `MODIFIED`, `REMOVED`, `UNCHANGED`)
