@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from nmdc_profiler.full_extractor import load_cycle3_inputs, run_full_extraction, write_full_outputs
+from nmdc_profiler.project_identity import apply_project_identity_overrides, load_project_identity_overrides
 from nmdc_profiler.rules import load_rules
 
 
@@ -10,6 +11,10 @@ def main() -> int:
     root = Path(__file__).resolve().parent
     rules = load_rules(root / "config" / "classification_rules.csv")
     work_items, selected_inventory, initial_review = load_cycle3_inputs(root)
+
+    project_overrides = load_project_identity_overrides(root / "config" / "project_identity_overrides.csv")
+    work_items, override_audit = apply_project_identity_overrides(work_items, project_overrides)
+
     records, reconciliation, review_queue = run_full_extraction(
         root,
         work_items,
@@ -17,6 +22,8 @@ def main() -> int:
         initial_review,
         rules,
     )
+    reconciliation["project_identity_overrides"] = override_audit
+    reconciliation["summary"]["owner_project_overrides_applied"] = len(override_audit)
     write_full_outputs(records, reconciliation, review_queue, root / "outputs" / "cycle3")
 
     summary = reconciliation["summary"]
@@ -32,6 +39,7 @@ def main() -> int:
     print(f"Cycle 3 revisions: {summary['distinct_revisions']}")
     print(f"Cycle 3 hyperlinks preserved: {summary['hyperlinks_preserved']}")
     print(f"Cycle 3 row-level review records: {summary['row_level_review_records']}")
+    print(f"Cycle 3 owner project overrides applied: {summary['owner_project_overrides_applied']}")
 
     hard_failures = []
     if summary["leaked_nonselected_sources"]:
