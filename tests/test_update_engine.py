@@ -45,6 +45,13 @@ class UpdateEngineTests(unittest.TestCase):
         path.write_bytes(content.encode("utf-8"))
         return path
 
+    def _approved_version_dir(self) -> Path:
+        current = json.loads((self.state / "approved" / "current.json").read_text(encoding="utf-8"))
+        return self.state / "approved" / "versions" / current["run_id"]
+
+    def _approved_records_path(self) -> Path:
+        return self._approved_version_dir() / "records.jsonl"
+
     def _approve_baseline(self) -> None:
         stage_update(data_dir=self.data, state_dir=self.state, processor=self.processor)
         approve_stage(self.state)
@@ -57,10 +64,12 @@ class UpdateEngineTests(unittest.TestCase):
         self.assertEqual(summary["source_counts"]["NEW"], 2)
         self.assertEqual(summary["staged_records"], 2)
         self.assertEqual(sorted(self.calls), ["A.xlsx", "sub/B.xlsm"])
-        self.assertFalse((self.state / "approved" / "manifest.json").exists())
-        approve_stage(self.state)
-        self.assertTrue((self.state / "approved" / "manifest.json").exists())
-        self.assertTrue((self.state / "approved" / "records.jsonl").exists())
+        self.assertFalse((self.state / "approved" / "current.json").exists())
+        approval = approve_stage(self.state)
+        self.assertTrue((self.state / "approved" / "current.json").exists())
+        version_dir = self.state / "approved" / "versions" / approval["run_id"]
+        self.assertTrue((version_dir / "manifest.json").exists())
+        self.assertTrue((version_dir / "records.jsonl").exists())
 
     def test_unchanged_sources_reuse_cache_without_processor_call(self) -> None:
         self._write("A.xlsx", "A1")
@@ -129,13 +138,16 @@ class UpdateEngineTests(unittest.TestCase):
     def test_hold_and_reject_do_not_replace_approved_dataset(self) -> None:
         self._write("A.xlsx", "A1")
         self._approve_baseline()
-        approved_before = (self.state / "approved" / "records.jsonl").read_bytes()
+        current_before = (self.state / "approved" / "current.json").read_bytes()
+        approved_before = self._approved_records_path().read_bytes()
         self._write("A.xlsx", "A2")
         stage_update(data_dir=self.data, state_dir=self.state, processor=self.processor)
         hold_stage(self.state, note="owner wants to inspect")
-        self.assertEqual((self.state / "approved" / "records.jsonl").read_bytes(), approved_before)
+        self.assertEqual((self.state / "approved" / "current.json").read_bytes(), current_before)
+        self.assertEqual(self._approved_records_path().read_bytes(), approved_before)
         reject_stage(self.state, note="wrong source version")
-        self.assertEqual((self.state / "approved" / "records.jsonl").read_bytes(), approved_before)
+        self.assertEqual((self.state / "approved" / "current.json").read_bytes(), current_before)
+        self.assertEqual(self._approved_records_path().read_bytes(), approved_before)
 
     def test_processor_failure_keeps_previous_approved_rows_and_flags_conflict(self) -> None:
         self._write("A.xlsx", "A1")
@@ -213,6 +225,20 @@ class UpdateEngineTests(unittest.TestCase):
         self.assertEqual(self.calls, [])
         self.assertEqual(summary["record_counts"]["removed"], 1)
         self.assertEqual(summary["review_flags"], 1)
+
+    def test_approval_pointer_switches_to_new_version_only_after_approval(self) -> None:
+        self._write("A.xlsx", "A1")
+        self._approve_baseline()
+        first_pointer = json.loads((self.state / "approved" / "current.json").read_text(encoding="utf-8"))
+        self._write("A.xlsx", "A2")
+        summary = stage_update(data_dir=self.data, state_dir=self.state, processor=self.processor)
+        before_approval = json.loads((self.state / "approved" / "current.json").read_text(encoding="utf-8"))
+        self.assertEqual(before_approval, first_pointer)
+        approve_stage(self.state, summary["run_id"])
+        after_approval = json.loads((self.state / "approved" / "current.json").read_text(encoding="utf-8"))
+        self.assertEqual(after_approval["run_id"], summary["run_id"])
+        self.assertNotEqual(after_approval["run_id"], first_pointer["run_id"])
+        self.assertTrue((self.state / "approved" / "versions" / first_pointer["run_id"] / "records.jsonl").exists())
 
 
 if __name__ == "__main__":
