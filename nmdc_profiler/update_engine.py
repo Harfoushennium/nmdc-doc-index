@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import uuid
 from dataclasses import dataclass
@@ -38,6 +39,13 @@ def _write_json(path: Path, payload: Mapping[str, Any] | Sequence[Any]) -> None:
     text = json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     with path.open("w", encoding="utf-8", newline="\n") as f:
         f.write(text)
+
+
+def _write_json_atomic(path: Path, payload: Mapping[str, Any] | Sequence[Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_name(path.name + f".tmp-{uuid.uuid4().hex[:8]}")
+    _write_json(temp, payload)
+    os.replace(temp, path)
 
 
 def _read_json(path: Path, default: Any) -> Any:
@@ -300,6 +308,26 @@ def _set_manifest_processed_run(manifest: Dict[str, Any], rel: str, processed_ru
             return
 
 
+def _load_approved_state(state_dir: Path) -> Tuple[Dict[str, Any], Dict[str, str], List[Record]]:
+    approved_dir = Path(state_dir) / "approved"
+    current = _read_json(approved_dir / "current.json", {})
+    run_id = str(current.get("run_id", ""))
+    if run_id:
+        version_dir = approved_dir / "versions" / run_id
+        if version_dir.exists():
+            return (
+                _read_json(version_dir / "manifest.json", {}),
+                _read_json(version_dir / "cache_index.json", {}),
+                _read_jsonl(version_dir / "records.jsonl"),
+            )
+    # Backward-compatible fallback for any pre-versioned local runtime state.
+    return (
+        _read_json(approved_dir / "manifest.json", {}),
+        _read_json(approved_dir / "cache_index.json", {}),
+        _read_jsonl(approved_dir / "records.jsonl"),
+    )
+
+
 def stage_update(
     *,
     data_dir: Path,
@@ -313,10 +341,7 @@ def stage_update(
     """Create a proposed update without changing the approved dataset."""
     data_dir = Path(data_dir)
     state_dir = Path(state_dir)
-    approved_dir = state_dir / "approved"
-    approved_manifest = _read_json(approved_dir / "manifest.json", {})
-    approved_cache_index = _read_json(approved_dir / "cache_index.json", {})
-    approved_rows = _read_jsonl(approved_dir / "records.jsonl")
+    approved_manifest, approved_cache_index, approved_rows = _load_approved_state(state_dir)
 
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     config_fingerprint = fingerprint_paths([Path(p) for p in config_paths])
@@ -535,19 +560,26 @@ def approve_stage(state_dir: Path, run_id: str | None = None, *, allow_conflicts
         raise ValueError(f"Staged update has {blocking} blocking conflict flag(s); approval is not allowed without an explicit override.")
 
     approved_dir = state_dir / "approved"
-    approved_dir.mkdir(parents=True, exist_ok=True)
+    version_dir = approved_dir / "versions" / run_id
+    version_dir.mkdir(parents=True, exist_ok=True)
     for name in ("manifest.json", "cache_index.json", "records.jsonl"):
         src = stage_dir / name
         if not src.exists():
             raise FileNotFoundError(f"Staged package is incomplete: {name}")
-        shutil.copy2(src, approved_dir / name)
+        shutil.copy2(src, version_dir / name)
     approval = {
         "run_id": run_id,
         "decision": "APPROVED",
         "approved_at": utc_now(),
         "allow_conflicts": bool(allow_conflicts),
     }
-    _write_json(approved_dir / "approval.json", approval)
+    _write_json(version_dir / "approval.json", approval)
+    # The pointer is the commit marker. Old approved versions stay intact until
+    # this single atomic replace succeeds.
+    _write_json_atomic(
+        approved_dir / "current.json",
+        {"run_id": run_id, "version_path": f"versions/{run_id}"},
+    )
     _write_json(stage_dir / "decision.json", approval)
     _append_log(state_dir, {"event": "APPROVED", **approval})
     return approval
