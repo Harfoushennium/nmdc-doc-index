@@ -68,6 +68,7 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertNotIn("powershell", text.lower())
         self.assertIn("ENGINE_MISSING", text)
         self.assertIn("Error Log", text)
+        self.assertIn('"EXCEL:" & code', text)
 
     def test_vba_actions_expose_required_button_macros(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Actions.bas").read_text(encoding="utf-8")
@@ -89,6 +90,12 @@ class ExcelUIContractTests(unittest.TestCase):
             self.assertIn(f"Public Sub {macro}", text)
         self.assertIn("The approved master index was not changed", text)
 
+    def test_error_refresh_preserves_excel_local_entries(self):
+        text = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
+        self.assertIn("NMDC_LoadErrorCsvPreserveLocal", text)
+        self.assertIn('Left$(CStr(ws.Cells(r, 3).Value), 6) = "EXCEL:"', text)
+        self.assertNotIn('NMDC_LoadCsvToSheet NMDC_ExchangePath() & "\\errors.csv", "Error Log"', text)
+
     def test_workbook_spec_states_excel_only_and_staged_approval(self):
         text = (ROOT / "excel" / "WORKBOOK_UI_SPEC.md").read_text(encoding="utf-8")
         self.assertIn("Excel only", text)
@@ -97,6 +104,7 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn("Flag Wrong Data", text)
         self.assertIn("Report Requirement / Problem", text)
         self.assertIn("Rules & Mappings", text)
+        self.assertIn("Refreshing engine-exported errors must not erase locally captured Excel errors", text)
 
 
 if __name__ == "__main__":
