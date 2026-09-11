@@ -151,6 +151,8 @@ class UpdateEngineTests(unittest.TestCase):
         latest = json.loads((self.state / "staging" / "latest.json").read_text(encoding="utf-8"))["run_id"]
         flags = json.loads((self.state / "staging" / latest / "flags.json").read_text(encoding="utf-8"))
         self.assertTrue(any(row["code"] == "PARSER_ERROR" for row in flags))
+        with self.assertRaises(ValueError):
+            approve_stage(self.state, allow_conflicts=True)
 
     def test_compare_records_reports_modified_record_with_same_event_key(self) -> None:
         approved = [{"Event_Key": "E1", "Document No.": "D1", "Event Status": "A"}]
@@ -180,6 +182,37 @@ class UpdateEngineTests(unittest.TestCase):
         lines = (self.state / "logs" / "history.jsonl").read_text(encoding="utf-8").splitlines()
         events = [json.loads(line)["event"] for line in lines]
         self.assertEqual(events, ["STAGED", "APPROVED"])
+
+    def test_source_selection_status_is_stored_and_nonselected_source_is_not_processed(self) -> None:
+        self._write("A.xlsx", "A1")
+        self._write("B.xlsx", "B1")
+        summary = stage_update(
+            data_dir=self.data,
+            state_dir=self.state,
+            processor=self.processor,
+            selection_statuses={"A.xlsx": "SELECTED", "B.xlsx": "EXCLUDED"},
+        )
+        self.assertEqual(self.calls, ["A.xlsx"])
+        self.assertEqual(summary["staged_records"], 1)
+        latest = json.loads((self.state / "staging" / "latest.json").read_text(encoding="utf-8"))["run_id"]
+        manifest = json.loads((self.state / "staging" / latest / "manifest.json").read_text(encoding="utf-8"))
+        statuses = {row["relative_path"]: row["selection_status"] for row in manifest["files"]}
+        self.assertEqual(statuses, {"A.xlsx": "SELECTED", "B.xlsx": "EXCLUDED"})
+        a_row = next(row for row in manifest["files"] if row["relative_path"] == "A.xlsx")
+        self.assertEqual(a_row["last_processed_run"], latest)
+
+    def test_selected_source_becoming_excluded_stages_record_removal_without_reprocessing(self) -> None:
+        self._write("A.xlsx", "A1")
+        self._approve_baseline()
+        summary = stage_update(
+            data_dir=self.data,
+            state_dir=self.state,
+            processor=self.processor,
+            selection_statuses={"A.xlsx": "EXCLUDED"},
+        )
+        self.assertEqual(self.calls, [])
+        self.assertEqual(summary["record_counts"]["removed"], 1)
+        self.assertEqual(summary["review_flags"], 1)
 
 
 if __name__ == "__main__":
