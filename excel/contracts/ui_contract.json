@@ -9,6 +9,7 @@
     "Review Flags",
     "User Decisions",
     "Configuration",
+    "Rules & Mappings",
     "Update History",
     "Error Log",
     "Help",
@@ -21,7 +22,7 @@
     "Approve Update": {"command": "approve"},
     "Hold Update": {"command": "hold"},
     "Reject Update": {"command": "reject"},
-    "Select Data Folder": {"command": "set-data-folder"},
+    "Select Data Folder": {"command": "local-vba", "action": "set-data-folder"},
     "Refresh Dashboard": {"command": "export-excel"},
     "Review Flags": {"command": "export-excel", "target_sheet": "Review Flags"},
     "Flag Wrong Data": {"command": "user-flag"},
@@ -41,5 +42,6 @@
   "flag_levels": ["OK", "REVIEW", "CONFLICT"],
   "approved_state_rule": "Approved master data changes only after an explicit Approve Update action.",
   "technical_conflicts_rule": "Non-overridable technical conflicts must be corrected and restaged before approval.",
+  "dynamic_rules_rule": "Business classifications and mappings must be user-editable in Excel and synchronized to engine configuration without source-code edits.",
   "normal_user_interface": "Excel only"
 }
