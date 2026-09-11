@@ -14,10 +14,11 @@ The normal user operates the product from Excel only. Technical runtime details 
 6. `Review Flags`
 7. `User Decisions`
 8. `Configuration`
-9. `Update History`
-10. `Error Log`
-11. `Help`
-12. `System Data` (hidden/protected)
+9. `Rules & Mappings`
+10. `Update History`
+11. `Error Log`
+12. `Help`
+13. `System Data` (hidden/protected)
 
 ## Home
 
@@ -194,6 +195,40 @@ Required configuration:
 
 The system should favor editable configuration tables over hard-coded business rules.
 
+## Rules & Mappings
+
+This sheet is the non-programmer control surface for business rules that should not require a code change.
+
+The workbook should present user-editable tables for items such as:
+
+- classification keyword / match rule;
+- discipline;
+- category;
+- subcategory;
+- status mappings;
+- project identity overrides;
+- permitted flag-severity overrides;
+- source-selection rules where safely configurable.
+
+Example:
+
+| Match / Condition | Discipline | Category | Subcategory | Enabled |
+|---|---|---|---|---|
+| Anchor Pattern | MARINE OPERATIONS | DRAWING | ANCHOR PATTERN | YES |
+| Installation Procedure | OFFSHORE INSTALLATION | PROCEDURE | INSTALLATION PROCEDURE | YES |
+| Sketch | OFFSHORE INSTALLATION | SKETCH | ENGINEERING SKETCH | YES |
+
+Rules are validated before they are exported to the engine configuration. Invalid or contradictory rules are flagged instead of being silently accepted.
+
+When an approved rule/mapping changes:
+
+1. increment the configuration version/fingerprint;
+2. record who/when changed it in Update History / User Decisions;
+3. require the next update to reprocess affected sources (or all sources when the affected scope cannot be safely narrowed);
+4. create a staged update for user review before the approved index changes.
+
+A requirement that cannot be expressed safely through these editable tables must be reported through **Report Requirement / Problem** and treated as a parser/code change rather than approximated.
+
 ## Update History
 
 One row per run / decision:
@@ -229,6 +264,8 @@ Columns:
 - Worksheet
 - Source Row/Cell
 
+Local Excel/VBA errors and engine/runtime errors must both be preserved. Refreshing engine-exported errors must not erase locally captured Excel errors.
+
 ## Help
 
 Short non-technical instructions:
@@ -239,7 +276,8 @@ Short non-technical instructions:
 4. Resolve/hold conflicts.
 5. Press Approve Update when satisfied.
 6. Use Full Rescan when rules/parser change or when you want a complete rebuild.
-7. Use Report Requirement / Problem to create a support package for GPT/developer follow-up.
+7. Use Rules & Mappings for supported business-rule changes that do not require programming.
+8. Use Report Requirement / Problem to create a support package for GPT/developer follow-up.
 
 ## Button-to-engine commands
 
@@ -253,6 +291,8 @@ Short non-technical instructions:
 | Reject Update | `reject` |
 | Flag Wrong Data | `user-flag` |
 | Report Requirement / Problem | `support-request` |
+
+`Select Data Folder` is handled locally by Excel/VBA and saved into workbook configuration; it is not an engine command.
 
 ## Visual behavior
 
