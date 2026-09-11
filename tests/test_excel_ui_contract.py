@@ -20,6 +20,7 @@ class ExcelUIContractTests(unittest.TestCase):
             "Review Flags",
             "User Decisions",
             "Configuration",
+            "Rules & Mappings",
             "Update History",
             "Error Log",
             "Help",
@@ -42,6 +43,7 @@ class ExcelUIContractTests(unittest.TestCase):
         }
         self.assertEqual(set(contract["buttons"]), required_buttons)
         self.assertEqual(contract["normal_user_interface"], "Excel only")
+        self.assertIn("user-editable in Excel", contract["dynamic_rules_rule"])
 
     def test_exchange_file_contract_is_stable(self):
         contract = json.loads((ROOT / "excel" / "contracts" / "ui_contract.json").read_text(encoding="utf-8"))
@@ -94,6 +96,7 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn("Approve Update", text)
         self.assertIn("Flag Wrong Data", text)
         self.assertIn("Report Requirement / Problem", text)
+        self.assertIn("Rules & Mappings", text)
 
 
 if __name__ == "__main__":
