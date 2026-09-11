@@ -10,7 +10,7 @@ Public Sub NMDC_RefreshExchangeData()
     NMDC_LoadCsvToSheet NMDC_ExchangePath() & "\pending_update.csv", "Pending Update"
     NMDC_LoadCsvToSheet NMDC_ExchangePath() & "\flags.csv", "Review Flags"
     NMDC_LoadCsvToSheet NMDC_ExchangePath() & "\history.csv", "Update History"
-    NMDC_LoadCsvToSheet NMDC_ExchangePath() & "\errors.csv", "Error Log"
+    NMDC_LoadErrorCsvPreserveLocal NMDC_ExchangePath() & "\errors.csv"
     NMDC_LoadDashboard NMDC_ExchangePath() & "\dashboard.csv"
 
     Exit Sub
@@ -54,6 +54,76 @@ Handler:
     Application.ScreenUpdating = True
     NMDC_LogError "CSV_IMPORT_ERROR", _
         "Excel could not load " & sheetName & ".", _
+        "File: " & csvPath & " | " & Err.Number & " - " & Err.Description
+End Sub
+
+Public Sub NMDC_LoadErrorCsvPreserveLocal(ByVal csvPath As String)
+    On Error GoTo Handler
+
+    Dim ws As Worksheet
+    Dim qt As QueryTable
+    Dim localRows As Collection
+    Dim rowValues As Variant
+    Dim r As Long
+    Dim c As Long
+    Dim lastRow As Long
+    Dim nextRow As Long
+
+    Set ws = ThisWorkbook.Worksheets("Error Log")
+    Set localRows = New Collection
+
+    ' Preserve only locally-created Excel/VBA entries. Engine-exported rows can be safely refreshed.
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    If lastRow >= 2 Then
+        For r = 2 To lastRow
+            If Left$(CStr(ws.Cells(r, 3).Value), 6) = "EXCEL:" Then
+                ReDim rowValues(1 To 8)
+                For c = 1 To 8
+                    rowValues(c) = ws.Cells(r, c).Value
+                Next c
+                localRows.Add rowValues
+            End If
+        Next r
+    End If
+
+    If Len(Dir$(csvPath)) > 0 Then
+        Application.ScreenUpdating = False
+        ws.Cells.ClearContents
+        For Each qt In ws.QueryTables
+            qt.Delete
+        Next qt
+
+        Set qt = ws.QueryTables.Add(Connection:="TEXT;" & csvPath, Destination:=ws.Range("A1"))
+        With qt
+            .TextFileParseType = xlDelimited
+            .TextFileCommaDelimiter = True
+            .TextFileTextQualifier = xlTextQualifierDoubleQuote
+            .TextFilePlatform = 65001
+            .Refresh BackgroundQuery:=False
+            .Delete
+        End With
+    End If
+
+    If Len(CStr(ws.Cells(1, 1).Value)) = 0 Then
+        ws.Range("A1:H1").Value = Array("Date/Time", "Severity", "Action", "Plain-English Error", "Recommended Action", "Technical Detail", "Run ID", "Source File")
+    End If
+
+    For Each rowValues In localRows
+        nextRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row + 1
+        If nextRow < 2 Then nextRow = 2
+        For c = 1 To 8
+            ws.Cells(nextRow, c).Value = rowValues(c)
+        Next c
+    Next rowValues
+
+    NMDC_FormatDataSheet ws
+    Application.ScreenUpdating = True
+    Exit Sub
+
+Handler:
+    Application.ScreenUpdating = True
+    NMDC_LogError "ERROR_LOG_REFRESH_ERROR", _
+        "Excel could not refresh the Error Log safely.", _
         "File: " & csvPath & " | " & Err.Number & " - " & Err.Description
 End Sub
 
