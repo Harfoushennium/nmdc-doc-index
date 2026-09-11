@@ -1,0 +1,45 @@
+{
+  "schema_version": "1",
+  "workbook_sheets": [
+    "Home",
+    "Master Documents",
+    "Revisions",
+    "Transactions",
+    "Pending Update",
+    "Review Flags",
+    "User Decisions",
+    "Configuration",
+    "Update History",
+    "Error Log",
+    "Help",
+    "System Data"
+  ],
+  "buttons": {
+    "Update Changed Files": {"command": "stage", "mode": "incremental"},
+    "Full Rescan / Rebuild All": {"command": "stage", "mode": "full"},
+    "Review Pending Update": {"command": "export-excel", "target_sheet": "Pending Update"},
+    "Approve Update": {"command": "approve"},
+    "Hold Update": {"command": "hold"},
+    "Reject Update": {"command": "reject"},
+    "Select Data Folder": {"command": "set-data-folder"},
+    "Refresh Dashboard": {"command": "export-excel"},
+    "Review Flags": {"command": "export-excel", "target_sheet": "Review Flags"},
+    "Flag Wrong Data": {"command": "user-flag"},
+    "Report Requirement / Problem": {"command": "support-request"},
+    "View Log": {"command": "export-excel", "target_sheet": "Error Log"}
+  },
+  "exchange_files": [
+    "dashboard.csv",
+    "master_documents.csv",
+    "revisions.csv",
+    "events.csv",
+    "pending_update.csv",
+    "flags.csv",
+    "history.csv",
+    "errors.csv"
+  ],
+  "flag_levels": ["OK", "REVIEW", "CONFLICT"],
+  "approved_state_rule": "Approved master data changes only after an explicit Approve Update action.",
+  "technical_conflicts_rule": "Non-overridable technical conflicts must be corrected and restaged before approval.",
+  "normal_user_interface": "Excel only"
+}
