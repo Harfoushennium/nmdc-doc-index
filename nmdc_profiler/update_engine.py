@@ -11,6 +11,11 @@ from typing import Any, Callable, Dict, Iterable, List, Mapping, Sequence, Tuple
 
 ENGINE_SCHEMA_VERSION = "1"
 DEFAULT_PARSER_VERSION = "cycle3-extractor-v1"
+NON_OVERRIDABLE_CONFLICT_CODES = {
+    "SOURCE_HASH_ERROR",
+    "PARSER_ERROR",
+    "DUPLICATE_RECORD_KEY",
+}
 
 Record = Dict[str, Any]
 Processor = Callable[[Path, str], Sequence[Mapping[str, Any]]]
@@ -141,8 +146,16 @@ def build_manifest(
     config_fingerprint: str,
     run_id: str,
     data_dir: Path,
+    selection_statuses: Mapping[str, str] | None = None,
 ) -> Dict[str, Any]:
-    files = [dict(row) for row in entries]
+    statuses = selection_statuses or {}
+    files: List[Dict[str, Any]] = []
+    for row in entries:
+        item = dict(row)
+        rel = str(item.get("relative_path", ""))
+        item["selection_status"] = str(statuses.get(rel, "SELECTED")).strip().upper() or "SELECTED"
+        item["last_processed_run"] = ""
+        files.append(item)
     files.sort(key=lambda r: str(r.get("relative_path", "")).casefold())
     return {
         "engine_schema_version": ENGINE_SCHEMA_VERSION,
@@ -280,6 +293,13 @@ def _append_log(state_dir: Path, payload: Mapping[str, Any]) -> None:
         f.write(json.dumps(dict(payload), ensure_ascii=False, sort_keys=True, default=str) + "\n")
 
 
+def _set_manifest_processed_run(manifest: Dict[str, Any], rel: str, processed_run: str) -> None:
+    for row in manifest.get("files", []):
+        if str(row.get("relative_path", "")) == rel:
+            row["last_processed_run"] = processed_run
+            return
+
+
 def stage_update(
     *,
     data_dir: Path,
@@ -288,6 +308,7 @@ def stage_update(
     config_paths: Sequence[Path] = (),
     parser_version: str = DEFAULT_PARSER_VERSION,
     full_rescan: bool = False,
+    selection_statuses: Mapping[str, str] | None = None,
 ) -> Dict[str, Any]:
     """Create a proposed update without changing the approved dataset."""
     data_dir = Path(data_dir)
@@ -306,30 +327,60 @@ def stage_update(
         config_fingerprint=config_fingerprint,
         run_id=run_id,
         data_dir=data_dir,
+        selection_statuses=selection_statuses,
     )
     decisions = compare_manifests(current_manifest, approved_manifest, full_rescan=full_rescan)
     current_map = _manifest_map(current_manifest)
     approved_map = _manifest_map(approved_manifest)
     cache_index: Dict[str, str] = {}
     staged_rows: List[Record] = []
+    effective_decisions: List[SourceDecision] = []
 
     for original_decision in decisions:
         decision = original_decision
         rel = decision.relative_path
         now = current_map.get(rel, {})
         old = approved_map.get(rel, {})
-        if decision.reason == "SOURCE_NEW":
+        now_status = str(now.get("selection_status", "SELECTED")).upper()
+        old_status = str(old.get("selection_status", "SELECTED")).upper() if old else ""
+
+        if rel in current_map and now_status != "SELECTED":
+            if now_status == "REVIEW_REQUIRED":
+                flags.append(
+                    _flag(
+                        "REVIEW",
+                        "SOURCE_SELECTION_REVIEW_REQUIRED",
+                        f"Source workbook '{rel}' requires source-selection review and is not included in the staged master data.",
+                        rel,
+                        "Resolve source selection before expecting this workbook to appear in the approved index.",
+                    )
+                )
+            if old_status == "SELECTED":
+                flags.append(
+                    _flag(
+                        "REVIEW",
+                        "SOURCE_SELECTION_CHANGED",
+                        f"Source workbook '{rel}' is no longer selected; its previously approved records are staged for removal.",
+                        rel,
+                        "Review the source-selection decision before approval.",
+                    )
+                )
+            decision = SourceDecision(rel, decision.change_type, "DROP", "SOURCE_NOT_SELECTED")
+
+        if decision.reason == "SOURCE_NEW" and now_status == "SELECTED":
             flags.append(_flag("REVIEW", "SOURCE_NEW", f"New source workbook detected: {rel}.", rel, "Review the staged extracted records before approval."))
-        elif decision.reason == "SOURCE_CHANGED":
+        elif decision.reason == "SOURCE_CHANGED" and now_status == "SELECTED":
             flags.append(_flag("REVIEW", "SOURCE_CHANGED", f"Source workbook content changed: {rel}.", rel, "Review staged differences before approval."))
-        elif decision.reason == "SOURCE_REMOVED":
+        elif decision.reason == "SOURCE_REMOVED" and old_status == "SELECTED":
             flags.append(_flag("CONFLICT", "SOURCE_REMOVED", f"Previously approved source workbook is no longer present: {rel}.", rel, "Confirm that removal is intentional before approval."))
-        elif decision.reason == "PARSER_VERSION_CHANGED":
+        elif decision.reason == "PARSER_VERSION_CHANGED" and now_status == "SELECTED":
             flags.append(_flag("REVIEW", "PARSER_VERSION_CHANGED", f"Parser version changed; '{rel}' will be reprocessed.", rel, "Review staged differences before approval."))
-        elif decision.reason == "CONFIG_CHANGED":
+        elif decision.reason == "CONFIG_CHANGED" and now_status == "SELECTED":
             flags.append(_flag("REVIEW", "CONFIG_CHANGED", f"Configuration changed; '{rel}' will be reprocessed.", rel, "Review staged differences before approval."))
 
         if decision.action == "DROP":
+            effective_decisions.append(decision)
+            _set_manifest_processed_run(current_manifest, rel, str(old.get("last_processed_run", "")))
             continue
 
         if decision.action == "REUSE":
@@ -342,6 +393,8 @@ def stage_update(
                 rows = _read_jsonl(cache_path)
                 staged_rows.extend(rows)
                 cache_index[rel] = cache_file
+                _set_manifest_processed_run(current_manifest, rel, str(old.get("last_processed_run", approved_manifest.get("run_id", ""))))
+                effective_decisions.append(decision)
                 continue
 
         if decision.action == "KEEP_APPROVED":
@@ -350,9 +403,12 @@ def stage_update(
             if cache_file and cache_path.exists():
                 staged_rows.extend(_read_jsonl(cache_path))
                 cache_index[rel] = cache_file
+            _set_manifest_processed_run(current_manifest, rel, str(old.get("last_processed_run", approved_manifest.get("run_id", ""))))
+            effective_decisions.append(decision)
             continue
 
         if decision.action == "BLOCK":
+            effective_decisions.append(decision)
             continue
 
         if decision.action == "REPROCESS":
@@ -371,6 +427,7 @@ def stage_update(
                 _write_jsonl(state_dir / cache_rel, rows)
                 cache_index[rel] = cache_rel
                 staged_rows.extend(rows)
+                _set_manifest_processed_run(current_manifest, rel, run_id)
             except Exception as exc:
                 flags.append(
                     _flag(
@@ -386,6 +443,8 @@ def stage_update(
                 if old_cache and old_cache_path.exists():
                     staged_rows.extend(_read_jsonl(old_cache_path))
                     cache_index[rel] = old_cache
+                _set_manifest_processed_run(current_manifest, rel, str(old.get("last_processed_run", approved_manifest.get("run_id", ""))))
+            effective_decisions.append(decision)
 
     staged_rows.sort(
         key=lambda r: (
@@ -414,7 +473,7 @@ def stage_update(
                 "action": d.action,
                 "reason": d.reason,
             }
-            for d in decisions
+            for d in effective_decisions
         ],
     )
     _write_json(stage_dir / "record_changes.json", record_changes)
@@ -457,7 +516,21 @@ def approve_stage(state_dir: Path, run_id: str | None = None, *, allow_conflicts
     state_dir = Path(state_dir)
     run_id, stage_dir = _resolve_stage(state_dir, run_id)
     summary = _read_json(stage_dir / "summary.json", {})
+    flags = _read_json(stage_dir / "flags.json", [])
     blocking = int(summary.get("blocking_flags", 0) or 0)
+    non_overridable = sorted(
+        {
+            str(flag.get("code", ""))
+            for flag in flags
+            if flag.get("level") == "CONFLICT" and str(flag.get("code", "")) in NON_OVERRIDABLE_CONFLICT_CODES
+        }
+    )
+    if non_overridable:
+        raise ValueError(
+            "Staged update has non-overridable technical conflict(s): "
+            + ", ".join(non_overridable)
+            + ". Correct the underlying problem and stage again."
+        )
     if blocking and not allow_conflicts:
         raise ValueError(f"Staged update has {blocking} blocking conflict flag(s); approval is not allowed without an explicit override.")
 
