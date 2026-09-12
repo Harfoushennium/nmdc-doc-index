@@ -1,33 +1,42 @@
 Attribute VB_Name = "modNMDC_Refresh"
 Option Explicit
 
-Public Sub NMDC_RefreshExchangeData()
+Public Function NMDC_RefreshExchangeData() As Boolean
     On Error GoTo Handler
 
-    NMDC_LoadCsvToSheet NMDC_ExchangePath() & "\master_documents.csv", "Master Documents"
-    NMDC_LoadCsvToSheet NMDC_ExchangePath() & "\revisions.csv", "Revisions"
-    NMDC_LoadCsvToSheet NMDC_ExchangePath() & "\events.csv", "Transactions"
-    NMDC_LoadCsvToSheet NMDC_ExchangePath() & "\pending_update.csv", "Pending Update"
-    NMDC_LoadCsvToSheet NMDC_ExchangePath() & "\flags.csv", "Review Flags"
-    NMDC_LoadCsvToSheet NMDC_ExchangePath() & "\history.csv", "Update History"
-    NMDC_LoadErrorCsvPreserveLocal NMDC_ExchangePath() & "\errors.csv"
-    NMDC_LoadDashboard NMDC_ExchangePath() & "\dashboard.csv"
+    Dim refreshOk As Boolean
+    refreshOk = True
 
-    Exit Sub
+    If Not NMDC_LoadCsvToSheet(NMDC_ExchangePath() & "\master_documents.csv", "Master Documents") Then refreshOk = False
+    If Not NMDC_LoadCsvToSheet(NMDC_ExchangePath() & "\revisions.csv", "Revisions") Then refreshOk = False
+    If Not NMDC_LoadCsvToSheet(NMDC_ExchangePath() & "\events.csv", "Transactions") Then refreshOk = False
+    If Not NMDC_LoadCsvToSheet(NMDC_ExchangePath() & "\pending_update.csv", "Pending Update") Then refreshOk = False
+    If Not NMDC_LoadCsvToSheet(NMDC_ExchangePath() & "\flags.csv", "Review Flags") Then refreshOk = False
+    If Not NMDC_LoadCsvToSheet(NMDC_ExchangePath() & "\history.csv", "Update History") Then refreshOk = False
+    If Not NMDC_LoadErrorCsvPreserveLocal(NMDC_ExchangePath() & "\errors.csv") Then refreshOk = False
+    If Not NMDC_LoadDashboard(NMDC_ExchangePath() & "\dashboard.csv") Then refreshOk = False
+
+    NMDC_RefreshExchangeData = refreshOk
+    Exit Function
 Handler:
     NMDC_LogError "EXCEL_REFRESH_ERROR", _
         "Excel could not refresh one or more NMDC Index tables.", _
         Err.Number & " - " & Err.Description
-End Sub
+    NMDC_RefreshExchangeData = False
+End Function
 
-Public Sub NMDC_LoadCsvToSheet(ByVal csvPath As String, ByVal sheetName As String)
+Public Function NMDC_LoadCsvToSheet(ByVal csvPath As String, ByVal sheetName As String) As Boolean
     On Error GoTo Handler
 
     Dim ws As Worksheet
     Dim qt As QueryTable
 
     Set ws = ThisWorkbook.Worksheets(sheetName)
-    If Len(Dir$(csvPath)) = 0 Then Exit Sub
+    If Len(Dir$(csvPath)) = 0 Then
+        NMDC_LogError "CSV_MISSING", "Excel could not find the exported data for " & sheetName & ".", "File: " & csvPath
+        NMDC_LoadCsvToSheet = False
+        Exit Function
+    End If
 
     Application.ScreenUpdating = False
     ws.Cells.ClearContents
@@ -42,22 +51,25 @@ Public Sub NMDC_LoadCsvToSheet(ByVal csvPath As String, ByVal sheetName As Strin
         .TextFileCommaDelimiter = True
         .TextFileTextQualifier = xlTextQualifierDoubleQuote
         .TextFilePlatform = 65001
+        .TextFileColumnDataTypes = NMDC_TextColumnTypes(csvPath)
         .Refresh BackgroundQuery:=False
         .Delete
     End With
 
     NMDC_FormatDataSheet ws
     Application.ScreenUpdating = True
-    Exit Sub
+    NMDC_LoadCsvToSheet = True
+    Exit Function
 
 Handler:
     Application.ScreenUpdating = True
     NMDC_LogError "CSV_IMPORT_ERROR", _
         "Excel could not load " & sheetName & ".", _
         "File: " & csvPath & " | " & Err.Number & " - " & Err.Description
-End Sub
+    NMDC_LoadCsvToSheet = False
+End Function
 
-Public Sub NMDC_LoadErrorCsvPreserveLocal(ByVal csvPath As String)
+Public Function NMDC_LoadErrorCsvPreserveLocal(ByVal csvPath As String) As Boolean
     On Error GoTo Handler
 
     Dim ws As Worksheet
@@ -72,7 +84,11 @@ Public Sub NMDC_LoadErrorCsvPreserveLocal(ByVal csvPath As String)
     Set ws = ThisWorkbook.Worksheets("Error Log")
 
     ' If the engine did not produce an error exchange file, leave the existing log untouched.
-    If Len(Dir$(csvPath)) = 0 Then Exit Sub
+    If Len(Dir$(csvPath)) = 0 Then
+        NMDC_LogError "CSV_MISSING", "Excel could not find the exported Error Log.", "File: " & csvPath
+        NMDC_LoadErrorCsvPreserveLocal = False
+        Exit Function
+    End If
 
     Set localRows = New Collection
 
@@ -81,8 +97,8 @@ Public Sub NMDC_LoadErrorCsvPreserveLocal(ByVal csvPath As String)
     If lastRow >= 2 Then
         For r = 2 To lastRow
             If Left$(CStr(ws.Cells(r, 3).Value), 6) = "EXCEL:" Then
-                ReDim rowValues(1 To 8)
-                For c = 1 To 8
+                ReDim rowValues(1 To 10)
+                For c = 1 To 10
                     rowValues(c) = ws.Cells(r, c).Value
                 Next c
                 localRows.Add rowValues
@@ -102,6 +118,7 @@ Public Sub NMDC_LoadErrorCsvPreserveLocal(ByVal csvPath As String)
         .TextFileCommaDelimiter = True
         .TextFileTextQualifier = xlTextQualifierDoubleQuote
         .TextFilePlatform = 65001
+        .TextFileColumnDataTypes = NMDC_TextColumnTypes(csvPath)
         .Refresh BackgroundQuery:=False
         .Delete
     End With
@@ -109,21 +126,23 @@ Public Sub NMDC_LoadErrorCsvPreserveLocal(ByVal csvPath As String)
     For Each rowValues In localRows
         nextRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row + 1
         If nextRow < 2 Then nextRow = 2
-        For c = 1 To 8
+        For c = 1 To 10
             ws.Cells(nextRow, c).Value = rowValues(c)
         Next c
     Next rowValues
 
     NMDC_FormatDataSheet ws
     Application.ScreenUpdating = True
-    Exit Sub
+    NMDC_LoadErrorCsvPreserveLocal = True
+    Exit Function
 
 Handler:
     Application.ScreenUpdating = True
     NMDC_LogError "ERROR_LOG_REFRESH_ERROR", _
         "Excel could not refresh the Error Log safely.", _
         "File: " & csvPath & " | " & Err.Number & " - " & Err.Description
-End Sub
+    NMDC_LoadErrorCsvPreserveLocal = False
+End Function
 
 Private Sub NMDC_FormatDataSheet(ByVal ws As Worksheet)
     On Error Resume Next
@@ -148,13 +167,17 @@ Private Sub NMDC_FormatDataSheet(ByVal ws As Worksheet)
     ActiveWindow.FreezePanes = True
 End Sub
 
-Public Sub NMDC_LoadDashboard(ByVal csvPath As String)
+Public Function NMDC_LoadDashboard(ByVal csvPath As String) As Boolean
     On Error GoTo Handler
     Dim ws As Worksheet
     Dim temp As Worksheet
     Dim qt As QueryTable
 
-    If Len(Dir$(csvPath)) = 0 Then Exit Sub
+    If Len(Dir$(csvPath)) = 0 Then
+        NMDC_LogError "CSV_MISSING", "Excel could not find the exported dashboard data.", "File: " & csvPath
+        NMDC_LoadDashboard = False
+        Exit Function
+    End If
     Set ws = ThisWorkbook.Worksheets("Home")
     Set temp = ThisWorkbook.Worksheets("System Data")
 
@@ -169,6 +192,7 @@ Public Sub NMDC_LoadDashboard(ByVal csvPath As String)
         .TextFileCommaDelimiter = True
         .TextFileTextQualifier = xlTextQualifierDoubleQuote
         .TextFilePlatform = 65001
+        .TextFileColumnDataTypes = NMDC_TextColumnTypes(csvPath)
         .Refresh BackgroundQuery:=False
         .Delete
     End With
@@ -177,6 +201,7 @@ Public Sub NMDC_LoadDashboard(ByVal csvPath As String)
     ws.Range("B5").Value = NMDC_SystemValue(temp, "Approved Status")
     ws.Range("B6").Value = NMDC_SystemValue(temp, "Approved Run ID")
     ws.Range("B7").Value = NMDC_SystemValue(temp, "Current Data Folder")
+    ws.Range("B8").Value = NMDC_SystemValue(temp, "Last Successful Update")
     ws.Range("E5").Value = NMDC_SystemValue(temp, "Approved Documents")
     ws.Range("E6").Value = NMDC_SystemValue(temp, "Approved Revisions")
     ws.Range("E7").Value = NMDC_SystemValue(temp, "Approved Transactions")
@@ -184,16 +209,50 @@ Public Sub NMDC_LoadDashboard(ByVal csvPath As String)
     ws.Range("H6").Value = NMDC_SystemValue(temp, "Pending Run ID")
     ws.Range("H7").Value = "Added " & NMDC_SystemValue(temp, "Pending Added") & _
                            " | Modified " & NMDC_SystemValue(temp, "Pending Modified") & _
-                           " | Removed " & NMDC_SystemValue(temp, "Pending Removed")
+                           " | Removed " & NMDC_SystemValue(temp, "Pending Removed") & _
+                           " | Unchanged " & NMDC_SystemValue(temp, "Pending Unchanged")
     ws.Range("K5").Value = NMDC_SystemValue(temp, "Review Flags")
     ws.Range("K6").Value = NMDC_SystemValue(temp, "Conflict Flags")
-    Exit Sub
+    NMDC_LoadDashboard = True
+    Exit Function
 
 Handler:
     NMDC_LogError "DASHBOARD_REFRESH_ERROR", _
         "Excel could not refresh the Home dashboard.", _
         Err.Number & " - " & Err.Description
-End Sub
+    NMDC_LoadDashboard = False
+End Function
+
+Private Function NMDC_TextColumnTypes(ByVal csvPath As String) As Variant
+    On Error GoTo Handler
+
+    Dim fileNumber As Integer
+    Dim headerLine As String
+    Dim headerFields As Variant
+    Dim dataTypes() As Integer
+    Dim index As Long
+
+    fileNumber = FreeFile
+    Open csvPath For Input As #fileNumber
+    Line Input #fileNumber, headerLine
+    Close #fileNumber
+
+    ' Exchange headers are controlled by the engine and contain no commas.
+    ' Import every field as text so Excel cannot change revisions such as 00,
+    ' document identifiers with leading zeroes, or references such as 1-2.
+    headerFields = Split(headerLine, ",")
+    ReDim dataTypes(0 To UBound(headerFields))
+    For index = 0 To UBound(dataTypes)
+        dataTypes(index) = xlTextFormat
+    Next index
+    NMDC_TextColumnTypes = dataTypes
+    Exit Function
+
+Handler:
+    On Error Resume Next
+    If fileNumber > 0 Then Close #fileNumber
+    NMDC_TextColumnTypes = Array(xlTextFormat)
+End Function
 
 Private Function NMDC_SystemValue(ByVal ws As Worksheet, ByVal headerName As String) As String
     Dim hit As Range

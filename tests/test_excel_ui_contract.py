@@ -38,8 +38,11 @@ class ExcelUIContractTests(unittest.TestCase):
             "Refresh Dashboard",
             "Review Flags",
             "Flag Wrong Data",
+            "Configuration",
+            "Rules & Mappings",
             "Report Requirement / Problem",
             "View Log",
+            "Help",
         }
         self.assertEqual(set(contract["buttons"]), required_buttons)
         self.assertEqual(contract["normal_user_interface"], "Excel only")
@@ -60,6 +63,28 @@ class ExcelUIContractTests(unittest.TestCase):
                 "errors.csv",
             ],
         )
+        self.assertEqual(
+            contract["exchange_columns"]["flags.csv"],
+            [
+                "Flag Level",
+                "Flag Code",
+                "Plain-English Problem",
+                "Recommended User Action",
+                "Project No.",
+                "Document No.",
+                "Revision",
+                "Source File",
+                "Source Sheet",
+                "Source Row",
+                "Source Cell",
+                "User Decision",
+                "User Comment",
+                "Resolution Status",
+                "Event Key",
+            ],
+        )
+        self.assertIn("exact pending run ID", contract["approval_binding_rule"])
+        self.assertIn("do not open or announce", contract["stale_review_rule"])
 
     def test_vba_launcher_hides_console_and_waits_for_result(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Engine.bas").read_text(encoding="utf-8")
@@ -83,18 +108,37 @@ class ExcelUIContractTests(unittest.TestCase):
             "NMDC_RefreshDashboard",
             "NMDC_ReviewFlags",
             "NMDC_FlagWrongData",
+            "NMDC_OpenConfiguration",
+            "NMDC_OpenRulesMappings",
             "NMDC_ReportRequirement",
             "NMDC_ViewLog",
+            "NMDC_OpenHelp",
         ]
         for macro in macros:
             self.assertIn(f"Public Sub {macro}", text)
         self.assertIn("The approved master index was not changed", text)
+        self.assertIn('approvalArgs = "--run-id " & NMDC_Quote(reviewedRunId)', text)
+        self.assertIn('approvalArgs = approvalArgs & " --allow-conflicts"', text)
+        self.assertIn('NMDC_RunEngine("approve", approvalArgs)', text)
+        self.assertIn("duplicate-key conflicts can never be overridden", text)
+        self.assertIn("The pending update changed after your last review", text)
+        self.assertIn('currentStatus <> "STAGED" And currentStatus <> "REVIEW_REQUIRED" And currentStatus <> "HOLD"', text)
+        self.assertIn("The proposed update was staged, but Excel could not load it for review", text)
+        self.assertIn('NMDC_GoToSheet "Error Log"', text)
+        self.assertNotIn("Or Not NMDC_RefreshExchangeData", text)
+
+    def test_csv_refresh_preserves_identifiers_as_text(self):
+        text = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
+        self.assertIn(".TextFileColumnDataTypes = NMDC_TextColumnTypes(csvPath)", text)
+        self.assertIn("dataTypes(index) = xlTextFormat", text)
+        self.assertIn("revisions such as 00", text)
 
     def test_error_refresh_preserves_excel_local_entries(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
         self.assertIn("NMDC_LoadErrorCsvPreserveLocal", text)
         self.assertIn('Left$(CStr(ws.Cells(r, 3).Value), 6) = "EXCEL:"', text)
         self.assertNotIn('NMDC_LoadCsvToSheet NMDC_ExchangePath() & "\\errors.csv", "Error Log"', text)
+        self.assertIn("ReDim rowValues(1 To 10)", text)
 
     def test_workbook_spec_states_excel_only_and_staged_approval(self):
         text = (ROOT / "excel" / "WORKBOOK_UI_SPEC.md").read_text(encoding="utf-8")

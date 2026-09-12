@@ -48,8 +48,12 @@ The Home page is the control panel.
 - **Select Data Folder**
 - **Refresh Dashboard**
 - **Review Flags**
+- **Flag Wrong Data**
+- **Configuration**
+- **Rules & Mappings**
 - **View Log**
 - **Report Requirement / Problem**
+- **Help**
 
 ## Master Documents
 
@@ -71,6 +75,7 @@ One row per document. Preferred columns:
 - Source File
 - Source Sheet
 - Source Row
+- Source Cell
 - Global Document Key
 
 The user should be able to filter/sort without exposing internal formulas.
@@ -91,6 +96,7 @@ Preferred columns:
 - Source File
 - Source Sheet
 - Source Row
+- Source Cell
 
 ## Transactions
 
@@ -113,6 +119,7 @@ Preferred columns:
 - Source File
 - Source Sheet
 - Source Row
+- Source Cell
 - Event Key
 
 ## Pending Update
@@ -149,15 +156,19 @@ Columns:
 - Source File
 - Source Sheet
 - Source Row
+- Source Cell
 - User Decision
 - User Comment
 - Resolution Status
+- Event Key
 
 Buttons:
 
 - **Flag Wrong Data**
 - **Create Support Request**
 - **Mark Reviewed**
+
+Source-level flags may legitimately leave document/revision fields blank. Record-level flags must carry all available record context so the affected row can be identified and corrected without guessing.
 
 ## User Decisions
 
@@ -293,6 +304,23 @@ Short non-technical instructions:
 | Report Requirement / Problem | `support-request` |
 
 `Select Data Folder` is handled locally by Excel/VBA and saved into workbook configuration; it is not an engine command.
+`Configuration`, `Rules & Mappings`, and `Help` are local Excel navigation actions and do not invoke the engine.
+
+The production approval call must bind to the exact pending run displayed and reviewed in Excel: `approve --run-id <displayed run ID>`. Before approval, Excel refreshes the exchange data and stops if the current pending run ID differs from the reviewed run ID.
+
+When the displayed run contains conflict flags, Excel requires a separate explicit warning/confirmation and may pass `--allow-conflicts`. The engine must still refuse non-overridable parser, source-hash, and duplicate-record-key conflicts. This permits an owner to intentionally accept an overridable business event such as a confirmed source removal without weakening technical data-integrity blocks.
+
+## Exchange-data integrity
+
+- Excel imports exchange CSV columns as text by default so identifiers and revisions are preserved exactly. Values such as revision `00`, document numbers with leading zeroes, and event references such as `1-2` must not be converted by Excel.
+- The engine is responsible for intentional date normalization before export. The Excel refresh must not reinterpret identifier-like values as dates or numbers.
+- If `export-excel` fails, Excel must stop the action, open the Error Log, and must not announce or open a stale Pending Update as if it were current.
+- Review Pending Update and Review Flags refresh the exchange data before opening their sheets.
+- An approval is allowed only for the exact pending run ID that remains current after a successful refresh.
+
+## Wrong-data context
+
+When **Flag Wrong Data** is used on a selected record, Excel passes all context available on that row, including source file/sheet/row/cell, document number, revision, event identity, flag code, selected field/current value, expected value, user note, and user name. The engine adds the approved/pending run IDs plus parser and configuration versions to the stored support record.
 
 ## Visual behavior
 
@@ -315,3 +343,4 @@ If the engine executable is missing, blocked, or returns a failure code:
 3. Write an Error Log entry.
 4. Preserve the technical error detail for support.
 5. Offer the user the Report Requirement / Problem workflow.
+6. Never continue to an older review table or approve a run that was not the one displayed and reviewed.

@@ -3,6 +3,8 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import os
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
@@ -12,6 +14,7 @@ Record = Dict[str, Any]
 DASHBOARD_FIELDS = [
     "Approved Status",
     "Approved Run ID",
+    "Last Successful Update",
     "Approved Documents",
     "Approved Revisions",
     "Approved Transactions",
@@ -43,6 +46,7 @@ DOCUMENT_FIELDS = [
     "Source File",
     "Source Sheet",
     "Source Row",
+    "Source Cell",
     "Global Document Key",
 ]
 
@@ -57,6 +61,7 @@ REVISION_FIELDS = [
     "Source File",
     "Source Sheet",
     "Source Row",
+    "Source Cell",
 ]
 
 EVENT_FIELDS = [
@@ -75,6 +80,7 @@ EVENT_FIELDS = [
     "Source File",
     "Source Sheet",
     "Source Row",
+    "Source Cell",
     "Event Key",
 ]
 
@@ -95,7 +101,17 @@ FLAG_FIELDS = [
     "Flag Code",
     "Plain-English Problem",
     "Recommended User Action",
+    "Project No.",
+    "Document No.",
+    "Revision",
     "Source File",
+    "Source Sheet",
+    "Source Row",
+    "Source Cell",
+    "User Decision",
+    "User Comment",
+    "Resolution Status",
+    "Event Key",
 ]
 
 HISTORY_FIELDS = [
@@ -125,6 +141,8 @@ ERROR_FIELDS = [
     "Technical Detail",
     "Run ID",
     "Source File",
+    "Worksheet",
+    "Source Row/Cell",
 ]
 
 
@@ -149,11 +167,17 @@ def _read_jsonl(path: Path) -> List[Record]:
 
 def _write_csv(path: Path, fields: Sequence[str], rows: Iterable[Mapping[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8-sig", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(fields), extrasaction="ignore", lineterminator="\n")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({field: row.get(field, "") for field in fields})
+    temp = path.with_name(f".{path.name}.tmp-{uuid.uuid4().hex[:8]}")
+    try:
+        with temp.open("w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=list(fields), extrasaction="ignore", lineterminator="\n")
+            writer.writeheader()
+            for row in rows:
+                writer.writerow({field: row.get(field, "") for field in fields})
+        os.replace(temp, path)
+    finally:
+        if temp.exists():
+            temp.unlink()
 
 
 def _as_int(value: Any) -> int:
@@ -212,13 +236,14 @@ def load_latest_stage(state_dir: Path) -> Dict[str, Any]:
     latest = _read_json(state_dir / "staging" / "latest.json", {})
     run_id = str(latest.get("run_id", ""))
     if not run_id:
-        return {"run_id": "", "stage_dir": None, "summary": {}, "flags": [], "changes": {}, "records": []}
+        return {"run_id": "", "stage_dir": None, "manifest": {}, "summary": {}, "flags": [], "changes": {}, "records": []}
     stage_dir = state_dir / "staging" / run_id
     if not stage_dir.exists():
-        return {"run_id": run_id, "stage_dir": None, "summary": {}, "flags": [], "changes": {}, "records": []}
+        return {"run_id": run_id, "stage_dir": None, "manifest": {}, "summary": {}, "flags": [], "changes": {}, "records": []}
     return {
         "run_id": run_id,
         "stage_dir": stage_dir,
+        "manifest": _read_json(stage_dir / "manifest.json", {}),
         "summary": _read_json(stage_dir / "summary.json", {}),
         "flags": _read_json(stage_dir / "flags.json", []),
         "changes": _read_json(stage_dir / "record_changes.json", {}),
@@ -253,7 +278,25 @@ def build_document_rows(records: Sequence[Mapping[str, Any]]) -> List[Record]:
     for key, group in sorted(by_doc.items(), key=lambda item: item[0]):
         doc_row = next((r for r in group if _as_int(r.get("Document_Row_Flag")) == 1), group[0])
         latest_rev = next((r for r in group if _as_int(r.get("Is_Latest_Revision")) == 1), doc_row)
-        latest_evt = next((r for r in group if _as_int(r.get("Is_Latest_Event")) == 1), latest_rev)
+        latest_revision_key = str(latest_rev.get("Revision_Key", "")).strip()
+        if latest_revision_key:
+            latest_revision_rows = [
+                r for r in group if str(r.get("Revision_Key", "")).strip() == latest_revision_key
+            ]
+        else:
+            # Backward-compatible fallback for any pre-key canonical records.
+            latest_source_document_key = str(latest_rev.get("Source_Document_Key", "")).strip()
+            latest_revision_value = str(latest_rev.get("Revision", ""))
+            latest_revision_rows = [
+                r
+                for r in group
+                if str(r.get("Source_Document_Key", "")).strip() == latest_source_document_key
+                and str(r.get("Revision", "")) == latest_revision_value
+            ]
+        latest_evt = next(
+            (r for r in latest_revision_rows if _as_int(r.get("Is_Latest_Event")) == 1),
+            latest_revision_rows[-1] if latest_revision_rows else latest_rev,
+        )
         flag_level = "REVIEW" if str(doc_row.get("Parsing Status", "INCLUDE")) != "INCLUDE" else "OK"
         out.append(
             {
@@ -273,6 +316,7 @@ def build_document_rows(records: Sequence[Mapping[str, Any]]) -> List[Record]:
                 "Source File": doc_row.get("Source File", ""),
                 "Source Sheet": doc_row.get("Source Sheet", ""),
                 "Source Row": doc_row.get("Source Row", ""),
+                "Source Cell": doc_row.get("Source Cell", ""),
                 "Global Document Key": key,
             }
         )
@@ -295,6 +339,7 @@ def build_revision_rows(records: Sequence[Mapping[str, Any]]) -> List[Record]:
                 "Source File": row.get("Source File", ""),
                 "Source Sheet": row.get("Source Sheet", ""),
                 "Source Row": row.get("Source Row", ""),
+                "Source Cell": row.get("Source Cell", ""),
             }
         )
     return out
@@ -320,6 +365,7 @@ def build_event_rows(records: Sequence[Mapping[str, Any]]) -> List[Record]:
                 "Source File": row.get("Source File", ""),
                 "Source Sheet": row.get("Source Sheet", ""),
                 "Source Row": row.get("Source Row", ""),
+                "Source Cell": row.get("Source Cell", ""),
                 "Event Key": row.get("Event_Key", ""),
             }
         )
@@ -332,7 +378,12 @@ def build_pending_rows(approved_records: Sequence[Mapping[str, Any]], stage: Map
     old_index = _index_records(approved_records)
     new_index = _index_records(staged_records)
     rows: List[Record] = []
-    for change_type, key_name in (("ADDED", "added"), ("MODIFIED", "modified"), ("REMOVED", "removed")):
+    for change_type, key_name in (
+        ("ADDED", "added"),
+        ("MODIFIED", "modified"),
+        ("REMOVED", "removed"),
+        ("UNCHANGED", "unchanged"),
+    ):
         for identity in changes.get(key_name, []) or []:
             row = new_index.get(identity) if change_type != "REMOVED" else old_index.get(identity)
             row = row or {}
@@ -340,6 +391,7 @@ def build_pending_rows(approved_records: Sequence[Mapping[str, Any]], stage: Map
                 "ADDED": "New record will be added if this update is approved.",
                 "MODIFIED": "Existing approved record changed in the staged update.",
                 "REMOVED": "Approved record will be removed if this update is approved.",
+                "UNCHANGED": "Approved record is unchanged and will be carried forward.",
             }[change_type]
             rows.append(
                 {
@@ -351,7 +403,7 @@ def build_pending_rows(approved_records: Sequence[Mapping[str, Any]], stage: Map
                     "Event Type": row.get("Event Type", ""),
                     "Source File": row.get("Source File", ""),
                     "Plain-English Summary": summary,
-                    "Review Required": "YES",
+                    "Review Required": "NO" if change_type == "UNCHANGED" else "YES",
                 }
             )
     return rows
@@ -366,7 +418,17 @@ def build_flag_rows(stage: Mapping[str, Any]) -> List[Record]:
                 "Flag Code": flag.get("code", ""),
                 "Plain-English Problem": flag.get("message", ""),
                 "Recommended User Action": flag.get("recommended_action", ""),
+                "Project No.": flag.get("project_no", ""),
+                "Document No.": flag.get("document_no", ""),
+                "Revision": flag.get("revision", ""),
                 "Source File": flag.get("source", ""),
+                "Source Sheet": flag.get("source_sheet", ""),
+                "Source Row": flag.get("source_row", ""),
+                "Source Cell": flag.get("source_cell", ""),
+                "User Decision": flag.get("user_decision", ""),
+                "User Comment": flag.get("user_comment", ""),
+                "Resolution Status": flag.get("resolution_status", "OPEN"),
+                "Event Key": flag.get("event_key", ""),
             }
         )
     return rows
@@ -415,6 +477,8 @@ def build_error_rows(stage: Mapping[str, Any]) -> List[Record]:
                 "Technical Detail": flag.get("code", ""),
                 "Run ID": run_id,
                 "Source File": flag.get("source", ""),
+                "Worksheet": flag.get("source_sheet", ""),
+                "Source Row/Cell": flag.get("source_cell", "") or flag.get("source_row", ""),
             }
         )
     return rows
@@ -425,18 +489,21 @@ def build_dashboard_row(approved: Mapping[str, Any], stage: Mapping[str, Any]) -
     documents = build_document_rows(approved_records)
     revisions = build_revision_rows(approved_records)
     manifest = approved.get("manifest", {}) or {}
+    stage_manifest = stage.get("manifest", {}) or {}
     summary = stage.get("summary", {}) or {}
+    decision = stage.get("decision", {}) or {}
     counts = summary.get("record_counts", {}) or {}
     flags = stage.get("flags", []) or []
     return {
         "Approved Status": "APPROVED" if approved.get("run_id") else "NO APPROVED INDEX",
         "Approved Run ID": approved.get("run_id", ""),
+        "Last Successful Update": (approved.get("approval", {}) or {}).get("approved_at", ""),
         "Approved Documents": len(documents),
         "Approved Revisions": len(revisions),
         "Approved Transactions": len(approved_records),
-        "Current Data Folder": manifest.get("data_dir", ""),
+        "Current Data Folder": stage_manifest.get("data_dir", manifest.get("data_dir", "")),
         "Pending Run ID": stage.get("run_id", ""),
-        "Pending Status": summary.get("status", "NONE") if stage.get("run_id") else "NONE",
+        "Pending Status": decision.get("decision", summary.get("status", "NONE")) if stage.get("run_id") else "NONE",
         "Pending Added": counts.get("added", 0),
         "Pending Modified": counts.get("modified", 0),
         "Pending Removed": counts.get("removed", 0),
@@ -491,19 +558,32 @@ def create_support_request(
     source_file: str = "",
     worksheet: str = "",
     source_row: str = "",
+    source_cell: str = "",
+    project_no: str = "",
     document_no: str = "",
     revision: str = "",
+    event_identity: str = "",
     flag_code: str = "",
+    current_field: str = "",
     current_value: str = "",
     expected_value: str = "",
     user_name: str = "",
+    parser_version: str = "",
+    configuration_version: str = "",
 ) -> Path:
     state_dir = Path(state_dir)
     now = datetime.now(timezone.utc).replace(microsecond=0)
-    request_id = now.strftime("SUPPORT-%Y%m%dT%H%M%SZ")
+    request_id = now.strftime("SUPPORT-%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     support_dir = state_dir / "support"
     support_dir.mkdir(parents=True, exist_ok=True)
     path = support_dir / f"{request_id}.json"
+    approved = load_approved_state(state_dir)
+    stage = load_latest_stage(state_dir)
+    active_manifest = stage.get("manifest", {}) or approved.get("manifest", {}) or {}
+    effective_parser_version = parser_version or str(active_manifest.get("parser_version", ""))
+    effective_configuration_version = configuration_version or str(
+        active_manifest.get("config_version", active_manifest.get("config_fingerprint", ""))
+    )
     payload = {
         "request_id": request_id,
         "created_at": now.isoformat(),
@@ -512,13 +592,21 @@ def create_support_request(
         "source_file": source_file,
         "worksheet": worksheet,
         "source_row": source_row,
+        "source_cell": source_cell,
+        "project_no": project_no,
         "document_no": document_no,
         "revision": revision,
+        "event_identity": event_identity,
         "flag_code": flag_code,
+        "current_field": current_field,
         "current_value": current_value,
         "expected_value": expected_value,
-        "approved_run_id": load_approved_state(state_dir).get("run_id", ""),
-        "pending_run_id": load_latest_stage(state_dir).get("run_id", ""),
+        "parser_version": effective_parser_version,
+        "configuration_version": effective_configuration_version,
+        "configuration_fingerprint": str(active_manifest.get("config_fingerprint", "")),
+        "approved_run_id": approved.get("run_id", ""),
+        "pending_run_id": stage.get("run_id", ""),
+        "run_id": stage.get("run_id", "") or approved.get("run_id", ""),
     }
     with path.open("w", encoding="utf-8", newline="\n") as f:
         f.write(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True) + "\n")

@@ -132,7 +132,7 @@ Public Sub NMDC_LogError(ByVal code As String, ByVal friendlyMessage As String, 
     nextRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row + 1
     If nextRow < 2 Then nextRow = 2
 
-    ' Keep the same eight-column layout used by engine-exported errors.
+    ' Keep the same ten-column layout used by engine-exported errors.
     ' The EXCEL: prefix lets refresh logic preserve local VBA errors while replacing engine rows.
     ws.Cells(nextRow, 1).Value = Now
     ws.Cells(nextRow, 2).Value = "ERROR"
@@ -142,4 +142,6 @@ Public Sub NMDC_LogError(ByVal code As String, ByVal friendlyMessage As String, 
     ws.Cells(nextRow, 6).Value = technicalDetail
     ws.Cells(nextRow, 7).Value = ""
     ws.Cells(nextRow, 8).Value = ""
+    ws.Cells(nextRow, 9).Value = ""
+    ws.Cells(nextRow, 10).Value = ""
 End Sub
