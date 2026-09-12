@@ -34,23 +34,18 @@ The pipeline must preserve this folder classification as `Source Family`.
 10. Protected/encrypted workbooks must generate a warning and support password-assisted reprocessing without storing passwords in the public repository.
 11. Routine refreshes must be deterministic and must not require an LLM.
 
-## Planned output
+## Final product direction
 
-The final user-facing deliverable will be:
+The normal user experience is Excel only:
 
-- `NMDC_DOCUMENT_INDEX.xlsx`
-  - one visible worksheet: `INDEX`
-  - Excel Table and filters
-  - frozen header
-  - preserved document hyperlinks
-  - normalized classification columns
-  - PivotTable helper keys/flags
+```text
+NMDC_Document_Index.xlsm
+        -> silent packaged Windows engine
+        -> source registers + local runtime/cache/staging
+        -> owner-reviewed approved master index
+```
 
-A machine-reviewable companion output will also be generated:
-
-- `NMDC_DOCUMENT_INDEX.csv`
-
-Validation/profiling reports will be generated so that no source is silently omitted.
+The workbook includes a Home dashboard plus Master Documents, Revisions, Transactions, Pending Update, Review Flags, User Decisions, Configuration, Rules & Mappings, Update History, Error Log, Help, and a hidden System Data area. Updates are staged and never replace approved data without an explicit owner approval action.
 
 ## Normalized hierarchy
 
@@ -104,9 +99,9 @@ Validation gate
 
 ## Current project status
 
-**Status: planning/specification complete; implementation has not started.**
+**Status: Cycles 1–3 and the incremental staged-approval engine are merged. PR #8 is implementing/reviewing the Excel-only user interface and engine-integration layer.**
 
-The next implementation step is **Cycle 1: Source Profiler**. The profiler is read-only and must produce inventory, workbook profile, source-selection and classification-discovery reports before the final extractor is implemented.
+The production `.xlsm`, attached VBA buttons, packaged Windows executable, and real end-to-end Microsoft Excel validation are not complete yet. The future document-folder/hyperlink scanner remains deferred until the core Excel/runtime path is proven.
 
 See [PROJECT_SPEC.md](PROJECT_SPEC.md) for the full implementation specification and [AGENTS.md](AGENTS.md) for LLM/Hermes handoff rules.
 
@@ -115,8 +110,7 @@ See [PROJECT_SPEC.md](PROJECT_SPEC.md) for the full implementation specification
 Planned Collaboration ID: `NMDC-DOC-INDEX-001`
 
 - **User** — owner and final decision maker.
-- **ChatGPT** — planner/architect and independent reviewer.
-- **Hermes** — implementation agent, preferably using a low-cost model.
+- **ChatGPT / Hermes** — role-based planner, implementer, or reviewer as recorded in the active PR.
 - **GitHub PR** — source of truth and communication/audit bridge.
 
-Hermes must not approve its own work. No merge is allowed unless the user explicitly authorizes it.
+PR titles use `[SEQ][STATUS] Title`, important comments identify `Written by` and `Role`, and one `AGENT COLLABORATION — CURRENT STATUS` comment is updated in place. No merge is allowed unless the owner explicitly authorizes it.
