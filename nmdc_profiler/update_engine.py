@@ -20,6 +20,7 @@ NON_OVERRIDABLE_CONFLICT_CODES = {
 
 Record = Dict[str, Any]
 Processor = Callable[[Path, str], Sequence[Mapping[str, Any]]]
+FlagProvider = Callable[[], Sequence[Mapping[str, Any]]]
 
 
 @dataclass(frozen=True)
@@ -139,7 +140,13 @@ def scan_sources(data_dir: Path) -> Tuple[List[Dict[str, Any]], List[Dict[str, s
         raise FileNotFoundError(f"Data folder not found: {data_dir}")
 
     files = sorted(
-        (p for p in data_dir.rglob("*") if p.is_file() and p.suffix.lower() in {".xlsx", ".xlsm"}),
+        (
+            p
+            for p in data_dir.rglob("*")
+            if p.is_file()
+            and p.suffix.lower() in {".xlsx", ".xlsm"}
+            and not p.name.startswith("~$")
+        ),
         key=lambda p: p.relative_to(data_dir).as_posix().casefold(),
     )
     for path in files:
@@ -247,6 +254,15 @@ def compare_manifests(
 def _cache_key(relative_path: str, file_hash: str, parser_version: str, config_fingerprint: str) -> str:
     raw = "\0".join((relative_path, file_hash, parser_version, config_fingerprint)).encode("utf-8", "surrogatepass")
     return hashlib.sha256(raw).hexdigest()[:32]
+
+
+def _cache_flags_path(cache_path: Path) -> Path:
+    return cache_path.with_suffix(".flags.json")
+
+
+def _cached_flags(cache_path: Path) -> List[Dict[str, Any]]:
+    value = _read_json(_cache_flags_path(cache_path), [])
+    return [dict(row) for row in value] if isinstance(value, list) else []
 
 
 def _canonical_record(record: Mapping[str, Any]) -> str:
@@ -360,6 +376,8 @@ def stage_update(
     parser_version: str = DEFAULT_PARSER_VERSION,
     full_rescan: bool = False,
     selection_statuses: Mapping[str, str] | None = None,
+    initial_flags: Sequence[Mapping[str, Any]] = (),
+    post_process_flags: FlagProvider | None = None,
 ) -> Dict[str, Any]:
     """Create a proposed update without changing the approved dataset."""
     data_dir = Path(data_dir)
@@ -369,6 +387,7 @@ def stage_update(
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     config_fingerprint = fingerprint_paths([Path(p) for p in config_paths])
     scanned, flags = scan_sources(data_dir)
+    flags.extend(dict(flag) for flag in initial_flags)
     current_manifest = build_manifest(
         scanned,
         parser_version=parser_version,
@@ -383,6 +402,7 @@ def stage_update(
     cache_index: Dict[str, str] = {}
     staged_rows: List[Record] = []
     effective_decisions: List[SourceDecision] = []
+    reprocessed_sources: List[str] = []
 
     for original_decision in decisions:
         decision = original_decision
@@ -441,6 +461,7 @@ def stage_update(
                 rows = _read_jsonl(cache_path)
                 staged_rows.extend(rows)
                 cache_index[rel] = cache_file
+                flags.extend(_cached_flags(cache_path))
                 _set_manifest_processed_run(current_manifest, rel, str(old.get("last_processed_run", approved_manifest.get("run_id", ""))))
                 effective_decisions.append(decision)
                 continue
@@ -451,6 +472,7 @@ def stage_update(
             if cache_file and cache_path.exists():
                 staged_rows.extend(_read_jsonl(cache_path))
                 cache_index[rel] = cache_file
+                flags.extend(_cached_flags(cache_path))
             _set_manifest_processed_run(current_manifest, rel, str(old.get("last_processed_run", approved_manifest.get("run_id", ""))))
             effective_decisions.append(decision)
             continue
@@ -475,6 +497,7 @@ def stage_update(
                 _write_jsonl(state_dir / cache_rel, rows)
                 cache_index[rel] = cache_rel
                 staged_rows.extend(rows)
+                reprocessed_sources.append(rel)
                 _set_manifest_processed_run(current_manifest, rel, run_id)
             except Exception as exc:
                 flags.append(
@@ -491,6 +514,7 @@ def stage_update(
                 if old_cache and old_cache_path.exists():
                     staged_rows.extend(_read_jsonl(old_cache_path))
                     cache_index[rel] = old_cache
+                    flags.extend(_cached_flags(old_cache_path))
                 _set_manifest_processed_run(current_manifest, rel, str(old.get("last_processed_run", approved_manifest.get("run_id", ""))))
             effective_decisions.append(decision)
 
@@ -504,6 +528,19 @@ def stage_update(
             str(r.get("Source Row", "")),
         )
     )
+    processor_flags = [dict(flag) for flag in post_process_flags()] if post_process_flags is not None else []
+    flags.extend(processor_flags)
+    flags_by_source: Dict[str, List[Dict[str, Any]]] = {}
+    for flag in processor_flags:
+        flags_by_source.setdefault(str(flag.get("source", "")), []).append(flag)
+    for rel in reprocessed_sources:
+        cache_file = cache_index.get(rel, "")
+        if cache_file:
+            _write_json(
+                _cache_flags_path(state_dir / cache_file),
+                flags_by_source.get(rel, []),
+            )
+
     record_changes, record_flags = compare_records(approved_rows, staged_rows)
     flags.extend(record_flags)
     blocking = sum(1 for f in flags if f.get("level") == "CONFLICT")

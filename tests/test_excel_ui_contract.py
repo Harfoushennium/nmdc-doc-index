@@ -94,6 +94,8 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn("ENGINE_MISSING", text)
         self.assertIn("Error Log", text)
         self.assertIn('"EXCEL:" & code', text)
+        self.assertIn('" --config-dir " & NMDC_Quote(NMDC_ConfigPath())', text)
+        self.assertIn('NMDC_RuntimePath() & "\\" & EXCHANGE_RELATIVE_PATH', text)
 
     def test_vba_actions_expose_required_button_macros(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Actions.bas").read_text(encoding="utf-8")
@@ -132,6 +134,16 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn(".TextFileColumnDataTypes = NMDC_TextColumnTypes(csvPath)", text)
         self.assertIn("dataTypes(index) = xlTextFormat", text)
         self.assertIn("revisions such as 00", text)
+        self.assertIn("NMDC_ActivateDocumentLinks ws", text)
+        self.assertIn('TextToDisplay:="Open document"', text)
+
+    def test_rules_are_validated_and_saved_before_staging(self):
+        actions = (ROOT / "excel" / "vba" / "modNMDC_Actions.bas").read_text(encoding="utf-8")
+        rules = (ROOT / "excel" / "vba" / "modNMDC_Rules.bas").read_text(encoding="utf-8")
+        self.assertIn("If Not NMDC_PrepareRulesForStage() Then Exit Sub", actions)
+        self.assertIn('Set table = ws.ListObjects("ClassificationRules")', rules)
+        self.assertIn("Duplicate Rule_ID", rules)
+        self.assertIn('NMDC_SetConfigValue "Configuration Version"', rules)
 
     def test_error_refresh_preserves_excel_local_entries(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")

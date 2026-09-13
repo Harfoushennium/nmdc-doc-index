@@ -6,16 +6,18 @@ The normal user must operate the NMDC Document Index from Excel only. No routine
 
 ## Product boundary for this PR
 
-This PR builds the Excel-facing contract and source components for the future macro-enabled production workbook. It includes:
+This PR builds the Excel-facing contract and a production-package candidate. It includes:
 
 1. workbook sheet / table / button specification;
 2. VBA source modules for button actions and navigation;
 3. a stable Excel-to-engine command contract;
 4. a Python bridge that converts runtime state into Excel-friendly CSV exchange files;
 5. tests for the bridge and safety contract;
-6. a user-reviewable Excel UI prototype generated outside the repo binary path.
+6. a production base workbook populated with the verified real-data baseline;
+7. a packaged Windows engine built by CI;
+8. a one-click setup that uses Microsoft Excel desktop to create the `.xlsm`, import the audited modules, and attach the Home buttons.
 
-The final signed/packaged `.xlsm` binary and packaged Windows executable are still separate packaging/deployment work because the repository needs auditable text sources and CI cannot execute desktop Excel macros.
+The package remains unsigned and requires owner testing under the intended Windows/Excel security policy. CI cannot execute desktop Excel macros, so this PR is not READY until that acceptance test is complete.
 
 ## Required workbook sheets
 
@@ -98,3 +100,4 @@ After the core workbook/runtime is stable, add the project-folder/file scanner t
 - Tests pass on Linux and Windows through the existing repository regression workflows.
 - `DATA/` remains unchanged.
 - No production `.xlsm` is claimed complete until macro injection/packaging is actually validated on Windows Excel.
+- Windows package contains a one-click Excel setup; owner acceptance confirms real button execution in desktop Excel.

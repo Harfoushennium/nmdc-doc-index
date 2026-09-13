@@ -7,11 +7,12 @@ These modules are the auditable source for the future production `NMDC_Document_
 - `modNMDC_Engine.bas` — configuration lookup, silent engine launcher and Excel error logging.
 - `modNMDC_Refresh.bas` — imports deterministic CSV exchange files into workbook sheets and refreshes the Home dashboard.
 - `modNMDC_Actions.bas` — button macros for update, full rebuild, approve/hold/reject, folder selection, flags and support requests.
+- `modNMDC_Rules.bas` — validates and exports owner-edited classification rules before staging.
 - `modNMDC_Startup.bas` — refreshes the dashboard when the workbook opens.
 
 ## Production packaging rule
 
-The text modules in this folder are the source of truth. The production `.xlsm` is a packaged artifact that must be created/validated on Windows with Microsoft Excel and the approved VBA modules attached to the corresponding workbook buttons.
+The text modules in this folder are the source of truth. `Create_NMDC_Document_Index.vbs` uses Microsoft Excel desktop to create the `.xlsm`, import these modules, and attach the corresponding workbook buttons.
 
 Do not claim the production workbook is complete merely because these source modules exist.
 
@@ -33,6 +34,9 @@ The user should not need Python, Git, GitHub Desktop, PowerShell, Command Prompt
 NMDC_Document_Index.xlsm
 engine/
   nmdc_index_engine.exe
+config/
+  classification_rules.csv
+  project_identity_overrides.csv
 runtime/
   ...generated local state...
 ```

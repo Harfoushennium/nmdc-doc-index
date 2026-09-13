@@ -4,6 +4,7 @@ import csv
 import hashlib
 import json
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -513,6 +514,63 @@ def build_dashboard_row(approved: Mapping[str, Any], stage: Mapping[str, Any]) -
     }
 
 
+def resolve_document_target(target: Any, source_file: Any, data_dir: Any) -> str:
+    """Resolve a source-register hyperlink against the selected data folder.
+
+    Canonical records keep the original target.  The Excel exchange receives an
+    operational absolute target when the source stored a relative Windows path.
+    """
+    value = str(target or "").strip()
+    if not value:
+        return ""
+    if value.startswith("#") or re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", value):
+        return value
+    if re.match(r"^[A-Za-z]:[\\/]", value) or value.startswith("\\\\"):
+        return value
+    root = str(data_dir or "").strip()
+    if not root:
+        return value
+    source = str(source_file or "").replace("\\", "/").lstrip("/")
+    if source.casefold().startswith("data/"):
+        source = source[5:]
+    relative_target = value.replace("\\", os.sep).replace("/", os.sep)
+    return str((Path(root) / Path(source).parent / relative_target).resolve(strict=False))
+
+
+def _resolve_exchange_links(rows: Sequence[Record], data_dir: Any) -> None:
+    for row in rows:
+        row["Document Link"] = resolve_document_target(
+            row.get("Document Link", ""),
+            row.get("Source File", ""),
+            data_dir,
+        )
+
+
+def build_user_flag_rows(state_dir: Path) -> List[Record]:
+    rows: List[Record] = []
+    for flag in _read_jsonl(Path(state_dir) / "user_flags" / "flags.jsonl"):
+        rows.append(
+            {
+                "Flag Level": flag.get("level", "REVIEW"),
+                "Flag Code": flag.get("code", "USER_FLAGGED_WRONG_DATA"),
+                "Plain-English Problem": flag.get("message", ""),
+                "Recommended User Action": flag.get("recommended_action", ""),
+                "Project No.": flag.get("project_no", ""),
+                "Document No.": flag.get("document_no", ""),
+                "Revision": flag.get("revision", ""),
+                "Source File": flag.get("source", ""),
+                "Source Sheet": flag.get("source_sheet", ""),
+                "Source Row": flag.get("source_row", ""),
+                "Source Cell": flag.get("source_cell", ""),
+                "User Decision": flag.get("resolution_route", ""),
+                "User Comment": flag.get("user_comment", ""),
+                "Resolution Status": flag.get("resolution_status", "OPEN"),
+                "Event Key": flag.get("event_key", ""),
+            }
+        )
+    return rows
+
+
 def export_excel_exchange(state_dir: Path, output_dir: Path) -> Dict[str, Any]:
     state_dir = Path(state_dir)
     output_dir = Path(output_dir)
@@ -525,9 +583,14 @@ def export_excel_exchange(state_dir: Path, output_dir: Path) -> Dict[str, Any]:
     revisions = build_revision_rows(approved_records)
     events = build_event_rows(approved_records)
     pending = build_pending_rows(approved_records, stage)
-    flags = build_flag_rows(stage)
+    flags = build_flag_rows(stage) + build_user_flag_rows(state_dir)
     history = build_history_rows(state_dir)
     errors = build_error_rows(stage)
+
+    active_manifest = stage.get("manifest", {}) or approved.get("manifest", {}) or {}
+    data_dir = active_manifest.get("data_dir", "")
+    _resolve_exchange_links(documents, data_dir)
+    _resolve_exchange_links(events, data_dir)
 
     _write_csv(output_dir / "dashboard.csv", DASHBOARD_FIELDS, [dashboard])
     _write_csv(output_dir / "master_documents.csv", DOCUMENT_FIELDS, documents)

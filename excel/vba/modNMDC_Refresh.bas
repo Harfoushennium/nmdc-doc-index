@@ -57,6 +57,7 @@ Public Function NMDC_LoadCsvToSheet(ByVal csvPath As String, ByVal sheetName As 
     End With
 
     NMDC_FormatDataSheet ws
+    NMDC_ActivateDocumentLinks ws
     Application.ScreenUpdating = True
     NMDC_LoadCsvToSheet = True
     Exit Function
@@ -167,6 +168,39 @@ Private Sub NMDC_FormatDataSheet(ByVal ws As Worksheet)
     ActiveWindow.FreezePanes = True
 End Sub
 
+Private Sub NMDC_ActivateDocumentLinks(ByVal ws As Worksheet)
+    On Error GoTo Handler
+
+    Dim header As Range
+    Dim cell As Range
+    Dim lastRow As Long
+    Dim target As String
+
+    Set header = ws.Rows(1).Find(What:="Document Link", LookIn:=xlValues, LookAt:=xlWhole, MatchCase:=False)
+    If header Is Nothing Then Exit Sub
+    lastRow = ws.Cells(ws.Rows.Count, header.Column).End(xlUp).Row
+    If lastRow < 2 Then Exit Sub
+
+    For Each cell In ws.Range(ws.Cells(2, header.Column), ws.Cells(lastRow, header.Column))
+        target = Trim$(CStr(cell.Value))
+        If Len(target) > 0 Then
+            If Left$(target, 1) = "#" Then
+                ws.Hyperlinks.Add Anchor:=cell, Address:="", SubAddress:=Mid$(target, 2), _
+                    TextToDisplay:="Open document", ScreenTip:="Open the source document"
+            Else
+                ws.Hyperlinks.Add Anchor:=cell, Address:=target, _
+                    TextToDisplay:="Open document", ScreenTip:="Open the source document"
+            End If
+        End If
+    Next cell
+    Exit Sub
+
+Handler:
+    NMDC_LogError "HYPERLINK_REFRESH_ERROR", _
+        "Excel loaded the index, but one or more document links could not be activated.", _
+        ws.Name & " | " & Err.Number & " - " & Err.Description
+End Sub
+
 Public Function NMDC_LoadDashboard(ByVal csvPath As String) As Boolean
     On Error GoTo Handler
     Dim ws As Worksheet
@@ -198,21 +232,21 @@ Public Function NMDC_LoadDashboard(ByVal csvPath As String) As Boolean
     End With
 
     ' Home cells intentionally use simple fixed positions so the workbook remains easy to maintain.
-    ws.Range("B5").Value = NMDC_SystemValue(temp, "Approved Status")
-    ws.Range("B6").Value = NMDC_SystemValue(temp, "Approved Run ID")
-    ws.Range("B7").Value = NMDC_SystemValue(temp, "Current Data Folder")
-    ws.Range("B8").Value = NMDC_SystemValue(temp, "Last Successful Update")
-    ws.Range("E5").Value = NMDC_SystemValue(temp, "Approved Documents")
-    ws.Range("E6").Value = NMDC_SystemValue(temp, "Approved Revisions")
-    ws.Range("E7").Value = NMDC_SystemValue(temp, "Approved Transactions")
-    ws.Range("H5").Value = NMDC_SystemValue(temp, "Pending Status")
-    ws.Range("H6").Value = NMDC_SystemValue(temp, "Pending Run ID")
-    ws.Range("H7").Value = "Added " & NMDC_SystemValue(temp, "Pending Added") & _
+    ws.Range("B6").Value = NMDC_SystemValue(temp, "Approved Status")
+    ws.Range("B7").Value = NMDC_SystemValue(temp, "Approved Run ID")
+    ws.Range("B8").Value = NMDC_SystemValue(temp, "Current Data Folder")
+    ws.Range("B9").Value = NMDC_SystemValue(temp, "Last Successful Update")
+    ws.Range("E6").Value = NMDC_SystemValue(temp, "Approved Documents")
+    ws.Range("E7").Value = NMDC_SystemValue(temp, "Approved Revisions")
+    ws.Range("E8").Value = NMDC_SystemValue(temp, "Approved Transactions")
+    ws.Range("H6").Value = NMDC_SystemValue(temp, "Pending Status")
+    ws.Range("H7").Value = NMDC_SystemValue(temp, "Pending Run ID")
+    ws.Range("H8").Value = "Added " & NMDC_SystemValue(temp, "Pending Added") & _
                            " | Modified " & NMDC_SystemValue(temp, "Pending Modified") & _
                            " | Removed " & NMDC_SystemValue(temp, "Pending Removed") & _
                            " | Unchanged " & NMDC_SystemValue(temp, "Pending Unchanged")
-    ws.Range("K5").Value = NMDC_SystemValue(temp, "Review Flags")
-    ws.Range("K6").Value = NMDC_SystemValue(temp, "Conflict Flags")
+    ws.Range("K6").Value = NMDC_SystemValue(temp, "Review Flags")
+    ws.Range("K7").Value = NMDC_SystemValue(temp, "Conflict Flags")
     NMDC_LoadDashboard = True
     Exit Function
 

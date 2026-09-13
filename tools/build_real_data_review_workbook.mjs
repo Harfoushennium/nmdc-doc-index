@@ -12,6 +12,8 @@ function arg(name, fallback = "") {
 const root = path.resolve(arg("--root", process.cwd()));
 const exchangeDir = path.resolve(arg("--exchange", path.join(root, "outputs", "nmdc_doc_index_real_review", "exchange")));
 const outputPath = path.resolve(arg("--output", path.join(root, "outputs", "nmdc_doc_index_real_review", "NMDC_Document_Index_Real_Data_Review.xlsx")));
+const packageMode = arg("--mode", "review").toLowerCase();
+const productionMode = packageMode === "production";
 const eventReviewLimit = Math.max(500, Number(arg("--event-limit", "5000")) || 5000);
 const detailReviewLimit = Math.max(500, Number(arg("--detail-limit", "1500")) || 1500);
 const nativeLinks = [];
@@ -286,35 +288,59 @@ async function main() {
   // snapshot; execution actions will be wired to the macro-enabled package.
   const home = workbook.worksheets.add("Home");
   baseSheet(home, TEAL);
-  titleBlock(home, "NMDC Document Index", "REAL-DATA REVIEW PACKAGE • click a control to move to the relevant review page", 10);
-  const status = home.getRange("A4:J4");
+  titleBlock(home, "NMDC Document Index", productionMode ? "PRODUCTION PACKAGE • Excel control panel" : "REAL-DATA REVIEW PACKAGE • click a control to move to the relevant review page", productionMode ? 12 : 10);
+  const status = home.getRange(productionMode ? "A4:L4" : "A4:J4");
   status.merge();
-  status.values = [["STATUS: REAL-DATA BASELINE — REVIEW ONLY • No approved master data was changed"]];
+  status.values = [[productionMode ? "STATUS: PRODUCTION SETUP • Select the DATA folder, stage an update, then review before approval" : "STATUS: REAL-DATA BASELINE — REVIEW ONLY • No approved master data was changed"]];
   status.format = { fill: PALE_AMBER, font: { bold: true, color: "#7A5A00", size: 11 }, horizontalAlignment: "center", verticalAlignment: "center" };
   status.format.rowHeight = 26;
 
-  const cards = [
-    ["Documents", value("Approved Documents"), "Master Documents", "A1"],
-    ["Revisions", value("Approved Revisions"), "Revisions", "A1"],
-    ["Transactions", value("Approved Transactions"), "Transactions", "A1"],
-    ["Review flags", value("Review Flags"), "Review Flags", "A1"],
-    ["Source workbooks", baseline.counts.selected_workbooks, "System Data", "A1"],
-  ];
-  for (let i = 0; i < cards.length; i += 1) {
-    const col = i * 2 + 1;
-    const top = home.getRange(`${colName(col)}6:${colName(col + 1)}6`);
-    top.merge();
-    top.values = [[cards[i][0]]];
-    top.format = { fill: NAVY, font: { bold: true, color: "#FFFFFF", size: 10 }, horizontalAlignment: "center", verticalAlignment: "center" };
-    const number = home.getRange(`${colName(col)}7:${colName(col + 1)}8`);
-    number.merge();
-    number.values = [[String(cards[i][1])]];
-    number.format = { fill: "#FFFFFF", font: { bold: true, color: TEAL, size: 18 }, horizontalAlignment: "center", verticalAlignment: "center", borders: { preset: "all", style: "thin", color: GRID } };
-    const target = home.getRange(`${colName(col)}9:${colName(col + 1)}9`);
-    target.merge();
-    target.values = [[`Open ${cards[i][2]}`]];
-    registerLink(home.name, `${colName(col)}9:${colName(col + 1)}9`, cards[i][2], cards[i][3], `Open ${cards[i][2]}`);
-    target.format = { fill: PALE_BLUE, font: { color: BLUE, underline: true, size: 9 }, horizontalAlignment: "center", verticalAlignment: "center" };
+  if (productionMode) {
+    const blocks = [
+      ["A5:C5", "APPROVED MASTER", [["A6", "Status", "B6:C6", "NOT YET APPROVED"], ["A7", "Run", "B7:C7", ""], ["A8", "Data folder", "B8:C8", "Select from Home"], ["A9", "Last update", "B9:C9", "Never"]]],
+      ["D5:F5", "APPROVED COUNTS", [["D6", "Documents", "E6:F6", "0"], ["D7", "Revisions", "E7:F7", "0"], ["D8", "Transactions", "E8:F8", "0"], ["D9", "Baseline", "E9:F9", `${value("Approved Documents")} documents for first scan`]]],
+      ["G5:I5", "PENDING UPDATE", [["G6", "Status", "H6:I6", "NONE"], ["G7", "Run", "H7:I7", ""], ["G8", "Changes", "H8:I8", "Stage an update first"], ["G9", "Safety", "H9:I9", "Approval required"]]],
+      ["J5:L5", "REVIEW CONTROL", [["J6", "Review flags", "K6:L6", "0"], ["J7", "Conflicts", "K7:L7", "0"], ["J8", "Real baseline", "K8:L8", String(value("Review Flags"))], ["J9", "Sources", "K9:L9", String(baseline.counts.selected_workbooks)]]],
+    ];
+    for (const [headerRange, headerText, rows] of blocks) {
+      const header = home.getRange(headerRange);
+      header.merge();
+      header.values = [[headerText]];
+      header.format = { fill: NAVY, font: { bold: true, color: "#FFFFFF", size: 9 }, horizontalAlignment: "center", verticalAlignment: "center" };
+      for (const [labelCell, labelText, valueRange, initialValue] of rows) {
+        const label = home.getRange(labelCell);
+        label.values = [[labelText]];
+        label.format = { fill: PALE_BLUE, font: { bold: true, color: INK, size: 8 }, verticalAlignment: "center", borders: { preset: "all", style: "thin", color: GRID } };
+        const output = home.getRange(valueRange);
+        output.merge();
+        output.values = [[initialValue]];
+        output.format = { fill: "#FFFFFF", font: { bold: true, color: TEAL, size: 9 }, verticalAlignment: "center", wrapText: true, borders: { preset: "all", style: "thin", color: GRID } };
+      }
+    }
+  } else {
+    const cards = [
+      ["Documents", value("Approved Documents"), "Master Documents", "A1"],
+      ["Revisions", value("Approved Revisions"), "Revisions", "A1"],
+      ["Transactions", value("Approved Transactions"), "Transactions", "A1"],
+      ["Review flags", value("Review Flags"), "Review Flags", "A1"],
+      ["Source workbooks", baseline.counts.selected_workbooks, "System Data", "A1"],
+    ];
+    for (let i = 0; i < cards.length; i += 1) {
+      const col = i * 2 + 1;
+      const top = home.getRange(`${colName(col)}6:${colName(col + 1)}6`);
+      top.merge();
+      top.values = [[cards[i][0]]];
+      top.format = { fill: NAVY, font: { bold: true, color: "#FFFFFF", size: 10 }, horizontalAlignment: "center", verticalAlignment: "center" };
+      const number = home.getRange(`${colName(col)}7:${colName(col + 1)}8`);
+      number.merge();
+      number.values = [[String(cards[i][1])]];
+      number.format = { fill: "#FFFFFF", font: { bold: true, color: TEAL, size: 18 }, horizontalAlignment: "center", verticalAlignment: "center", borders: { preset: "all", style: "thin", color: GRID } };
+      const target = home.getRange(`${colName(col)}9:${colName(col + 1)}9`);
+      target.merge();
+      target.values = [[`Open ${cards[i][2]}`]];
+      registerLink(home.name, `${colName(col)}9:${colName(col + 1)}9`, cards[i][2], cards[i][3], `Open ${cards[i][2]}`);
+      target.format = { fill: PALE_BLUE, font: { color: BLUE, underline: true, size: 9 }, horizontalAlignment: "center", verticalAlignment: "center" };
+    }
   }
 
   const buttonSpecs = [
@@ -337,8 +363,8 @@ async function main() {
   let bRow = 12;
   for (let i = 0; i < buttonSpecs.length; i += 1) {
     const [label, targetSheet, targetCell, fill] = buttonSpecs[i];
-    const col = i % 3 === 0 ? "A" : i % 3 === 1 ? "D" : "G";
-    const end = col === "A" ? "C" : col === "D" ? "F" : "I";
+    const col = productionMode ? (i % 3 === 0 ? "A" : i % 3 === 1 ? "E" : "I") : (i % 3 === 0 ? "A" : i % 3 === 1 ? "D" : "G");
+    const end = productionMode ? (col === "A" ? "D" : col === "E" ? "H" : "L") : (col === "A" ? "C" : col === "D" ? "F" : "I");
     const row = bRow + Math.floor(i / 3) * 3;
     const range = home.getRange(`${col}${row}:${end}${row + 1}`);
     range.merge();
@@ -347,12 +373,12 @@ async function main() {
     range.format = { fill, font: { bold: true, color: BLUE, underline: true, size: 10 }, horizontalAlignment: "center", verticalAlignment: "center", wrapText: true, borders: { preset: "all", style: "thin", color: GRID } };
     range.format.rowHeight = 28;
   }
-  const note = home.getRange("A29:J33");
+  const note = home.getRange(productionMode ? "A29:L33" : "A29:J33");
   note.merge();
-  note.values = [["What is functional in this file: every colored control is a real Excel hyperlink to the relevant review page, the tables contain the Cycle 3 real-data baseline, and document/source identifiers are stored as text. The file is deliberately review-only. Running the engine, selecting an external folder, and changing the approved master still require the macro-enabled production package; this workbook does not pretend those actions are available here."]];
+  note.values = [[productionMode ? "Production workflow: select the DATA folder, press Update Changed Files or Full Rescan, review Pending Update and Review Flags, then Approve, Hold, or Reject. Approved data changes only after the explicit Approve action. Document links become clickable after the engine resolves them against the selected DATA folder." : "What is functional in this file: every colored control is a real Excel hyperlink to the relevant review page, the tables contain the Cycle 3 real-data baseline, and document/source identifiers are stored as text. The file is deliberately review-only. Running the engine, selecting an external folder, and changing the approved master still require the macro-enabled production package; this workbook does not pretend those actions are available here."]];
   note.format = { fill: PALE_BLUE, font: { color: INK, size: 10 }, wrapText: true, verticalAlignment: "center", borders: { preset: "all", style: "thin", color: GRID } };
   note.format.rowHeight = 78;
-  setWidths(home, [18, 18, 4, 18, 18, 4, 18, 18, 4, 18]);
+  setWidths(home, productionMode ? [15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15] : [18, 18, 4, 18, 18, 4, 18, 18, 4, 18]);
 
   addDetailSheet(workbook, "Master Documents", "Master Documents", `Real-data document view • ${value("Approved Documents")} documents • identifiers preserved as text`, docsReviewMatrix, "MasterDocuments", [10, 12, 18, 22, 18, 24, 28, 42, 24, 12, 14, 22, 34, 42, 26, 10, 10, 30]);
   addDetailSheet(workbook, "Revisions", "Revisions", `Real-data revision view • ${value("Approved Revisions")} revisions • identifiers preserved as text`, revisionsReviewMatrix, "RevisionRegister", [10, 12, 30, 42, 12, 16, 32, 42, 26, 10, 10]);
@@ -367,48 +393,52 @@ async function main() {
     empty.format.rowHeight = 70;
   }
   addDetailSheet(workbook, "Review Flags", "Review Flags", `${value("Review Flags")} worksheets require safe layout review • no conflicts were created`, flagsMatrix, "ReviewFlags", [12, 24, 48, 55, 12, 24, 12, 46, 28, 12, 12, 18, 26, 18, 32], PALE_AMBER);
-  const decisions = addTextSheet(workbook, "User Decisions", "User Decisions / Overrides", "Owner decision area • this review package records no approval, hold, reject, or override", [
-    "Review package status: REVIEW ONLY.",
-    "There is no staged run ID to approve, hold, or reject in this snapshot.",
-    "When the macro-enabled workflow is available, decisions will be tied to the exact displayed pending run ID and logged before any approved master pointer can change.",
+  const decisions = addTextSheet(workbook, "User Decisions", "User Decisions / Overrides", productionMode ? "Auditable owner decisions and configuration changes" : "Owner decision area • this review package records no approval, hold, reject, or override", [
+    productionMode ? "Decisions are recorded against the exact staged run displayed in Excel." : "Review package status: REVIEW ONLY.",
+    productionMode ? "Approve changes the approved master pointer only after confirmation. Hold and Reject keep the approved master unchanged." : "There is no staged run ID to approve, hold, or reject in this snapshot.",
+    productionMode ? "Rules & Mappings changes are validated and recorded before a staged update is created." : "When the macro-enabled workflow is available, decisions will be tied to the exact displayed pending run ID and logged before any approved master pointer can change.",
     "Owner override rule: an explicit owner identity decision takes priority, but contradictions raise APPROVED_OVERRIDE_CONTRADICTED for review.",
   ], PALE_GREEN);
-  const decisionHeader = ["Run ID", "Decision", "Target", "Note", "Timestamp"];
-  addTable(decisions, 11, [decisionHeader, ["", "", "", "", ""]], "UserDecisionLog", [32, 18, 30, 60, 24]);
-  decisions.getRange("B12").dataValidation = { rule: { type: "list", values: ["APPROVE", "HOLD", "REJECT", "OVERRIDE", ""] } };
-  addDetailSheet(workbook, "Configuration", "Configuration", "Editable control surface for the future macro-enabled engine integration", [
+  const decisionHeader = ["Decision ID", "Date/Time", "User", "Decision Type", "Source File", "Project / Document / Revision", "Previous Value", "Approved Value", "User Note", "Status", "Configuration Version"];
+  addTable(decisions, 11, [decisionHeader, new Array(decisionHeader.length).fill("")], "UserDecisionLog", [30, 22, 24, 24, 42, 36, 28, 28, 55, 24, 26]);
+  decisions.getRange("D12").dataValidation = { rule: { type: "list", values: ["APPROVE", "HOLD", "REJECT", "OVERRIDE", "CONFIGURATION CHANGE", ""] } };
+  addDetailSheet(workbook, "Configuration", "Configuration", productionMode ? "Editable production settings" : "Editable control surface for the future macro-enabled engine integration", [
     ["Setting", "Current value", "Owner note"],
-    ["Package mode", "REAL-DATA REVIEW ONLY", "This workbook is a review snapshot; engine execution is not attached."],
+    ["Package mode", productionMode ? "PRODUCTION" : "REAL-DATA REVIEW ONLY", productionMode ? "Operational buttons are attached during Windows Excel packaging." : "This workbook is a review snapshot; engine execution is not attached."],
     ["Source set", "Cycle 3 selected DATA workbooks", "46 selected workbooks were extracted without changing DATA/."],
-    ["Data folder", "DATA", "The production workbook will let the owner choose an external data folder."],
-    ["Parser version", "Cycle 3 baseline", "Displayed for traceability."],
-    ["Configuration version", "classification_rules.csv", "Rules are shown on Rules & Mappings."],
+    ["Data Folder", productionMode ? "" : "DATA", productionMode ? "Use Select Data Folder on Home." : "The production workbook will let the owner choose an external data folder."],
+    ["Runtime Folder", "", "Leave blank to use the runtime folder beside the workbook."],
+    ["Engine Executable Path", "", "Leave blank to use engine\\nmdc_index_engine.exe beside the workbook."],
+    ["Classification Rules File", "config\\classification_rules.csv", "Rules & Mappings exports to this controlled file."],
+    ["Project Identity Overrides File", "config\\project_identity_overrides.csv", "Owner-approved project identities."],
+    ["Parser Version", "cycle3-extractor-v1", "Displayed for traceability."],
+    ["Configuration Version", "INITIAL", "Changes automatically when Rules & Mappings is saved."],
     ["Approval safety", "Explicit approval only", "Staged data must never silently replace approved data."],
   ], "Configuration", [24, 34, 80], PALE_BLUE);
-  const rulesSheet = addDetailSheet(workbook, "Rules & Mappings", "Rules & Mappings", "Business classification rules loaded from the real project configuration • editability is shown for review", rulesMatrix, "ClassificationRules", [12, 10, 14, 18, 34, 34, 28, 28, 28, 28, 28, 12, 12, 14, 14, 14, 42], PALE_BLUE);
+  const rulesSheet = addDetailSheet(workbook, "Rules & Mappings", "Rules & Mappings", productionMode ? "Edit business classification rules here; changes are validated before staging" : "Business classification rules loaded from the real project configuration • editability is shown for review", rulesMatrix, "ClassificationRules", [12, 10, 14, 18, 34, 34, 28, 28, 28, 28, 28, 12, 12, 14, 14, 14, 42], PALE_BLUE);
   const ruleNote = rulesSheet.getRange("A4:Q4");
   ruleNote.merge();
-  ruleNote.values = [["Owner note: rule changes must be validated, versioned, reprocessed, staged, and explicitly approved in the production workflow. This review file does not write rule changes back to the engine."]];
+  ruleNote.values = [[productionMode ? "Rule changes are validated and versioned when you start an update. They trigger reprocessing and remain staged until you explicitly approve the resulting master update." : "Owner note: rule changes must be validated, versioned, reprocessed, staged, and explicitly approved in the production workflow. This review file does not write rule changes back to the engine."]];
   ruleNote.format = { fill: PALE_AMBER, font: { color: "#7A5A00", bold: true, size: 9 }, wrapText: true, verticalAlignment: "center" };
   ruleNote.format.rowHeight = 32;
   // Move the table down visually by leaving the existing table readable below
   // the note; the note is intentionally secondary and does not alter values.
   addDetailSheet(workbook, "Update History", "Update History", "Audit trail for this package", historyMatrix, "UpdateHistory", [24, 24, 34, 18, 18, 18, 14, 16, 16, 16, 18, 18, 14, 14, 70], PALE_BLUE);
   addDetailSheet(workbook, "Error Log", "Error / Debug Log", "Technical conflicts are shown here; the real-data baseline produced no parser/hash/duplicate-key conflicts", errorsMatrix, "ErrorLog", [24, 14, 24, 55, 55, 30, 30, 42, 28, 18], PALE_RED);
-  const help = addTextSheet(workbook, "Help", "Help", "Plain-language guide for reviewing this real-data package", [
-    "Start on Home. The coloured controls are clickable Excel links to the relevant page.",
+  const help = addTextSheet(workbook, "Help", "Help", productionMode ? "Plain-language production guide" : "Plain-language guide for reviewing this real-data package", [
+    productionMode ? "Start on Home. Use Select Data Folder first, then use Update Changed Files for routine updates." : "Start on Home. The coloured controls are clickable Excel links to the relevant page.",
     "Master Documents is the one-row-per-document view. Revisions preserves every detected revision. Transactions / Events preserves one row per extracted event.",
     "Review Flags lists 15 unusual or empty worksheet layouts that were deliberately not guessed. Review them before those worksheets can be included safely.",
     "The green OK level means the row was extracted without a row-level parser warning. Yellow REVIEW means a human decision is needed. Red CONFLICT is reserved for blocking integrity problems.",
-    "The baseline is real extracted data, but it is not an approved master snapshot. No approval action was recorded and no source file was changed.",
-    "NEXT PRODUCTION STEP (Update Changed Files / Full Rescan): open the macro-enabled package, choose the data folder, run the engine, review the staged tables, then approve, hold, or reject the exact pending run.",
+    productionMode ? "Every update is staged first. Review Pending Update and Review Flags before choosing Approve, Hold, or Reject." : "The baseline is real extracted data, but it is not an approved master snapshot. No approval action was recorded and no source file was changed.",
+    productionMode ? "Use Full Rescan after a parser or rules change, or when you want to rebuild every eligible source from scratch." : "NEXT PRODUCTION STEP (Update Changed Files / Full Rescan): open the macro-enabled package, choose the data folder, run the engine, review the staged tables, then approve, hold, or reject the exact pending run.",
     "A wrong-data report should capture the run, source workbook, worksheet, row/cell, document, revision, current value, expected value, and user note.",
     "Report Requirement / Problem should be plain English; the production engine will capture the active run and configuration context automatically.",
   ], PALE_BLUE);
   // Anchor points used by Home controls.
   const helpAnchor = help.getRange("A22:I24");
   helpAnchor.merge();
-  helpAnchor.values = [["ENGINE ACTIONS IN THIS REVIEW FILE\n\nThe links from Home take you to this explanation. The actual silent engine launch and Excel-to-engine refresh are deliberately not claimed until the macro-enabled package is attached and validated in Microsoft Excel."]];
+  helpAnchor.values = [[productionMode ? "ENGINE ACTIONS\n\nHome buttons run the packaged engine silently. If Windows or corporate policy blocks the engine, Excel records the failure in Error Log and approved data remains unchanged." : "ENGINE ACTIONS IN THIS REVIEW FILE\n\nThe links from Home take you to this explanation. The actual silent engine launch and Excel-to-engine refresh are deliberately not claimed until the macro-enabled package is attached and validated in Microsoft Excel."]];
   helpAnchor.format = { fill: PALE_AMBER, font: { bold: true, color: "#7A5A00", size: 10 }, wrapText: true, verticalAlignment: "center", borders: { preset: "all", style: "thin", color: GRID } };
   helpAnchor.format.rowHeight = 65;
   const reportAnchor = help.getRange("A34:I36");
@@ -419,7 +449,7 @@ async function main() {
 
   const system = workbook.worksheets.add("System Data");
   baseSheet(system, NAVY);
-  titleBlock(system, "System Data", "Read-only support view for the baseline package", 9);
+  titleBlock(system, "System Data", productionMode ? "Protected runtime support area" : "Read-only support view for the baseline package", 9);
   homeLink(system);
   const countRows = [
     ["Measure", "Value"],
@@ -457,7 +487,7 @@ async function main() {
   // Artifact Tool writes a large inspection sidecar for authoring QA.  It is
   // useful during construction but is not part of the user-facing package.
   try { await fs.unlink(`${outputPath}.inspect.ndjson`); } catch (_) { /* optional sidecar */ }
-  console.log(JSON.stringify({ outputPath, sheets: workbook.worksheets.items.length, documents: value("Approved Documents"), revisions: value("Approved Revisions"), events: value("Approved Transactions"), flags: value("Review Flags") }));
+  console.log(JSON.stringify({ outputPath, packageMode, sheets: workbook.worksheets.items.length, documents: value("Approved Documents"), revisions: value("Approved Revisions"), events: value("Approved Transactions"), flags: value("Review Flags") }));
 }
 
 function xmlEscape(value) {

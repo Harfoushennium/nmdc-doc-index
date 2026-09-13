@@ -30,6 +30,8 @@ Private Sub NMDC_RunStagingAction(ByVal fullRescan As Boolean)
         modeText = "incremental"
     End If
 
+    If Not NMDC_PrepareRulesForStage() Then Exit Sub
+
     Application.StatusBar = "NMDC Document Index: preparing staged update..."
     exitCode = NMDC_RunEngine("stage", "--mode " & modeText & " --data-dir " & NMDC_Quote(dataFolder))
     If exitCode <> 0 Then
@@ -111,7 +113,7 @@ Public Sub NMDC_ApproveUpdate()
         Exit Sub
     End If
 
-    currentStatus = UCase$(Trim$(CStr(ThisWorkbook.Worksheets("Home").Range("H5").Value)))
+    currentStatus = UCase$(Trim$(CStr(ThisWorkbook.Worksheets("Home").Range("H6").Value)))
     If currentStatus <> "STAGED" And currentStatus <> "REVIEW_REQUIRED" And currentStatus <> "HOLD" Then
         MsgBox "Update " & reviewedRunId & " is not awaiting approval (status: " & currentStatus & ")." & vbCrLf & vbCrLf & _
                "Nothing was approved. Please create or review a pending update first.", _
@@ -119,7 +121,7 @@ Public Sub NMDC_ApproveUpdate()
         Exit Sub
     End If
 
-    conflictCount = CLng(Val(ThisWorkbook.Worksheets("Home").Range("K6").Value))
+    conflictCount = CLng(Val(ThisWorkbook.Worksheets("Home").Range("K7").Value))
     If conflictCount > 0 Then
         answer = MsgBox("This staged update has " & CStr(conflictCount) & " conflict flag(s)." & vbCrLf & vbCrLf & _
                         "Continue only if you reviewed and intentionally accept every overridable conflict." & vbCrLf & _
@@ -238,7 +240,7 @@ Public Sub NMDC_SelectDataFolder()
     If picker.Show <> -1 Then Exit Sub
     selectedPath = picker.SelectedItems(1)
     NMDC_SetConfigValue "Data Folder", selectedPath
-    ThisWorkbook.Worksheets("Home").Range("B7").Value = selectedPath
+    ThisWorkbook.Worksheets("Home").Range("B8").Value = selectedPath
     MsgBox "Data folder saved." & vbCrLf & selectedPath, vbInformation, "NMDC Document Index"
     Exit Sub
 
@@ -322,7 +324,7 @@ Public Sub NMDC_FlagWrongData()
     If Len(eventIdentity) = 0 Then eventIdentity = NMDC_RowValueByHeader(ws, rowNumber, "Record Identity")
     flagCode = NMDC_RowValueByHeader(ws, rowNumber, "Flag Code")
     currentField = CStr(ws.Cells(1, ActiveCell.Column).Value)
-    currentValue = CStr(ActiveCell.Value)
+    currentValue = NMDC_SelectedCellValue(ActiveCell)
     userNote = InputBox("Describe what is wrong with this record:", "Flag Wrong Data")
     If Len(Trim$(userNote)) = 0 Then Exit Sub
     expectedValue = InputBox("Enter the correct/expected value if known (optional):", "Flag Wrong Data")
@@ -376,7 +378,7 @@ Public Sub NMDC_ReportRequirement()
                       " --source-cell " & NMDC_Quote(NMDC_RowValueByHeader(ws, rowNumber, "Source Cell")) & _
                       " --event-identity " & NMDC_Quote(NMDC_RowValueByHeader(ws, rowNumber, "Event Key")) & _
                       " --current-field " & NMDC_Quote(CStr(ws.Cells(1, ActiveCell.Column).Value)) & _
-                      " --current-value " & NMDC_Quote(CStr(ActiveCell.Value))
+                      " --current-value " & NMDC_Quote(NMDC_SelectedCellValue(ActiveCell))
     End If
 
     If NMDC_RunEngine("support-request", "--message " & NMDC_Quote(message) & contextArgs) = 0 Then
@@ -407,7 +409,7 @@ End Sub
 
 Private Function NMDC_DisplayedPendingRunId() As String
     On Error GoTo Handler
-    NMDC_DisplayedPendingRunId = Trim$(CStr(ThisWorkbook.Worksheets("Home").Range("H6").Value))
+    NMDC_DisplayedPendingRunId = Trim$(CStr(ThisWorkbook.Worksheets("Home").Range("H7").Value))
     Exit Function
 Handler:
     NMDC_DisplayedPendingRunId = ""
@@ -429,4 +431,20 @@ Private Function NMDC_RowValueByHeader(ByVal ws As Worksheet, ByVal rowNumber As
     Else
         NMDC_RowValueByHeader = CStr(ws.Cells(rowNumber, hit.Column).Value)
     End If
+End Function
+
+Private Function NMDC_SelectedCellValue(ByVal cell As Range) As String
+    On Error GoTo Handler
+    If cell.Hyperlinks.Count > 0 Then
+        If Len(cell.Hyperlinks(1).Address) > 0 Then
+            NMDC_SelectedCellValue = cell.Hyperlinks(1).Address
+        Else
+            NMDC_SelectedCellValue = cell.Hyperlinks(1).SubAddress
+        End If
+    Else
+        NMDC_SelectedCellValue = CStr(cell.Value)
+    End If
+    Exit Function
+Handler:
+    NMDC_SelectedCellValue = CStr(cell.Value)
 End Function

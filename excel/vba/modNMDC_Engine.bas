@@ -3,7 +3,8 @@ Option Explicit
 
 Private Const ENGINE_RELATIVE_PATH As String = "engine\nmdc_index_engine.exe"
 Private Const RUNTIME_RELATIVE_PATH As String = "runtime"
-Private Const EXCHANGE_RELATIVE_PATH As String = "runtime\excel_exchange"
+Private Const EXCHANGE_RELATIVE_PATH As String = "excel_exchange"
+Private Const CONFIG_RELATIVE_PATH As String = "config"
 
 Public Function NMDC_WorkbookFolder() As String
     NMDC_WorkbookFolder = ThisWorkbook.Path
@@ -30,7 +31,11 @@ Public Function NMDC_RuntimePath() As String
 End Function
 
 Public Function NMDC_ExchangePath() As String
-    NMDC_ExchangePath = NMDC_WorkbookFolder() & "\" & EXCHANGE_RELATIVE_PATH
+    NMDC_ExchangePath = NMDC_RuntimePath() & "\" & EXCHANGE_RELATIVE_PATH
+End Function
+
+Public Function NMDC_ConfigPath() As String
+    NMDC_ConfigPath = NMDC_WorkbookFolder() & "\" & CONFIG_RELATIVE_PATH
 End Function
 
 Public Function NMDC_Quote(ByVal value As String) As String
@@ -64,7 +69,8 @@ Public Function NMDC_RunEngine(ByVal commandName As String, Optional ByVal extra
 
     cmd = NMDC_Quote(enginePath) & " " & commandName & _
           " --state-dir " & NMDC_Quote(runtimePath) & _
-          " --exchange-dir " & NMDC_Quote(exchangePath)
+          " --exchange-dir " & NMDC_Quote(exchangePath) & _
+          " --config-dir " & NMDC_Quote(NMDC_ConfigPath())
     If Len(Trim$(extraArgs)) > 0 Then cmd = cmd & " " & extraArgs
 
     Set shell = CreateObject("WScript.Shell")

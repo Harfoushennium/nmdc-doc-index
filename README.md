@@ -99,9 +99,9 @@ Validation gate
 
 ## Current project status
 
-**Status: Cycles 1–3 and the incremental staged-approval engine are merged. PR #8 is implementing/reviewing the Excel-only user interface and engine-integration layer.**
+**Status: Cycles 1–3 and the incremental staged-approval engine are merged. PR #8 contains the production-package candidate for owner Windows/Excel acceptance testing.**
 
-The production `.xlsm`, attached VBA buttons, packaged Windows executable, and real end-to-end Microsoft Excel validation are not complete yet. The future document-folder/hyperlink scanner remains deferred until the core Excel/runtime path is proven.
+The candidate includes the real-data workbook, audited VBA actions, one-click Excel setup, and a packaged Windows executable built and smoke-tested in CI. Microsoft Excel desktop performs the one-time `.xlsm` creation and button attachment because CI does not provide desktop Excel. The future document-folder/hyperlink scanner remains deferred until this core Excel/runtime path is accepted.
 
 See [PROJECT_SPEC.md](PROJECT_SPEC.md) for the full implementation specification and [AGENTS.md](AGENTS.md) for LLM/Hermes handoff rules.
 
