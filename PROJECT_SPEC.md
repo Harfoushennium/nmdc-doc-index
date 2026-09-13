@@ -1,5 +1,7 @@
 # NMDC Document Index — Project Specification
 
+> **Current implementation note:** Cycles 1–3 and the incremental staged-approval engine are complete. The earlier single-sheet Cycle-4 wording below records the original planning baseline; the approved multi-sheet Excel-only product requirements in `USER_PRODUCT_REQUIREMENTS.md`, `08_EXCEL_UI_PLAN.md`, and `excel/WORKBOOK_UI_SPEC.md` govern the current user interface and deployment direction.
+
 ## 1. Objective
 
 Build a deterministic system that reads the project deliverable Excel workbooks under `DATA/`, selects the correct current source files, extracts all relevant documents without losing merged-cell revision/event history, normalizes the records, and produces one consolidated Excel index plus a reviewable CSV.

@@ -189,13 +189,16 @@ The preferred technical approach is an Excel `.xlsm` front end that calls a pack
 
 Canonical development branch names must start with a sequence number, e.g. `01-...`, `02-...`, `03-...`.
 
-PR titles must always include the final/current status and sequence, for example:
+PR titles must use `[SEQ][STATUS] Title`, where `SEQ` is the actual GitHub PR number. Examples:
 
-- `[DRAFT][06] ...`
-- `[READY][06] ...`
-- `[CHANGES-REQUESTED][06] ...`
-- `[MERGED][06] ...`
-- `[CLOSED-NOT-MERGED][06] ...`
+- `[08][DRAFT] ...`
+- `[08][REVIEW] ...`
+- `[08][CHANGES] ...`
+- `[08][READY] ...`
+- `[08][MERGED] ...`
+- `[08][BLOCKED] ...`
+
+Maintain one human-readable `AGENT COLLABORATION — CURRENT STATUS` dashboard comment and update it in place. Every important PR comment identifies `Written by` and `Role`. Implementation reports are role-based and are not restricted to one named agent.
 
 When a PR reaches a final state, add a final status comment that clearly states:
 

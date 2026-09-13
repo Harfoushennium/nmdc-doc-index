@@ -437,8 +437,6 @@ At minimum verify:
 
 ## 15. Version status
 
-This document is **Classification Model v2**.
+This document is the owner-approved **Classification Model v2** baseline, merged through PR #4 and preserved by subsequent extraction/update-engine regression suites.
 
-The model is ready for independent review only after exact-head CI and Windows validation confirm the complete regression suite, deterministic outputs, zero current classification review rows, semantic mixed-sample safety, and unchanged `DATA/`.
-
-Cycle 2 remains unauthorized until owner approval.
+Later phases must continue to verify deterministic outputs, zero unresolved current classification discovery rows, semantic mixed-sample safety, and unchanged `DATA/`. Proposed taxonomy changes still require explicit review; they must not be introduced silently.

@@ -98,14 +98,36 @@ def fingerprint_paths(paths: Sequence[Path]) -> str:
     return h.hexdigest()
 
 
-def _flag(level: str, code: str, message: str, source: str = "", action: str = "") -> Dict[str, str]:
-    return {
+def _flag(
+    level: str,
+    code: str,
+    message: str,
+    source: str = "",
+    action: str = "",
+    *,
+    record: Mapping[str, Any] | None = None,
+) -> Dict[str, str]:
+    flag = {
         "level": level,
         "code": code,
         "message": message,
         "source": source,
         "recommended_action": action,
     }
+    if record:
+        flag.update(
+            {
+                "project_no": str(record.get("Project No.", "")),
+                "document_no": str(record.get("Document No.", "")),
+                "revision": str(record.get("Revision", "")),
+                "source_sheet": str(record.get("Source Sheet", "")),
+                "source_row": str(record.get("Source Row", "")),
+                "source_cell": str(record.get("Source Cell", "")),
+                "event_key": str(record.get("Event_Key", "")),
+                "resolution_status": "OPEN",
+            }
+        )
+    return flag
 
 
 def scan_sources(data_dir: Path) -> Tuple[List[Dict[str, Any]], List[Dict[str, str]]]:
@@ -254,6 +276,7 @@ def _index_records(rows: Sequence[Mapping[str, Any]], side: str) -> Tuple[Dict[s
                     f"Duplicate canonical record key found in {side} dataset: {base}.",
                     str(row.get("Source File", "")),
                     "Review duplicate document/revision/event rows before approval.",
+                    record=row,
                 )
             )
         index[key] = dict(row)
