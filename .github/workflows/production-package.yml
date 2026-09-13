@@ -58,8 +58,15 @@ jobs:
         run: |
           $package = "production-package"
           New-Item -ItemType Directory -Force -Path "$package\engine", "$package\config", "$package\vba", "$package\source" | Out-Null
-          $encodedWorkbook = (Get-ChildItem .\excel\base_chunks\*.part | Sort-Object Name | ForEach-Object { Get-Content $_.FullName -Raw }) -join ""
-          [IO.File]::WriteAllBytes("$package\source\NMDC_Document_Index_Base.xlsx", [Convert]::FromBase64String($encodedWorkbook))
+          $encodedWorkbook = (Get-ChildItem .\excel\base_chunks\*.part | Sort-Object Name | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join ""
+          $workbookBytes = [Convert]::FromBase64String($encodedWorkbook)
+          if ($workbookBytes.Length -ne 6235698) { throw "Production workbook reconstruction has the wrong size: $($workbookBytes.Length) bytes." }
+          $workbookPath = "$package\source\NMDC_Document_Index_Base.xlsx"
+          [IO.File]::WriteAllBytes($workbookPath, $workbookBytes)
+          $workbookHash = (Get-FileHash $workbookPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($workbookHash -ne "92a32e25ff274b556ac07e66605e6ce9ae55f98ffdaf642453c076f16eb5d7ea") {
+            throw "Production workbook hash verification failed: $workbookHash"
+          }
           Copy-Item .\dist\nmdc_index_engine.exe "$package\engine\nmdc_index_engine.exe"
           Copy-Item .\config\classification_rules.csv, .\config\project_identity_overrides.csv "$package\config\"
           Copy-Item .\excel\vba\*.bas "$package\vba\"
