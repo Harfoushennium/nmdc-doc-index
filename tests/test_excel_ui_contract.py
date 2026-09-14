@@ -191,9 +191,12 @@ class ExcelUIContractTests(unittest.TestCase):
         text = (ROOT / "excel" / "vba" / "modNMDC_TableActions.bas").read_text(encoding="utf-8")
         self.assertIn("Public Sub NMDC_FlagWrongDataFromTable", text)
         self.assertIn("Public Sub NMDC_ReportRequirementFromTable", text)
-        self.assertIn("For Each table In ActiveSheet.ListObjects", text)
+        self.assertIn("Application.InputBox", text)
+        self.assertIn('Type:=8', text)
+        self.assertIn("For Each table In selectedCell.Worksheet.ListObjects", text)
         self.assertIn("table.HeaderRowRange.Cells", text)
         self.assertIn("table.ListColumns(headerName).Index", text)
+        self.assertIn("NMDC_TableHeaderForCell(table, selectedCell)", text)
         self.assertNotIn("ws.Rows(1).Find", text)
 
     def test_windows_setup_preflights_package_writes_paths_and_guarantees_tables(self):
