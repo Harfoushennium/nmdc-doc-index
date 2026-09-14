@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from nmdc_profiler.extractor import discover_layout, read_sheet_model
-from nmdc_profiler.layout_compat import install_layout_compatibility
+from nmdc_profiler.layout_compat import _extended_document_header, install_layout_compatibility
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,15 +20,15 @@ class OwnerLayoutCasesTests(unittest.TestCase):
         self.assertTrue(source.exists(), source)
         model = read_sheet_model(source, ROOT, "Setup Plans & Anchor Patterns")
         layout, warnings = discover_layout(model)
-        header_cells = [
-            (row, col, value)
-            for (row, col), value in sorted(model.cells.items())
-            if row <= 30 and str(value).strip()
-        ][:120]
         self.assertIsNotNone(
             layout,
-            f"2035 Setup Plans should match the conservative engineering-header fallback; warnings={warnings}; header_cells={header_cells}",
+            f"2035 Setup Plans should recognize NMDC ENERGY NUMBER as the document identifier; warnings={warnings}",
         )
+        self.assertEqual(layout.document_col, 3)
+        self.assertEqual(layout.first_data_row, 9)
+
+    def test_nmdc_energy_number_is_a_supported_engineering_header(self):
+        self.assertTrue(_extended_document_header("NMDC\nENERGY NUMBER"))
 
     def test_layout_review_flag_explains_missing_header(self):
         from nmdc_profiler import runtime_engine
