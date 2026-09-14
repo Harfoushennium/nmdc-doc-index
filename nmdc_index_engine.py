@@ -7,6 +7,9 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from nmdc_profiler.excel_bridge import create_support_request, export_excel_exchange
+from nmdc_profiler.layout_compat import install_layout_compatibility
+from nmdc_profiler.review_decisions import apply_review_decisions
+from nmdc_profiler.runtime_admin import reset_runtime_state, undo_last_approval
 from nmdc_profiler.runtime_engine import record_user_flag, stage_runtime_update
 from nmdc_profiler.update_engine import approve_stage, hold_stage, reject_stage
 
@@ -40,6 +43,16 @@ def build_parser() -> argparse.ArgumentParser:
         _common(decision)
         decision.add_argument("--run-id", required=True)
         decision.add_argument("--note", default="")
+
+    reset = subparsers.add_parser("reset", help="Delete indexed/staged runtime records without touching source DATA or configuration")
+    _common(reset)
+
+    undo = subparsers.add_parser("undo", help="Restore the immediately preceding approved version")
+    _common(undo)
+
+    review = subparsers.add_parser("save-review-decisions", help="Persist Review Flags user decisions for the latest staged run")
+    _common(review)
+    review.add_argument("--decisions-file", type=Path, required=True)
 
     context_fields = (
         "message",
@@ -89,6 +102,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         if args.command == "stage":
+            install_layout_compatibility()
             result = stage_runtime_update(
                 data_dir=args.data_dir,
                 state_dir=args.state_dir,
@@ -104,6 +118,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             result = hold_stage(args.state_dir, args.run_id, note=args.note)
         elif args.command == "reject":
             result = reject_stage(args.state_dir, args.run_id, note=args.note)
+        elif args.command == "reset":
+            result = reset_runtime_state(args.state_dir)
+        elif args.command == "undo":
+            result = undo_last_approval(args.state_dir)
+        elif args.command == "save-review-decisions":
+            result = apply_review_decisions(args.state_dir, args.decisions_file)
         elif args.command == "user-flag":
             result = record_user_flag(args.state_dir, **_request_context(args))
         elif args.command == "support-request":
