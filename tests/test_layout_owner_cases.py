@@ -25,7 +25,7 @@ class OwnerLayoutCasesTests(unittest.TestCase):
             f"2035 Setup Plans should recognize NMDC ENERGY NUMBER as the document identifier; warnings={warnings}",
         )
         self.assertEqual(layout.document_col, 3)
-        self.assertEqual(layout.first_data_row, 9)
+        self.assertEqual(layout.data_start, 9)
 
     def test_nmdc_energy_number_is_a_supported_engineering_header(self):
         self.assertTrue(_extended_document_header("NMDC\nENERGY NUMBER"))
