@@ -24,6 +24,8 @@ def _extended_document_header(text: str) -> bool:
         "cut list number",
         "cut-list no",
         "cut-list number",
+        "nmdc energy number",
+        "nmdc energy no",
     }
     if n in exact:
         return True
@@ -82,7 +84,7 @@ def install_layout_compatibility() -> None:
             flag["message"] = (
                 "The worksheet contains candidate register content, but the parser could not find a recognized "
                 "document-number/identifier header in the header area. The runtime also checks common engineering "
-                "labels such as Procedure No., Setup Plan No., Anchor Pattern No. and Cut List No."
+                "labels such as NMDC Energy Number, Procedure No., Setup Plan No., Anchor Pattern No. and Cut List No."
             )
             flag["recommended_action"] = (
                 "Open the Source File and named Source Sheet. If it contains register data, compare the identifier "
