@@ -30,8 +30,8 @@ Public Function NMDC_LoadCsvToTable(ByVal csvPath As String, ByVal sheetName As 
 
     Dim ws As Worksheet
     Dim table As ListObject
-    Dim temp As Worksheet
-    Dim imported As Range
+    Dim headers As Variant
+    Dim data As Variant
     Dim targetRange As Range
     Dim dataCount As Long
     Dim tableRows As Long
@@ -60,14 +60,10 @@ Public Function NMDC_LoadCsvToTable(ByVal csvPath As String, ByVal sheetName As 
     End If
 
     Application.ScreenUpdating = False
-    If Not NMDC_ImportCsvToTemporarySheet(csvPath, temp, imported) Then GoTo ImportFailed
+    If Not NMDC_ParseCsvFile(csvPath, headers, data, dataCount, columnCount) Then GoTo ImportFailed
 
-    columnCount = imported.Columns.Count
-    dataCount = imported.Rows.Count - 1
-    If dataCount < 0 Then dataCount = 0
     tableRows = dataCount
     If tableRows < 1 Then tableRows = 1
-
     headerRow = table.HeaderRowRange.Row
     firstColumn = table.Range.Column
 
@@ -81,74 +77,36 @@ Public Function NMDC_LoadCsvToTable(ByVal csvPath As String, ByVal sheetName As 
     Set targetRange = ws.Range(ws.Cells(headerRow, firstColumn), _
                                ws.Cells(headerRow + tableRows, firstColumn + columnCount - 1))
     table.Resize targetRange
-    table.HeaderRowRange.Value2 = imported.Rows(1).Value2
+    table.HeaderRowRange.Value2 = headers
 
     If dataCount > 0 Then
-        table.DataBodyRange.Value2 = imported.Offset(1, 0).Resize(dataCount, columnCount).Value2
+        table.DataBodyRange.Value2 = data
     Else
         table.DataBodyRange.ClearContents
     End If
 
     NMDC_ApplyTypedFormatting table
     NMDC_ActivateDocumentLinks table
+    NMDC_ActivateSourceLinks table
+    NMDC_EnhanceReviewFlagGuidance table
+    NMDC_ApplyReviewFlagValidation table
 
-    NMDC_DeleteTemporarySheet temp
     Application.ScreenUpdating = True
     NMDC_LoadCsvToTable = True
     Exit Function
 
 ImportFailed:
-    NMDC_DeleteTemporarySheet temp
     Application.ScreenUpdating = True
     NMDC_LoadCsvToTable = False
     Exit Function
 
 Handler:
-    NMDC_DeleteTemporarySheet temp
     Application.ScreenUpdating = True
     NMDC_LogError "CSV_IMPORT_ERROR", _
         "Excel could not load " & sheetName & ".", _
         "Table: " & tableName & " | File: " & csvPath & " | " & Err.Number & " - " & Err.Description
     NMDC_LoadCsvToTable = False
 End Function
-
-Private Function NMDC_ImportCsvToTemporarySheet(ByVal csvPath As String, ByRef temp As Worksheet, ByRef imported As Range) As Boolean
-    On Error GoTo Handler
-
-    Dim qt As QueryTable
-    Set temp = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
-    temp.Visible = xlSheetVeryHidden
-
-    Set qt = temp.QueryTables.Add(Connection:="TEXT;" & csvPath, Destination:=temp.Range("A1"))
-    With qt
-        .TextFileParseType = xlDelimited
-        .TextFileCommaDelimiter = True
-        .TextFileTextQualifier = xlTextQualifierDoubleQuote
-        .TextFilePlatform = 65001
-        .TextFileColumnDataTypes = NMDC_ColumnTypes(csvPath)
-        .Refresh BackgroundQuery:=False
-    End With
-    Set imported = qt.ResultRange
-    qt.Delete
-
-    NMDC_ImportCsvToTemporarySheet = True
-    Exit Function
-Handler:
-    NMDC_LogError "CSV_TEMP_IMPORT_ERROR", _
-        "Excel could not read an exported CSV file.", _
-        "File: " & csvPath & " | " & Err.Number & " - " & Err.Description
-    NMDC_ImportCsvToTemporarySheet = False
-End Function
-
-Private Sub NMDC_DeleteTemporarySheet(ByRef temp As Worksheet)
-    On Error Resume Next
-    If Not temp Is Nothing Then
-        Application.DisplayAlerts = False
-        temp.Delete
-        Application.DisplayAlerts = True
-    End If
-    Set temp = Nothing
-End Sub
 
 Public Function NMDC_LoadErrorCsvPreserveLocal(ByVal csvPath As String) As Boolean
     On Error GoTo Handler
@@ -194,6 +152,7 @@ Public Function NMDC_LoadErrorCsvPreserveLocal(ByVal csvPath As String) As Boole
         Next columnIndex
     Next rowValues
     NMDC_ApplyTypedFormatting table
+    NMDC_ActivateSourceLinks table
 
     NMDC_LoadErrorCsvPreserveLocal = True
     Exit Function
@@ -212,47 +171,6 @@ Private Function NMDC_BlankOrNewRow(ByVal table As ListObject) As ListRow
         End If
     End If
     Set NMDC_BlankOrNewRow = table.ListRows.Add
-End Function
-
-Private Function NMDC_ColumnTypes(ByVal csvPath As String) As Variant
-    On Error GoTo Handler
-
-    Dim fileNumber As Integer
-    Dim headerLine As String
-    Dim headerFields As Variant
-    Dim dataTypes() As Integer
-    Dim index As Long
-    Dim headerName As String
-
-    fileNumber = FreeFile
-    Open csvPath For Input As #fileNumber
-    Line Input #fileNumber, headerLine
-    Close #fileNumber
-
-    headerFields = Split(headerLine, ",")
-    ReDim dataTypes(0 To UBound(headerFields))
-    For index = 0 To UBound(headerFields)
-        headerName = NMDC_CleanHeader(CStr(headerFields(index)))
-        If NMDC_IsDateHeader(headerName) Or NMDC_IsNumericHeader(headerName) Then
-            dataTypes(index) = xlGeneralFormat
-        Else
-            dataTypes(index) = xlTextFormat
-        End If
-    Next index
-    NMDC_ColumnTypes = dataTypes
-    Exit Function
-Handler:
-    On Error Resume Next
-    If fileNumber > 0 Then Close #fileNumber
-    NMDC_ColumnTypes = Array(xlTextFormat)
-End Function
-
-Private Function NMDC_CleanHeader(ByVal rawHeader As String) As String
-    Dim value As String
-    value = Trim$(rawHeader)
-    If Left$(value, 1) = Chr$(34) Then value = Mid$(value, 2)
-    If Right$(value, 1) = Chr$(34) Then value = Left$(value, Len(value) - 1)
-    NMDC_CleanHeader = Replace(value, Chr$(34) & Chr$(34), Chr$(34))
 End Function
 
 Private Sub NMDC_ApplyTypedFormatting(ByVal table As ListObject)
@@ -397,12 +315,131 @@ Handler:
         table.Name & " | " & Err.Number & " - " & Err.Description
 End Sub
 
+Private Sub NMDC_ActivateSourceLinks(ByVal table As ListObject)
+    On Error GoTo Handler
+
+    NMDC_ActivateSourceColumn table, "Source File"
+    NMDC_ActivateSourceColumn table, "relative_path"
+    NMDC_ActivateSourceColumn table, "Relative Path"
+    Exit Sub
+Handler:
+    NMDC_LogError "SOURCE_HYPERLINK_ERROR", _
+        "Excel loaded the table but could not activate all source-file links.", _
+        table.Name & " | " & Err.Number & " - " & Err.Description
+End Sub
+
+Private Sub NMDC_ActivateSourceColumn(ByVal table As ListObject, ByVal columnName As String)
+    Dim column As ListColumn
+    Dim cell As Range
+    Dim sourceText As String
+    Dim addressText As String
+    Dim dataFolder As String
+    Dim fso As Object
+
+    Set column = Nothing
+    On Error Resume Next
+    Set column = table.ListColumns(columnName)
+    On Error GoTo 0
+    If column Is Nothing Then Exit Sub
+    If column.DataBodyRange Is Nothing Then Exit Sub
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    dataFolder = Trim$(NMDC_ConfigValue("Data Folder"))
+
+    For Each cell In column.DataBodyRange.Cells
+        sourceText = Trim$(CStr(cell.Value))
+        If Len(sourceText) > 0 Then
+            addressText = sourceText
+            If Len(dataFolder) > 0 Then
+                If Len(fso.GetDriveName(sourceText)) = 0 And Left$(sourceText, 2) <> "\\" Then
+                    addressText = fso.BuildPath(dataFolder, Replace(sourceText, "/", "\"))
+                End If
+            End If
+            On Error Resume Next
+            cell.Hyperlinks.Delete
+            table.Parent.Hyperlinks.Add Anchor:=cell, Address:=addressText, _
+                TextToDisplay:=sourceText, ScreenTip:="Open source workbook"
+            On Error GoTo 0
+        End If
+    Next cell
+End Sub
+
+Private Sub NMDC_EnhanceReviewFlagGuidance(ByVal table As ListObject)
+    On Error GoTo Handler
+    If StrComp(table.Name, "ReviewFlags", vbTextCompare) <> 0 Then Exit Sub
+    If table.DataBodyRange Is Nothing Then Exit Sub
+
+    Dim row As ListRow
+    Dim codeCol As Long
+    Dim problemCol As Long
+    Dim actionCol As Long
+
+    codeCol = table.ListColumns("Flag Code").Index
+    problemCol = table.ListColumns("Plain-English Problem").Index
+    actionCol = table.ListColumns("Recommended User Action").Index
+
+    For Each row In table.ListRows
+        If UCase$(Trim$(CStr(row.Range.Cells(1, codeCol).Value))) = "UNRECOGNIZED_LAYOUT" Then
+            row.Range.Cells(1, problemCol).Value = _
+                "The parser could not identify a safe document-number/data-row layout automatically. " & _
+                "This can happen when the sheet is empty, when the identifier header uses a different label, " & _
+                "or when the header/data starts in an unusual position. It does not necessarily mean the workbook is badly formatted."
+            row.Range.Cells(1, actionCol).Value = _
+                "Open the Source File link and check the named Source Sheet. If it is empty, choose NO ACTION REQUIRED. " & _
+                "If it contains normal register data, choose NEEDS PARSER/MAPPING FIX and add a short User Comment, then Save Review Decisions."
+        End If
+    Next row
+    Exit Sub
+Handler:
+    NMDC_LogError "REVIEW_GUIDANCE_ERROR", _
+        "Excel loaded Review Flags but could not apply the user guidance.", _
+        Err.Number & " - " & Err.Description
+End Sub
+
+Private Sub NMDC_ApplyReviewFlagValidation(ByVal table As ListObject)
+    On Error GoTo Handler
+    If StrComp(table.Name, "ReviewFlags", vbTextCompare) <> 0 Then Exit Sub
+    If table.DataBodyRange Is Nothing Then Exit Sub
+
+    Dim decisionRange As Range
+    Dim statusRange As Range
+    Dim commentRange As Range
+
+    Set decisionRange = table.ListColumns("User Decision").DataBodyRange
+    Set commentRange = table.ListColumns("User Comment").DataBodyRange
+    Set statusRange = table.ListColumns("Resolution Status").DataBodyRange
+
+    decisionRange.Validation.Delete
+    decisionRange.Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Operator:=xlBetween, _
+        Formula1:="ACKNOWLEDGED,NO ACTION REQUIRED,NEEDS SOURCE CORRECTION,NEEDS PARSER/MAPPING FIX,HOLD FOR REVIEW"
+    decisionRange.Validation.IgnoreBlank = True
+    decisionRange.Validation.InCellDropdown = True
+
+    statusRange.Validation.Delete
+    statusRange.Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Operator:=xlBetween, _
+        Formula1:="OPEN,ACKNOWLEDGED,RESOLVED,DEFERRED"
+    statusRange.Validation.IgnoreBlank = True
+    statusRange.Validation.InCellDropdown = True
+
+    decisionRange.Interior.Color = RGB(234, 244, 251)
+    commentRange.Interior.Color = RGB(255, 247, 219)
+    statusRange.Interior.Color = RGB(234, 246, 236)
+    Exit Sub
+Handler:
+    NMDC_LogError "REVIEW_DROPDOWN_ERROR", _
+        "Excel loaded Review Flags but could not apply one or more dropdown menus.", _
+        Err.Number & " - " & Err.Description
+End Sub
+
 Public Function NMDC_LoadDashboard(ByVal csvPath As String) As Boolean
     On Error GoTo Handler
 
     Dim ws As Worksheet
-    Dim temp As Worksheet
-    Dim imported As Range
+    Dim headers As Variant
+    Dim data As Variant
+    Dim dataCount As Long
+    Dim columnCount As Long
+    Dim parsedDate As Date
 
     If Not NMDC_FileExists(csvPath) Then
         NMDC_LogError "CSV_MISSING", "Excel could not find the exported dashboard data.", "File: " & csvPath
@@ -410,67 +447,64 @@ Public Function NMDC_LoadDashboard(ByVal csvPath As String) As Boolean
         Exit Function
     End If
 
-    Application.ScreenUpdating = False
-    If Not NMDC_ImportCsvToTemporarySheet(csvPath, temp, imported) Then GoTo ImportFailed
-    Set ws = ThisWorkbook.Worksheets("Home")
+    If Not NMDC_ParseCsvFile(csvPath, headers, data, dataCount, columnCount) Then
+        NMDC_LoadDashboard = False
+        Exit Function
+    End If
 
-    ws.Range("B6").Value = NMDC_ImportedValue(imported, "Approved Status")
-    ws.Range("B7").Value = NMDC_ImportedValue(imported, "Approved Run ID")
-    ws.Range("B8").Value = NMDC_ImportedValue(imported, "Current Data Folder")
-    ws.Range("B9").Value = NMDC_ImportedValue(imported, "Last Successful Update")
-    ws.Range("E6").Value = NMDC_ImportedValue(imported, "Approved Documents")
-    ws.Range("E7").Value = NMDC_ImportedValue(imported, "Approved Revisions")
-    ws.Range("E8").Value = NMDC_ImportedValue(imported, "Approved Transactions")
-    ws.Range("H6").Value = NMDC_ImportedValue(imported, "Pending Status")
-    ws.Range("H7").Value = NMDC_ImportedValue(imported, "Pending Run ID")
-    ws.Range("H8").Value = "Added " & NMDC_ImportedValue(imported, "Pending Added") & _
-                           " | Modified " & NMDC_ImportedValue(imported, "Pending Modified") & _
-                           " | Removed " & NMDC_ImportedValue(imported, "Pending Removed") & _
-                           " | Unchanged " & NMDC_ImportedValue(imported, "Pending Unchanged")
-    ws.Range("K6").Value = NMDC_ImportedValue(imported, "Review Flags")
-    ws.Range("K7").Value = NMDC_ImportedValue(imported, "Conflict Flags")
+    Set ws = ThisWorkbook.Worksheets("Home")
+    ws.Range("B6").Value = NMDC_CsvValue(headers, data, dataCount, "Approved Status")
+    ws.Range("B7").Value = NMDC_CsvValue(headers, data, dataCount, "Approved Run ID")
+    ws.Range("B8").Value = NMDC_CsvValue(headers, data, dataCount, "Current Data Folder")
+
+    If NMDC_TryParseDate(NMDC_CsvValue(headers, data, dataCount, "Last Successful Update"), parsedDate) Then
+        ws.Range("B9").Value = parsedDate
+    Else
+        ws.Range("B9").Value = NMDC_CsvValue(headers, data, dataCount, "Last Successful Update")
+    End If
+
+    ws.Range("E6").Value = Val(CStr(NMDC_CsvValue(headers, data, dataCount, "Approved Documents")))
+    ws.Range("E7").Value = Val(CStr(NMDC_CsvValue(headers, data, dataCount, "Approved Revisions")))
+    ws.Range("E8").Value = Val(CStr(NMDC_CsvValue(headers, data, dataCount, "Approved Transactions")))
+    ws.Range("H6").Value = NMDC_CsvValue(headers, data, dataCount, "Pending Status")
+    ws.Range("H7").Value = NMDC_CsvValue(headers, data, dataCount, "Pending Run ID")
+    ws.Range("H8").Value = "Added " & NMDC_CsvValue(headers, data, dataCount, "Pending Added") & _
+                           " | Modified " & NMDC_CsvValue(headers, data, dataCount, "Pending Modified") & _
+                           " | Removed " & NMDC_CsvValue(headers, data, dataCount, "Pending Removed") & _
+                           " | Unchanged " & NMDC_CsvValue(headers, data, dataCount, "Pending Unchanged")
+    ws.Range("K6").Value = Val(CStr(NMDC_CsvValue(headers, data, dataCount, "Review Flags")))
+    ws.Range("K7").Value = Val(CStr(NMDC_CsvValue(headers, data, dataCount, "Conflict Flags")))
 
     ws.Range("B9").NumberFormat = "dd-mmm-yyyy hh:mm"
     ws.Range("E6:E8").NumberFormat = "#,##0"
     ws.Range("K6:K7").NumberFormat = "#,##0"
 
-    NMDC_DeleteTemporarySheet temp
-    Application.ScreenUpdating = True
     NMDC_LoadDashboard = True
     Exit Function
-
-ImportFailed:
-    NMDC_DeleteTemporarySheet temp
-    Application.ScreenUpdating = True
-    NMDC_LoadDashboard = False
-    Exit Function
-
 Handler:
-    NMDC_DeleteTemporarySheet temp
-    Application.ScreenUpdating = True
     NMDC_LogError "DASHBOARD_REFRESH_ERROR", _
         "Excel could not refresh the Home dashboard.", _
         Err.Number & " - " & Err.Description
     NMDC_LoadDashboard = False
 End Function
 
-Private Function NMDC_ImportedValue(ByVal imported As Range, ByVal headerName As String) As Variant
+Private Function NMDC_CsvValue(ByVal headers As Variant, ByVal data As Variant, ByVal dataCount As Long, ByVal headerName As String) As Variant
     Dim columnIndex As Long
-    columnIndex = NMDC_ImportedColumn(imported, headerName)
-    If columnIndex = 0 Or imported.Rows.Count < 2 Then
-        NMDC_ImportedValue = ""
+    columnIndex = NMDC_CsvColumn(headers, headerName)
+    If columnIndex = 0 Or dataCount < 1 Then
+        NMDC_CsvValue = ""
     Else
-        NMDC_ImportedValue = imported.Cells(2, columnIndex).Value
+        NMDC_CsvValue = data(1, columnIndex)
     End If
 End Function
 
-Private Function NMDC_ImportedColumn(ByVal imported As Range, ByVal headerName As String) As Long
+Private Function NMDC_CsvColumn(ByVal headers As Variant, ByVal headerName As String) As Long
     Dim index As Long
-    For index = 1 To imported.Columns.Count
-        If StrComp(Trim$(CStr(imported.Cells(1, index).Value)), headerName, vbTextCompare) = 0 Then
-            NMDC_ImportedColumn = index
+    For index = 1 To UBound(headers, 2)
+        If StrComp(Trim$(CStr(headers(1, index))), headerName, vbTextCompare) = 0 Then
+            NMDC_CsvColumn = index
             Exit Function
         End If
     Next index
-    NMDC_ImportedColumn = 0
+    NMDC_CsvColumn = 0
 End Function
