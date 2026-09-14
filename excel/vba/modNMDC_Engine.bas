@@ -14,7 +14,7 @@ Public Function NMDC_EnginePath() As String
     Dim configured As String
     configured = Trim$(NMDC_ConfigValue("Engine Executable Path"))
     If Len(configured) > 0 Then
-        NMDC_EnginePath = configured
+        NMDC_EnginePath = NMDC_ResolvePackagePath(configured)
     Else
         NMDC_EnginePath = NMDC_WorkbookFolder() & "\" & ENGINE_RELATIVE_PATH
     End If
@@ -24,7 +24,7 @@ Public Function NMDC_RuntimePath() As String
     Dim configured As String
     configured = Trim$(NMDC_ConfigValue("Runtime Folder"))
     If Len(configured) > 0 Then
-        NMDC_RuntimePath = configured
+        NMDC_RuntimePath = NMDC_ResolvePackagePath(configured)
     Else
         NMDC_RuntimePath = NMDC_WorkbookFolder() & "\" & RUNTIME_RELATIVE_PATH
     End If
@@ -35,7 +35,50 @@ Public Function NMDC_ExchangePath() As String
 End Function
 
 Public Function NMDC_ConfigPath() As String
-    NMDC_ConfigPath = NMDC_WorkbookFolder() & "\" & CONFIG_RELATIVE_PATH
+    Dim configured As String
+    configured = Trim$(NMDC_ConfigValue("Configuration Folder"))
+    If Len(configured) > 0 Then
+        NMDC_ConfigPath = NMDC_ResolvePackagePath(configured)
+    Else
+        NMDC_ConfigPath = NMDC_WorkbookFolder() & "\" & CONFIG_RELATIVE_PATH
+    End If
+End Function
+
+Public Function NMDC_ResolvePackagePath(ByVal configuredPath As String) As String
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Len(fso.GetDriveName(configuredPath)) > 0 Or Left$(configuredPath, 2) = "\\" Then
+        NMDC_ResolvePackagePath = configuredPath
+    Else
+        NMDC_ResolvePackagePath = fso.BuildPath(NMDC_WorkbookFolder(), configuredPath)
+    End If
+End Function
+
+Public Function NMDC_FileExists(ByVal filePath As String) As Boolean
+    On Error GoTo Missing
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    NMDC_FileExists = fso.FileExists(filePath)
+    Exit Function
+Missing:
+    NMDC_FileExists = False
+End Function
+
+Public Function NMDC_FolderExists(ByVal folderPath As String) As Boolean
+    On Error GoTo Missing
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    NMDC_FolderExists = fso.FolderExists(folderPath)
+    Exit Function
+Missing:
+    NMDC_FolderExists = False
+End Function
+
+Public Function NMDC_PathDiagnostics() As String
+    NMDC_PathDiagnostics = "Workbook=" & NMDC_WorkbookFolder() & _
+        "; Engine=" & NMDC_EnginePath() & _
+        "; Runtime=" & NMDC_RuntimePath() & _
+        "; Config=" & NMDC_ConfigPath()
 End Function
 
 Public Function NMDC_Quote(ByVal value As String) As String
@@ -56,14 +99,25 @@ Public Function NMDC_RunEngine(ByVal commandName As String, Optional ByVal extra
     runtimePath = NMDC_RuntimePath()
     exchangePath = NMDC_ExchangePath()
 
-    If Len(Dir$(enginePath)) = 0 Then
+    If Not NMDC_FileExists(enginePath) Then
         NMDC_LogError "ENGINE_MISSING", _
             "The NMDC Index engine could not be found.", _
-            "Expected engine: " & enginePath & ". Contact support or use Report Requirement / Problem."
+            NMDC_PathDiagnostics()
         MsgBox "The NMDC Index engine could not be found." & vbCrLf & vbCrLf & _
                "Nothing was changed. Please open Error Log or use Report Requirement / Problem.", _
                vbExclamation, "NMDC Document Index"
         NMDC_RunEngine = 9001
+        Exit Function
+    End If
+
+    If Not NMDC_FolderExists(NMDC_ConfigPath()) Then
+        NMDC_LogError "CONFIG_FOLDER_MISSING", _
+            "The NMDC Index configuration folder could not be found.", _
+            NMDC_PathDiagnostics()
+        MsgBox "The NMDC Index configuration folder could not be found." & vbCrLf & vbCrLf & _
+               "Nothing was changed. Please rerun the one-time setup from the extracted production package.", _
+               vbExclamation, "NMDC Document Index"
+        NMDC_RunEngine = 9003
         Exit Function
     End If
 
@@ -88,7 +142,7 @@ Public Function NMDC_RunEngine(ByVal commandName As String, Optional ByVal extra
 Handler:
     NMDC_LogError "VBA_ENGINE_LAUNCH_ERROR", _
         "Excel could not start the NMDC Index engine.", _
-        Err.Number & " - " & Err.Description
+        Err.Number & " - " & Err.Description & "; " & NMDC_PathDiagnostics()
     NMDC_RunEngine = 9002
 End Function
 

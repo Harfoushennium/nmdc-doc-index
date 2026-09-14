@@ -96,6 +96,10 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn('"EXCEL:" & code', text)
         self.assertIn('" --config-dir " & NMDC_Quote(NMDC_ConfigPath())', text)
         self.assertIn('NMDC_RuntimePath() & "\\" & EXCHANGE_RELATIVE_PATH', text)
+        self.assertIn('NMDC_ConfigValue("Configuration Folder")', text)
+        self.assertIn("Scripting.FileSystemObject", text)
+        self.assertIn("NMDC_PathDiagnostics", text)
+        self.assertNotIn("Dir$(enginePath)", text)
 
     def test_vba_actions_expose_required_button_macros(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Actions.bas").read_text(encoding="utf-8")
@@ -128,6 +132,8 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn("The proposed update was staged, but Excel could not load it for review", text)
         self.assertIn('NMDC_GoToSheet "Error Log"', text)
         self.assertNotIn("Or Not NMDC_RefreshExchangeData", text)
+        self.assertNotIn("Dir$(dataFolder", text)
+        self.assertIn("NMDC_FolderExists(dataFolder)", text)
 
     def test_csv_refresh_preserves_identifiers_as_text(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
@@ -144,6 +150,26 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn('Set table = ws.ListObjects("ClassificationRules")', rules)
         self.assertIn("Duplicate Rule_ID", rules)
         self.assertIn('NMDC_SetConfigValue "Configuration Version"', rules)
+        self.assertIn("fso.FolderExists(folderPath)", rules)
+        self.assertNotIn("Dir$(folderPath", rules)
+
+    def test_windows_setup_preflights_package_and_writes_absolute_paths(self):
+        text = (ROOT / "packaging" / "Create_NMDC_Document_Index.vbs").read_text(encoding="utf-8")
+        for required in [
+            "engine\\nmdc_index_engine.exe",
+            "classification_rules.csv",
+            "project_identity_overrides.csv",
+            "modNMDC_Engine.bas",
+            "modNMDC_Refresh.bas",
+            "modNMDC_Actions.bas",
+            "modNMDC_Rules.bas",
+            "modNMDC_Startup.bas",
+        ]:
+            self.assertIn(required, text)
+        self.assertIn('SetWorkbookConfig workbook, "Engine Executable Path", enginePath', text)
+        self.assertIn('SetWorkbookConfig workbook, "Runtime Folder", runtimeFolder', text)
+        self.assertIn('SetWorkbookConfig workbook, "Configuration Folder", configFolder', text)
+        self.assertIn("If Not fso.FolderExists(runtimeFolder) Then fso.CreateFolder runtimeFolder", text)
 
     def test_error_refresh_preserves_excel_local_entries(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")

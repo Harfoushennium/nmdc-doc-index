@@ -37,7 +37,7 @@ Public Function NMDC_PrepareRulesForStage() As Boolean
 Handler:
     NMDC_LogError "RULE_EXPORT_ERROR", _
         "Excel could not validate or save Rules & Mappings.", _
-        Err.Number & " - " & Err.Description
+        Err.Number & " - " & Err.Description & "; Rules target=" & NMDC_ConfigPath() & "\" & RULES_FILENAME & "; " & NMDC_PathDiagnostics()
     MsgBox "Rules & Mappings could not be saved." & vbCrLf & _
            "Nothing was staged. Please review the Error Log.", _
            vbExclamation, "NMDC Document Index"
@@ -135,7 +135,9 @@ Private Function NMDC_CsvField(ByVal value As String) As String
 End Function
 
 Private Sub NMDC_EnsureFolder(ByVal folderPath As String)
-    If Len(Dir$(folderPath, vbDirectory)) = 0 Then MkDir folderPath
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FolderExists(folderPath) Then fso.CreateFolder folderPath
 End Sub
 
 Private Function NMDC_ReadUtf8(ByVal filePath As String) As String

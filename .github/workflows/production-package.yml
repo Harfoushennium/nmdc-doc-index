@@ -62,11 +62,11 @@ jobs:
           if ($workbookParts.Count -ne 10) { throw "Expected 10 production workbook chunks; found $($workbookParts.Count)." }
           $encodedWorkbook = ($workbookParts | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join ""
           $workbookBytes = [Convert]::FromBase64String($encodedWorkbook)
-          if ($workbookBytes.Length -ne 6235698) { throw "Production workbook reconstruction has the wrong size: $($workbookBytes.Length) bytes." }
+          if ($workbookBytes.Length -ne 6235717) { throw "Production workbook reconstruction has the wrong size: $($workbookBytes.Length) bytes." }
           $workbookPath = "$package\source\NMDC_Document_Index_Base.xlsx"
           [IO.File]::WriteAllBytes($workbookPath, $workbookBytes)
           $workbookHash = (Get-FileHash $workbookPath -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($workbookHash -ne "92a32e25ff274b556ac07e66605e6ce9ae55f98ffdaf642453c076f16eb5d7ea") {
+          if ($workbookHash -ne "9225a41707c2dd483499a697d8358556364d42a2a35be9a09027f170c45f7682") {
             throw "Production workbook hash verification failed: $workbookHash"
           }
           Copy-Item .\dist\nmdc_index_engine.exe "$package\engine\nmdc_index_engine.exe"

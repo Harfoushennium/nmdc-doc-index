@@ -17,11 +17,11 @@ Private Sub NMDC_RunStagingAction(ByVal fullRescan As Boolean)
     Dim exitCode As Long
 
     dataFolder = Trim$(NMDC_ConfigValue("Data Folder"))
-    If Len(dataFolder) = 0 Or Len(Dir$(dataFolder, vbDirectory)) = 0 Then
+    If Len(dataFolder) = 0 Or Not NMDC_FolderExists(dataFolder) Then
         MsgBox "Please select a valid data folder first.", vbExclamation, "NMDC Document Index"
         NMDC_SelectDataFolder
         dataFolder = Trim$(NMDC_ConfigValue("Data Folder"))
-        If Len(dataFolder) = 0 Or Len(Dir$(dataFolder, vbDirectory)) = 0 Then Exit Sub
+        If Len(dataFolder) = 0 Or Not NMDC_FolderExists(dataFolder) Then Exit Sub
     End If
 
     If fullRescan Then

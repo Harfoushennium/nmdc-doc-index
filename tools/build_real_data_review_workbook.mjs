@@ -409,6 +409,7 @@ async function main() {
     ["Data Folder", productionMode ? "" : "DATA", productionMode ? "Use Select Data Folder on Home." : "The production workbook will let the owner choose an external data folder."],
     ["Runtime Folder", "", "Leave blank to use the runtime folder beside the workbook."],
     ["Engine Executable Path", "", "Leave blank to use engine\\nmdc_index_engine.exe beside the workbook."],
+    ["Configuration Folder", "", "Leave blank to use the config folder beside the workbook."],
     ["Classification Rules File", "config\\classification_rules.csv", "Rules & Mappings exports to this controlled file."],
     ["Project Identity Overrides File", "config\\project_identity_overrides.csv", "Owner-approved project identities."],
     ["Parser Version", "cycle3-extractor-v1", "Displayed for traceability."],

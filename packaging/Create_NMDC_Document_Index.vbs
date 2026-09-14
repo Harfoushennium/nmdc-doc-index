@@ -4,7 +4,7 @@ Const xlOpenXMLWorkbookMacroEnabled = 52
 Const msoShapeRoundedRectangle = 5
 
 Dim fso, shell, packageRoot, sourceWorkbook, outputWorkbook, excel, workbook
-Dim modulesFolder, response
+Dim modulesFolder, enginePath, runtimeFolder, configFolder, response
 
 Set fso = CreateObject("Scripting.FileSystemObject")
 Set shell = CreateObject("WScript.Shell")
@@ -12,6 +12,9 @@ packageRoot = fso.GetParentFolderName(WScript.ScriptFullName)
 sourceWorkbook = fso.BuildPath(packageRoot, "source\NMDC_Document_Index_Base.xlsx")
 outputWorkbook = fso.BuildPath(packageRoot, "NMDC_Document_Index.xlsm")
 modulesFolder = fso.BuildPath(packageRoot, "vba")
+enginePath = fso.BuildPath(packageRoot, "engine\nmdc_index_engine.exe")
+runtimeFolder = fso.BuildPath(packageRoot, "runtime")
+configFolder = fso.BuildPath(packageRoot, "config")
 
 If Not fso.FileExists(sourceWorkbook) Then
     MsgBox "The production workbook source is missing:" & vbCrLf & sourceWorkbook, vbCritical, "NMDC Document Index Setup"
@@ -21,6 +24,15 @@ If Not fso.FolderExists(modulesFolder) Then
     MsgBox "The VBA source folder is missing:" & vbCrLf & modulesFolder, vbCritical, "NMDC Document Index Setup"
     WScript.Quit 2
 End If
+RequireFile enginePath, "The packaged NMDC Index engine is missing."
+RequireFile fso.BuildPath(configFolder, "classification_rules.csv"), "The classification rules file is missing."
+RequireFile fso.BuildPath(configFolder, "project_identity_overrides.csv"), "The project identity overrides file is missing."
+RequireFile fso.BuildPath(modulesFolder, "modNMDC_Engine.bas"), "A required Excel action module is missing."
+RequireFile fso.BuildPath(modulesFolder, "modNMDC_Refresh.bas"), "A required Excel action module is missing."
+RequireFile fso.BuildPath(modulesFolder, "modNMDC_Actions.bas"), "A required Excel action module is missing."
+RequireFile fso.BuildPath(modulesFolder, "modNMDC_Rules.bas"), "A required Excel action module is missing."
+RequireFile fso.BuildPath(modulesFolder, "modNMDC_Startup.bas"), "A required Excel action module is missing."
+If Not fso.FolderExists(runtimeFolder) Then fso.CreateFolder runtimeFolder
 
 If fso.FileExists(outputWorkbook) Then
     response = MsgBox("NMDC_Document_Index.xlsm already exists." & vbCrLf & vbCrLf & _
@@ -76,6 +88,11 @@ If Err.Number <> 0 Then
 End If
 
 AttachHomeButtons workbook
+SetWorkbookConfig workbook, "Engine Executable Path", enginePath
+SetWorkbookConfig workbook, "Runtime Folder", runtimeFolder
+SetWorkbookConfig workbook, "Configuration Folder", configFolder
+SetWorkbookConfig workbook, "Classification Rules File", fso.BuildPath(configFolder, "classification_rules.csv")
+SetWorkbookConfig workbook, "Project Identity Overrides File", fso.BuildPath(configFolder, "project_identity_overrides.csv")
 workbook.Worksheets("System Data").Visible = 2
 workbook.Save
 workbook.Close True
@@ -91,6 +108,33 @@ Sub ImportModule(ByVal wb, ByVal modulePath)
         Err.Raise vbObjectError + 100, "NMDC Setup", "Missing VBA module: " & modulePath
     End If
     wb.VBProject.VBComponents.Import modulePath
+End Sub
+
+Sub RequireFile(ByVal filePath, ByVal friendlyMessage)
+    If Not fso.FileExists(filePath) Then
+        MsgBox friendlyMessage & vbCrLf & vbCrLf & filePath & vbCrLf & vbCrLf & _
+               "Extract the complete production ZIP to a normal folder and run setup again.", _
+               vbCritical, "NMDC Document Index Setup"
+        WScript.Quit 2
+    End If
+End Sub
+
+Sub SetWorkbookConfig(ByVal wb, ByVal keyName, ByVal configValue)
+    Dim ws, lastRow, rowIndex, found
+    Set ws = wb.Worksheets("Configuration")
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(-4162).Row
+    found = False
+    For rowIndex = 1 To lastRow
+        If StrComp(Trim(CStr(ws.Cells(rowIndex, 1).Value)), keyName, 1) = 0 Then
+            ws.Cells(rowIndex, 2).Value = configValue
+            found = True
+            Exit For
+        End If
+    Next
+    If Not found Then
+        ws.Cells(lastRow + 1, 1).Value = keyName
+        ws.Cells(lastRow + 1, 2).Value = configValue
+    End If
 End Sub
 
 Sub AttachHomeButtons(ByVal wb)

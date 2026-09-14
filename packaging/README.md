@@ -14,6 +14,12 @@ The one-time setup uses Microsoft Excel to attach the audited VBA modules to the
 workbook. If Excel blocks that attachment, the setup displays the exact Trust
 Center setting needed and stops without changing the source workbook.
 
+Setup verifies the engine, configuration files, and all five VBA modules before
+opening Excel. It then stores their absolute extracted-package paths in the
+workbook so folders containing spaces (including OneDrive paths) work reliably.
+If you move or rename the extracted package later, rerun setup from its new
+location so those paths are refreshed.
+
 ## Safety
 
 - Source registers are read-only.
