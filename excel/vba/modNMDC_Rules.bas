@@ -112,7 +112,9 @@ Private Function NMDC_RulesCsv(ByVal table As ListObject) As String
     Dim columnIndex As Long
     Dim lineText As String
     Dim outputText As String
+    Dim ruleIdColumn As Long
 
+    ruleIdColumn = NMDC_TableColumn(table, "Rule_ID")
     For columnIndex = 1 To table.ListColumns.Count
         If columnIndex > 1 Then lineText = lineText & ","
         lineText = lineText & NMDC_CsvField(CStr(table.HeaderRowRange.Cells(1, columnIndex).Value))
@@ -120,12 +122,14 @@ Private Function NMDC_RulesCsv(ByVal table As ListObject) As String
     outputText = lineText & vbLf
 
     For rowIndex = 1 To table.ListRows.Count
-        lineText = ""
-        For columnIndex = 1 To table.ListColumns.Count
-            If columnIndex > 1 Then lineText = lineText & ","
-            lineText = lineText & NMDC_CsvField(CStr(table.DataBodyRange.Cells(rowIndex, columnIndex).Value))
-        Next columnIndex
-        outputText = outputText & lineText & vbLf
+        If ruleIdColumn = 0 Or Len(Trim$(CStr(table.DataBodyRange.Cells(rowIndex, ruleIdColumn).Value))) > 0 Then
+            lineText = ""
+            For columnIndex = 1 To table.ListColumns.Count
+                If columnIndex > 1 Then lineText = lineText & ","
+                lineText = lineText & NMDC_CsvField(CStr(table.DataBodyRange.Cells(rowIndex, columnIndex).Value))
+            Next columnIndex
+            outputText = outputText & lineText & vbLf
+        End If
     Next rowIndex
     NMDC_RulesCsv = outputText
 End Function
@@ -167,17 +171,41 @@ Private Sub NMDC_WriteUtf8(ByVal filePath As String, ByVal value As String)
 End Sub
 
 Private Sub NMDC_RecordRuleChange(ByVal note As String)
-    On Error Resume Next
+    On Error GoTo Handler
+
     Dim ws As Worksheet
-    Dim nextRow As Long
+    Dim table As ListObject
+    Dim row As ListRow
+
     Set ws = ThisWorkbook.Worksheets("User Decisions")
-    nextRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row + 1
-    If nextRow < 2 Then nextRow = 2
-    ws.Cells(nextRow, 1).Value = "RULE-" & Format$(Now, "yyyymmddhhnnss")
-    ws.Cells(nextRow, 2).Value = Now
-    ws.Cells(nextRow, 3).Value = Application.UserName
-    ws.Cells(nextRow, 4).Value = "CONFIGURATION CHANGE"
-    ws.Cells(nextRow, 9).Value = note
-    ws.Cells(nextRow, 10).Value = "STAGED ON NEXT UPDATE"
-    ws.Cells(nextRow, 11).Value = NMDC_ConfigValue("Configuration Version")
+    Set table = ws.ListObjects("UserDecisionLog")
+    Set row = NMDC_BlankOrNewDecisionRow(table)
+
+    NMDC_SetDecisionValue table, row, "Decision ID", "RULE-" & Format$(Now, "yyyymmddhhnnss")
+    NMDC_SetDecisionValue table, row, "Date/Time", Now
+    NMDC_SetDecisionValue table, row, "User", Application.UserName
+    NMDC_SetDecisionValue table, row, "Decision Type", "CONFIGURATION CHANGE"
+    NMDC_SetDecisionValue table, row, "User Note", note
+    NMDC_SetDecisionValue table, row, "Status", "STAGED ON NEXT UPDATE"
+    NMDC_SetDecisionValue table, row, "Configuration Version", NMDC_ConfigValue("Configuration Version")
+    table.ListColumns("Date/Time").DataBodyRange.NumberFormat = "dd-mmm-yyyy hh:mm"
+    Exit Sub
+Handler:
+    NMDC_LogError "RULE_CHANGE_LOG_ERROR", _
+        "The rules were saved, but Excel could not record the configuration change in User Decisions.", _
+        Err.Number & " - " & Err.Description
+End Sub
+
+Private Function NMDC_BlankOrNewDecisionRow(ByVal table As ListObject) As ListRow
+    If table.ListRows.Count = 1 Then
+        If Application.WorksheetFunction.CountA(table.ListRows(1).Range) = 0 Then
+            Set NMDC_BlankOrNewDecisionRow = table.ListRows(1)
+            Exit Function
+        End If
+    End If
+    Set NMDC_BlankOrNewDecisionRow = table.ListRows.Add
+End Function
+
+Private Sub NMDC_SetDecisionValue(ByVal table As ListObject, ByVal row As ListRow, ByVal headerName As String, ByVal value As Variant)
+    row.Range.Cells(1, table.ListColumns(headerName).Index).Value = value
 End Sub
