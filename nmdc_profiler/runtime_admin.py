@@ -84,15 +84,14 @@ def undo_last_approval(state_dir: Path) -> Dict[str, Any]:
     current_index = next((i for i, row in enumerate(versions) if row["run_id"] == current_run), -1)
     if current_index < 0:
         raise ValueError(f"The current approved version is not available for undo: {current_run}")
+    if current_index == 0:
+        raise ValueError("There is no previous approved version available to restore.")
 
-    previous_run = versions[current_index - 1]["run_id"] if current_index > 0 else ""
-    if previous_run:
-        _write_json_atomic(
-            approved_dir / "current.json",
-            {"run_id": previous_run, "version_path": f"versions/{previous_run}"},
-        )
-    else:
-        _write_json_atomic(approved_dir / "current.json", {"run_id": "", "version_path": ""})
+    previous_run = versions[current_index - 1]["run_id"]
+    _write_json_atomic(
+        approved_dir / "current.json",
+        {"run_id": previous_run, "version_path": f"versions/{previous_run}"},
+    )
 
     result = {
         "decision": "UNDO_APPROVAL",
