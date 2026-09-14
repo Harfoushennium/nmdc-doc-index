@@ -35,7 +35,8 @@ class OwnerFollowupTests(unittest.TestCase):
         refresh = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
         setup = (ROOT / "packaging" / "Create_NMDC_Document_Index.vbs").read_text(encoding="utf-8")
         self.assertIn("NMDC_ActivateSourceLinks table", refresh)
-        self.assertIn('table.ListColumns("Source File")', refresh)
+        self.assertIn('NMDC_ActivateSourceColumn table, "Source File"', refresh)
+        self.assertIn("Set column = table.ListColumns(columnName)", refresh)
         self.assertIn('ScreenTip:="Open source workbook"', refresh)
         self.assertIn("ACKNOWLEDGED,NO ACTION REQUIRED,NEEDS SOURCE CORRECTION,NEEDS PARSER/MAPPING FIX,HOLD FOR REVIEW", setup)
         self.assertIn("OPEN,ACKNOWLEDGED,RESOLVED,DEFERRED", setup)
@@ -84,6 +85,23 @@ class OwnerFollowupTests(unittest.TestCase):
             result = undo_last_approval(state)
             self.assertEqual(result["undone_run_id"], "RUN-B")
             self.assertEqual(result["restored_run_id"], "RUN-A")
+            current = json.loads((approved / "current.json").read_text(encoding="utf-8"))
+            self.assertEqual(current["run_id"], "RUN-A")
+
+    def test_undo_refuses_when_no_previous_approved_version_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp)
+            approved = state / "approved"
+            version = approved / "versions" / "RUN-A"
+            version.mkdir(parents=True)
+            (version / "approval.json").write_text(
+                json.dumps({"run_id": "RUN-A", "approved_at": "2026-09-01T10:00:00+00:00"}), encoding="utf-8"
+            )
+            (approved / "current.json").write_text(
+                json.dumps({"run_id": "RUN-A", "version_path": "versions/RUN-A"}), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ValueError, "no previous approved version"):
+                undo_last_approval(state)
             current = json.loads((approved / "current.json").read_text(encoding="utf-8"))
             self.assertEqual(current["run_id"], "RUN-A")
 
