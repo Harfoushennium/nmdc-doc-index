@@ -80,9 +80,18 @@ Public Function NMDC_LoadCsvToTable(ByVal csvPath As String, ByVal sheetName As 
     table.HeaderRowRange.Value2 = headers
 
     If dataCount > 0 Then
+        If table.DataBodyRange Is Nothing Then table.ListRows.Add
+        If table.DataBodyRange Is Nothing Then
+            Err.Raise vbObjectError + 321, "NMDC CSV Refresh", _
+                "Excel could not create a data row for table " & tableName & "."
+        End If
         table.DataBodyRange.Value2 = data
     Else
-        table.DataBodyRange.ClearContents
+        ' Excel can expose an empty ListObject with DataBodyRange = Nothing even
+        ' when the requested resize includes one blank row. Keep a structural row
+        ' for filters, but never dereference DataBodyRange unless it exists.
+        If table.ListRows.Count = 0 Then table.ListRows.Add
+        If Not table.DataBodyRange Is Nothing Then table.DataBodyRange.ClearContents
     End If
 
     NMDC_ApplyTypedFormatting table
