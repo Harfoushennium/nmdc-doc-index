@@ -157,14 +157,16 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn('TextToDisplay:="Open document"', text)
 
     def test_csv_refresh_keeps_identifiers_text_but_types_dates_and_numbers(self):
-        text = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
-        self.assertIn("dataTypes(index) = xlTextFormat", text)
-        self.assertIn("dataTypes(index) = xlGeneralFormat", text)
-        self.assertIn('column.DataBodyRange.NumberFormat = "dd-mmm-yyyy"', text)
-        self.assertIn('column.DataBodyRange.NumberFormat = "dd-mmm-yyyy hh:mm"', text)
-        self.assertIn('column.DataBodyRange.NumberFormat = "#,##0"', text)
-        self.assertIn('column.DataBodyRange.NumberFormat = "@"', text)
-        self.assertIn("NMDC_TryParseDate", text)
+        refresh = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
+        parser = (ROOT / "excel" / "vba" / "modNMDC_Csv.bas").read_text(encoding="utf-8")
+        self.assertIn("NMDC_ParseCsvFile", refresh)
+        self.assertIn("NMDC_FillCsvArrays", parser)
+        self.assertIn('column.DataBodyRange.NumberFormat = "dd-mmm-yyyy"', refresh)
+        self.assertIn('column.DataBodyRange.NumberFormat = "dd-mmm-yyyy hh:mm"', refresh)
+        self.assertIn('column.DataBodyRange.NumberFormat = "#,##0"', refresh)
+        self.assertIn('column.DataBodyRange.NumberFormat = "@"', refresh)
+        self.assertIn("NMDC_TryParseDate", refresh)
+        self.assertNotIn("QueryTables.Add", refresh)
 
     def test_configuration_and_error_log_write_through_named_tables(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Engine.bas").read_text(encoding="utf-8")
@@ -206,9 +208,11 @@ class ExcelUIContractTests(unittest.TestCase):
             "classification_rules.csv",
             "project_identity_overrides.csv",
             "modNMDC_Engine.bas",
+            "modNMDC_Csv.bas",
             "modNMDC_Refresh.bas",
             "modNMDC_Actions.bas",
             "modNMDC_TableActions.bas",
+            "modNMDC_Admin.bas",
             "modNMDC_Rules.bas",
             "modNMDC_Startup.bas",
         ]:
@@ -246,11 +250,14 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn('Left$(CStr(row.Range.Cells(1, actionColumn).Value), 6) = "EXCEL:"', text)
         self.assertIn('NMDC_LoadCsvToTable(csvPath, "Error Log", "ErrorLog")', text)
 
-    def test_dashboard_refresh_does_not_clear_system_data(self):
+    def test_dashboard_refresh_does_not_create_or_clear_support_sheets(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
-        self.assertIn("NMDC_ImportCsvToTemporarySheet(csvPath, temp, imported)", text)
+        self.assertIn("NMDC_ParseCsvFile(csvPath, headers, data, dataCount, columnCount)", text)
+        self.assertNotIn("Worksheets.Add", text)
+        self.assertNotIn("QueryTables.Add", text)
         self.assertNotIn('Set temp = ThisWorkbook.Worksheets("System Data")', text)
         self.assertNotIn("temp.Cells.ClearContents", text)
+        self.assertNotIn("temp.Delete", text)
 
     def test_workbook_spec_states_excel_only_and_staged_approval(self):
         text = (ROOT / "excel" / "WORKBOOK_UI_SPEC.md").read_text(encoding="utf-8")
