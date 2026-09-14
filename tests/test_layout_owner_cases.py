@@ -20,9 +20,14 @@ class OwnerLayoutCasesTests(unittest.TestCase):
         self.assertTrue(source.exists(), source)
         model = read_sheet_model(source, ROOT, "Setup Plans & Anchor Patterns")
         layout, warnings = discover_layout(model)
+        header_cells = [
+            (row, col, value)
+            for (row, col), value in sorted(model.cells.items())
+            if row <= 30 and str(value).strip()
+        ][:120]
         self.assertIsNotNone(
             layout,
-            f"2035 Setup Plans should match the conservative engineering-header fallback; warnings={warnings}",
+            f"2035 Setup Plans should match the conservative engineering-header fallback; warnings={warnings}; header_cells={header_cells}",
         )
 
     def test_layout_review_flag_explains_missing_header(self):
