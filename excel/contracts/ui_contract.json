@@ -32,6 +32,11 @@
     "View Log": {"command": "export-excel", "target_sheet": "Error Log"},
     "Help": {"command": "local-vba", "target_sheet": "Help"}
   },
+  "secondary_controls": {
+    "Save Review Decisions": {"command": "save-review-decisions", "source_table": "ReviewFlags"},
+    "Undo Last Approval": {"command": "undo", "restores_previous_approved_version": true},
+    "Reset All Records": {"command": "reset", "preserves_source_data": true, "preserves_configuration": true, "preserves_audit_history": true}
+  },
   "exchange_files": [
     "dashboard.csv",
     "master_documents.csv",
@@ -78,6 +83,9 @@
   "approval_binding_rule": "Approve only the exact pending run ID that was successfully refreshed, displayed, and reviewed in Excel.",
   "stale_review_rule": "If exchange export or refresh fails, do not open or announce an older review table as current.",
   "identifier_preservation_rule": "Import exchange CSV fields as text unless the engine contract explicitly declares a non-identifier typed field.",
+  "source_file_hyperlink_rule": "Every table column that identifies a source workbook must be converted to a clickable Excel hyperlink resolved against the selected Data Folder.",
+  "user_input_rule": "Categorical user inputs must use Excel dropdown lists; only explanatory comment/note fields remain free text.",
+  "review_flag_workflow_rule": "Review Flags decisions are selected from dropdowns, optionally explained in User Comment, assigned a Resolution Status, and explicitly saved to the staged-run audit trail.",
   "wrong_data_context": [
     "run_id",
     "source_file",
