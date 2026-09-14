@@ -148,16 +148,25 @@ End Function
 
 Public Function NMDC_ConfigValue(ByVal keyName As String) As String
     On Error GoTo Handler
+
     Dim ws As Worksheet
-    Dim hit As Range
+    Dim table As ListObject
+    Dim row As ListRow
+    Dim settingColumn As Long
+    Dim valueColumn As Long
 
     Set ws = ThisWorkbook.Worksheets("Configuration")
-    Set hit = ws.Columns("A").Find(What:=keyName, LookIn:=xlValues, LookAt:=xlWhole, MatchCase:=False)
-    If Not hit Is Nothing Then
-        NMDC_ConfigValue = CStr(hit.Offset(0, 1).Value)
-    Else
-        NMDC_ConfigValue = ""
-    End If
+    Set table = ws.ListObjects("Configuration")
+    settingColumn = table.ListColumns("Setting").Index
+    valueColumn = table.ListColumns("Current value").Index
+
+    For Each row In table.ListRows
+        If StrComp(Trim$(CStr(row.Range.Cells(1, settingColumn).Value)), keyName, vbTextCompare) = 0 Then
+            NMDC_ConfigValue = CStr(row.Range.Cells(1, valueColumn).Value)
+            Exit Function
+        End If
+    Next row
+    NMDC_ConfigValue = ""
     Exit Function
 Handler:
     NMDC_ConfigValue = ""
@@ -165,19 +174,28 @@ End Function
 
 Public Sub NMDC_SetConfigValue(ByVal keyName As String, ByVal value As String)
     On Error GoTo Handler
+
     Dim ws As Worksheet
-    Dim hit As Range
-    Dim nextRow As Long
+    Dim table As ListObject
+    Dim row As ListRow
+    Dim settingColumn As Long
+    Dim valueColumn As Long
 
     Set ws = ThisWorkbook.Worksheets("Configuration")
-    Set hit = ws.Columns("A").Find(What:=keyName, LookIn:=xlValues, LookAt:=xlWhole, MatchCase:=False)
-    If hit Is Nothing Then
-        nextRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row + 1
-        ws.Cells(nextRow, "A").Value = keyName
-        ws.Cells(nextRow, "B").Value = value
-    Else
-        hit.Offset(0, 1).Value = value
-    End If
+    Set table = ws.ListObjects("Configuration")
+    settingColumn = table.ListColumns("Setting").Index
+    valueColumn = table.ListColumns("Current value").Index
+
+    For Each row In table.ListRows
+        If StrComp(Trim$(CStr(row.Range.Cells(1, settingColumn).Value)), keyName, vbTextCompare) = 0 Then
+            row.Range.Cells(1, valueColumn).Value = value
+            Exit Sub
+        End If
+    Next row
+
+    Set row = NMDC_BlankOrNewTableRow(table)
+    row.Range.Cells(1, settingColumn).Value = keyName
+    row.Range.Cells(1, valueColumn).Value = value
     Exit Sub
 Handler:
     NMDC_LogError "CONFIG_WRITE_ERROR", "Excel could not save the configuration value.", Err.Number & " - " & Err.Description
@@ -185,23 +203,40 @@ End Sub
 
 Public Sub NMDC_LogError(ByVal code As String, ByVal friendlyMessage As String, ByVal technicalDetail As String)
     On Error Resume Next
+
     Dim ws As Worksheet
-    Dim nextRow As Long
+    Dim table As ListObject
+    Dim row As ListRow
 
     Set ws = ThisWorkbook.Worksheets("Error Log")
-    nextRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row + 1
-    If nextRow < 2 Then nextRow = 2
+    Set table = ws.ListObjects("ErrorLog")
+    Set row = NMDC_BlankOrNewTableRow(table)
 
-    ' Keep the same ten-column layout used by engine-exported errors.
-    ' The EXCEL: prefix lets refresh logic preserve local VBA errors while replacing engine rows.
-    ws.Cells(nextRow, 1).Value = Now
-    ws.Cells(nextRow, 2).Value = "ERROR"
-    ws.Cells(nextRow, 3).Value = "EXCEL:" & code
-    ws.Cells(nextRow, 4).Value = friendlyMessage
-    ws.Cells(nextRow, 5).Value = "Review the message and use Report Requirement / Problem if support is needed."
-    ws.Cells(nextRow, 6).Value = technicalDetail
-    ws.Cells(nextRow, 7).Value = ""
-    ws.Cells(nextRow, 8).Value = ""
-    ws.Cells(nextRow, 9).Value = ""
-    ws.Cells(nextRow, 10).Value = ""
+    NMDC_SetTableValue table, row, "Date/Time", Now
+    NMDC_SetTableValue table, row, "Severity", "ERROR"
+    NMDC_SetTableValue table, row, "Action", "EXCEL:" & code
+    NMDC_SetTableValue table, row, "Plain-English Error", friendlyMessage
+    NMDC_SetTableValue table, row, "Recommended Action", "Review the message and use Report Requirement / Problem if support is needed."
+    NMDC_SetTableValue table, row, "Technical Detail", technicalDetail
+    NMDC_SetTableValue table, row, "Run ID", ""
+    NMDC_SetTableValue table, row, "Source File", ""
+    NMDC_SetTableValue table, row, "Worksheet", ""
+    NMDC_SetTableValue table, row, "Source Row/Cell", ""
+    table.ListColumns("Date/Time").DataBodyRange.NumberFormat = "dd-mmm-yyyy hh:mm"
+End Sub
+
+Private Function NMDC_BlankOrNewTableRow(ByVal table As ListObject) As ListRow
+    If table.ListRows.Count = 1 Then
+        If Application.WorksheetFunction.CountA(table.ListRows(1).Range) = 0 Then
+            Set NMDC_BlankOrNewTableRow = table.ListRows(1)
+            Exit Function
+        End If
+    End If
+    Set NMDC_BlankOrNewTableRow = table.ListRows.Add
+End Function
+
+Private Sub NMDC_SetTableValue(ByVal table As ListObject, ByVal row As ListRow, ByVal headerName As String, ByVal value As Variant)
+    Dim columnIndex As Long
+    columnIndex = table.ListColumns(headerName).Index
+    row.Range.Cells(1, columnIndex).Value = value
 End Sub
