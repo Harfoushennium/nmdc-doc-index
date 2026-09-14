@@ -1,6 +1,10 @@
 Option Explicit
 
 Const xlOpenXMLWorkbookMacroEnabled = 52
+Const xlSrcRange = 1
+Const xlYes = 1
+Const xlUp = -4162
+Const xlToLeft = -4159
 Const msoShapeRoundedRectangle = 5
 
 Dim fso, shell, packageRoot, sourceWorkbook, outputWorkbook, excel, workbook
@@ -30,6 +34,7 @@ RequireFile fso.BuildPath(configFolder, "project_identity_overrides.csv"), "The 
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Engine.bas"), "A required Excel action module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Refresh.bas"), "A required Excel action module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Actions.bas"), "A required Excel action module is missing."
+RequireFile fso.BuildPath(modulesFolder, "modNMDC_TableActions.bas"), "A required Excel table-action module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Rules.bas"), "A required Excel action module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Startup.bas"), "A required Excel action module is missing."
 If Not fso.FolderExists(runtimeFolder) Then fso.CreateFolder runtimeFolder
@@ -77,14 +82,21 @@ If Err.Number <> 0 Then
     WScript.Quit 6
 End If
 
+EnsureNamedTables workbook
+If Err.Number <> 0 Then
+    ShowFailure "Excel could not validate the required named tables."
+    WScript.Quit 7
+End If
+
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Engine.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Refresh.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Actions.bas")
+ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_TableActions.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Rules.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Startup.bas")
 If Err.Number <> 0 Then
     ShowFailure "Excel could not attach the production actions."
-    WScript.Quit 7
+    WScript.Quit 8
 End If
 
 AttachHomeButtons workbook
@@ -119,21 +131,86 @@ Sub RequireFile(ByVal filePath, ByVal friendlyMessage)
     End If
 End Sub
 
+Sub EnsureNamedTables(ByVal wb)
+    EnsureTable wb, "Master Documents", "MasterDocuments", 5, Empty
+    EnsureTable wb, "Revisions", "RevisionRegister", 5, Empty
+    EnsureTable wb, "Transactions", "EventRegister", 5, Empty
+    EnsureTable wb, "Pending Update", "PendingUpdate", 5, Array("Change Type", "Record Identity", "Project No.", "Document No.", "Revision", "Event Type", "Source File", "Plain-English Summary", "Review Required")
+    EnsureTable wb, "Review Flags", "ReviewFlags", 5, Empty
+    EnsureTable wb, "User Decisions", "UserDecisionLog", 11, Empty
+    EnsureTable wb, "Configuration", "Configuration", 5, Empty
+    EnsureTable wb, "Rules & Mappings", "ClassificationRules", 5, Empty
+    EnsureTable wb, "Update History", "UpdateHistory", 5, Empty
+    EnsureTable wb, "Error Log", "ErrorLog", 5, Array("Date/Time", "Severity", "Action", "Plain-English Error", "Recommended Action", "Technical Detail", "Run ID", "Source File", "Worksheet", "Source Row/Cell")
+    EnsureTable wb, "System Data", "BaselineCounts", 5, Empty
+    EnsureTable wb, "System Data", "SourceInventory", 21, Empty
+End Sub
+
+Sub EnsureTable(ByVal wb, ByVal sheetName, ByVal tableName, ByVal headerRow, ByVal expectedHeaders)
+    Dim ws, table, candidate, lastCol, lastRow, index, headerCount, sourceRange
+    Set ws = wb.Worksheets(sheetName)
+    Set table = Nothing
+
+    On Error Resume Next
+    Set table = ws.ListObjects(tableName)
+    On Error GoTo 0
+
+    If table Is Nothing Then
+        For Each candidate In ws.ListObjects
+            If candidate.HeaderRowRange.Row = headerRow Then
+                Set table = candidate
+                Exit For
+            End If
+        Next
+    End If
+
+    If IsArray(expectedHeaders) Then
+        headerCount = UBound(expectedHeaders) - LBound(expectedHeaders) + 1
+        ws.Range(ws.Cells(headerRow, 1), ws.Cells(headerRow + 2, headerCount)).UnMerge
+        For index = LBound(expectedHeaders) To UBound(expectedHeaders)
+            ws.Cells(headerRow, index - LBound(expectedHeaders) + 1).Value = expectedHeaders(index)
+        Next
+        lastCol = headerCount
+    Else
+        lastCol = ws.Cells(headerRow, ws.Columns.Count).End(xlToLeft).Column
+    End If
+
+    If lastCol < 1 Then Err.Raise vbObjectError + 110, "NMDC Setup", "No table headers found on " & sheetName
+
+    If table Is Nothing Then
+        lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+        If lastRow < headerRow + 1 Then lastRow = headerRow + 1
+        Set sourceRange = ws.Range(ws.Cells(headerRow, 1), ws.Cells(lastRow, lastCol))
+        Set table = ws.ListObjects.Add(xlSrcRange, sourceRange, , xlYes)
+        table.Name = tableName
+        table.TableStyle = "TableStyleMedium2"
+    ElseIf StrComp(table.Name, tableName, 1) <> 0 Then
+        table.Name = tableName
+    End If
+
+    If table.ListRows.Count = 0 Then table.ListRows.Add
+End Sub
+
 Sub SetWorkbookConfig(ByVal wb, ByVal keyName, ByVal configValue)
-    Dim ws, lastRow, rowIndex, found
+    Dim ws, table, row, settingColumn, valueColumn, found
     Set ws = wb.Worksheets("Configuration")
-    lastRow = ws.Cells(ws.Rows.Count, 1).End(-4162).Row
+    Set table = ws.ListObjects("Configuration")
+    settingColumn = table.ListColumns("Setting").Index
+    valueColumn = table.ListColumns("Current value").Index
     found = False
-    For rowIndex = 1 To lastRow
-        If StrComp(Trim(CStr(ws.Cells(rowIndex, 1).Value)), keyName, 1) = 0 Then
-            ws.Cells(rowIndex, 2).Value = configValue
+
+    For Each row In table.ListRows
+        If StrComp(Trim(CStr(row.Range.Cells(1, settingColumn).Value)), keyName, 1) = 0 Then
+            row.Range.Cells(1, valueColumn).Value = configValue
             found = True
             Exit For
         End If
     Next
+
     If Not found Then
-        ws.Cells(lastRow + 1, 1).Value = keyName
-        ws.Cells(lastRow + 1, 2).Value = configValue
+        Set row = table.ListRows.Add
+        row.Range.Cells(1, settingColumn).Value = keyName
+        row.Range.Cells(1, valueColumn).Value = configValue
     End If
 End Sub
 
@@ -147,8 +224,8 @@ Sub AttachHomeButtons(ByVal wb)
                    "A24:D25", "E24:H25", "I24:L25")
     macros = Array("NMDC_UpdateChangedFiles", "NMDC_FullRescan", "NMDC_ReviewPendingUpdate", _
                    "NMDC_ApproveUpdate", "NMDC_HoldUpdate", "NMDC_RejectUpdate", _
-                   "NMDC_SelectDataFolder", "NMDC_ReviewFlags", "NMDC_FlagWrongData", _
-                   "NMDC_OpenConfiguration", "NMDC_ReportRequirement", "NMDC_ViewLog", _
+                   "NMDC_SelectDataFolder", "NMDC_ReviewFlags", "NMDC_FlagWrongDataFromTable", _
+                   "NMDC_OpenConfiguration", "NMDC_ReportRequirementFromTable", "NMDC_ViewLog", _
                    "NMDC_RefreshDashboard", "NMDC_OpenRulesMappings", "NMDC_OpenHelp")
 
     For index = 0 To UBound(ranges)
