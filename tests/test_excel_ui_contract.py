@@ -135,15 +135,47 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertNotIn("Dir$(dataFolder", text)
         self.assertIn("NMDC_FolderExists(dataFolder)", text)
 
-    def test_csv_refresh_preserves_identifiers_as_text(self):
+    def test_csv_refresh_targets_exact_named_tables_and_preserves_layout(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
-        self.assertIn(".TextFileColumnDataTypes = NMDC_TextColumnTypes(csvPath)", text)
-        self.assertIn("dataTypes(index) = xlTextFormat", text)
-        self.assertIn("revisions such as 00", text)
-        self.assertIn("NMDC_ActivateDocumentLinks ws", text)
+        expected = {
+            "master_documents.csv": ("Master Documents", "MasterDocuments"),
+            "revisions.csv": ("Revisions", "RevisionRegister"),
+            "events.csv": ("Transactions", "EventRegister"),
+            "pending_update.csv": ("Pending Update", "PendingUpdate"),
+            "flags.csv": ("Review Flags", "ReviewFlags"),
+            "history.csv": ("Update History", "UpdateHistory"),
+        }
+        for csv_name, (sheet, table) in expected.items():
+            self.assertIn(f'"\\{csv_name}", "{sheet}", "{table}"', text)
+        self.assertIn('ws.ListObjects(tableName)', text)
+        self.assertIn("table.Resize targetRange", text)
+        self.assertIn("If tableRows < 1 Then tableRows = 1", text)
+        self.assertNotIn("ws.Cells.ClearContents", text)
+        self.assertNotIn("temp.Cells.ClearContents", text)
+        self.assertNotIn('Destination:=ws.Range("A1")', text)
+        self.assertIn("NMDC_ActivateDocumentLinks table", text)
         self.assertIn('TextToDisplay:="Open document"', text)
 
-    def test_rules_are_validated_and_saved_before_staging(self):
+    def test_csv_refresh_keeps_identifiers_text_but_types_dates_and_numbers(self):
+        text = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
+        self.assertIn("dataTypes(index) = xlTextFormat", text)
+        self.assertIn("dataTypes(index) = xlGeneralFormat", text)
+        self.assertIn('column.DataBodyRange.NumberFormat = "dd-mmm-yyyy"', text)
+        self.assertIn('column.DataBodyRange.NumberFormat = "dd-mmm-yyyy hh:mm"', text)
+        self.assertIn('column.DataBodyRange.NumberFormat = "#,##0"', text)
+        self.assertIn('column.DataBodyRange.NumberFormat = "@"', text)
+        self.assertIn("NMDC_TryParseDate", text)
+
+    def test_configuration_and_error_log_write_through_named_tables(self):
+        text = (ROOT / "excel" / "vba" / "modNMDC_Engine.bas").read_text(encoding="utf-8")
+        self.assertIn('ws.ListObjects("Configuration")', text)
+        self.assertIn('table.ListColumns("Setting")', text)
+        self.assertIn('table.ListColumns("Current value")', text)
+        self.assertIn('ws.ListObjects("ErrorLog")', text)
+        self.assertIn('NMDC_SetTableValue table, row, "Date/Time", Now', text)
+        self.assertNotIn('ws.Cells(nextRow, 1).Value = Now', text)
+
+    def test_rules_are_validated_saved_and_logged_through_named_tables(self):
         actions = (ROOT / "excel" / "vba" / "modNMDC_Actions.bas").read_text(encoding="utf-8")
         rules = (ROOT / "excel" / "vba" / "modNMDC_Rules.bas").read_text(encoding="utf-8")
         self.assertIn("If Not NMDC_PrepareRulesForStage() Then Exit Sub", actions)
@@ -152,8 +184,19 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn('NMDC_SetConfigValue "Configuration Version"', rules)
         self.assertIn("fso.FolderExists(folderPath)", rules)
         self.assertNotIn("Dir$(folderPath", rules)
+        self.assertIn('Set table = ws.ListObjects("UserDecisionLog")', rules)
+        self.assertIn('NMDC_SetDecisionValue table, row, "Decision Type", "CONFIGURATION CHANGE"', rules)
 
-    def test_windows_setup_preflights_package_and_writes_absolute_paths(self):
+    def test_table_aware_wrong_data_capture_uses_actual_listobject_header(self):
+        text = (ROOT / "excel" / "vba" / "modNMDC_TableActions.bas").read_text(encoding="utf-8")
+        self.assertIn("Public Sub NMDC_FlagWrongDataFromTable", text)
+        self.assertIn("Public Sub NMDC_ReportRequirementFromTable", text)
+        self.assertIn("For Each table In ActiveSheet.ListObjects", text)
+        self.assertIn("table.HeaderRowRange.Cells", text)
+        self.assertIn("table.ListColumns(headerName).Index", text)
+        self.assertNotIn("ws.Rows(1).Find", text)
+
+    def test_windows_setup_preflights_package_writes_paths_and_guarantees_tables(self):
         text = (ROOT / "packaging" / "Create_NMDC_Document_Index.vbs").read_text(encoding="utf-8")
         for required in [
             "engine\\nmdc_index_engine.exe",
@@ -162,6 +205,7 @@ class ExcelUIContractTests(unittest.TestCase):
             "modNMDC_Engine.bas",
             "modNMDC_Refresh.bas",
             "modNMDC_Actions.bas",
+            "modNMDC_TableActions.bas",
             "modNMDC_Rules.bas",
             "modNMDC_Startup.bas",
         ]:
@@ -170,13 +214,40 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn('SetWorkbookConfig workbook, "Runtime Folder", runtimeFolder', text)
         self.assertIn('SetWorkbookConfig workbook, "Configuration Folder", configFolder', text)
         self.assertIn("If Not fso.FolderExists(runtimeFolder) Then fso.CreateFolder runtimeFolder", text)
+        self.assertIn("EnsureNamedTables workbook", text)
+        expected_tables = [
+            "MasterDocuments",
+            "RevisionRegister",
+            "EventRegister",
+            "PendingUpdate",
+            "ReviewFlags",
+            "UserDecisionLog",
+            "Configuration",
+            "ClassificationRules",
+            "UpdateHistory",
+            "ErrorLog",
+            "BaselineCounts",
+            "SourceInventory",
+        ]
+        for table_name in expected_tables:
+            self.assertIn(f'"{table_name}"', text)
+        self.assertIn("If table.ListRows.Count = 0 Then table.ListRows.Add", text)
+        self.assertIn('ws.ListObjects("Configuration")', text)
+        self.assertIn('"NMDC_FlagWrongDataFromTable"', text)
+        self.assertIn('"NMDC_ReportRequirementFromTable"', text)
 
     def test_error_refresh_preserves_excel_local_entries(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
         self.assertIn("NMDC_LoadErrorCsvPreserveLocal", text)
-        self.assertIn('Left$(CStr(ws.Cells(r, 3).Value), 6) = "EXCEL:"', text)
-        self.assertNotIn('NMDC_LoadCsvToSheet NMDC_ExchangePath() & "\\errors.csv", "Error Log"', text)
-        self.assertIn("ReDim rowValues(1 To 10)", text)
+        self.assertIn('table.ListColumns("Action").Index', text)
+        self.assertIn('Left$(CStr(row.Range.Cells(1, actionColumn).Value), 6) = "EXCEL:"', text)
+        self.assertIn('NMDC_LoadCsvToTable(csvPath, "Error Log", "ErrorLog")', text)
+
+    def test_dashboard_refresh_does_not_clear_system_data(self):
+        text = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
+        self.assertIn("NMDC_ImportCsvToTemporarySheet(csvPath, temp, imported)", text)
+        self.assertNotIn('Set temp = ThisWorkbook.Worksheets("System Data")', text)
+        self.assertNotIn("temp.Cells.ClearContents", text)
 
     def test_workbook_spec_states_excel_only_and_staged_approval(self):
         text = (ROOT / "excel" / "WORKBOOK_UI_SPEC.md").read_text(encoding="utf-8")
