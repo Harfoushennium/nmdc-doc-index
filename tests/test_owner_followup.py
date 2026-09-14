@@ -31,6 +31,13 @@ class OwnerFollowupTests(unittest.TestCase):
         self.assertIn('fieldText = fieldText & " "', text)
         self.assertNotIn("QueryTable", text)
 
+    def test_empty_csv_tables_keep_structure_without_dereferencing_nothing(self):
+        refresh = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
+        self.assertIn("If table.ListRows.Count = 0 Then table.ListRows.Add", refresh)
+        self.assertIn("If Not table.DataBodyRange Is Nothing Then table.DataBodyRange.ClearContents", refresh)
+        self.assertIn("If table.DataBodyRange Is Nothing Then table.ListRows.Add", refresh)
+        self.assertNotIn("Else\n        table.DataBodyRange.ClearContents", refresh)
+
     def test_source_file_hyperlinks_and_review_dropdowns_are_applied(self):
         refresh = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
         setup = (ROOT / "packaging" / "Create_NMDC_Document_Index.vbs").read_text(encoding="utf-8")
