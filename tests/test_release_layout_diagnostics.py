@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 
 from nmdc_profiler.extractor import discover_layout, read_sheet_model, _looks_identifier
+from nmdc_profiler.full_extractor import resolve_sheet_name
 from nmdc_profiler.layout_compat import install_layout_compatibility
-from nmdc_profiler.core import norm_text
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -45,27 +45,29 @@ class ReleaseLayoutDiagnostics(unittest.TestCase):
 
     def test_print_known_review_layouts(self):
         payload = []
-        for source_rel, sheet in CASES:
+        for source_rel, requested_sheet in CASES:
             source = ROOT / source_rel
             self.assertTrue(source.exists(), source)
-            model = read_sheet_model(source, ROOT, sheet)
+            actual_sheet = resolve_sheet_name(source, requested_sheet)
+            model = read_sheet_model(source, ROOT, actual_sheet)
             layout, warnings = discover_layout(model)
             nonempty_rows = sorted({row for row, _col in model.cells})
             first_rows = [
                 {"row": row, "text": row_summary(model, row)}
-                for row in nonempty_rows[:20]
+                for row in nonempty_rows[:24]
             ]
             identifier_samples = []
             for (row, col), value in sorted(model.cells.items()):
                 text = str(value or "").strip()
                 if _looks_identifier(text):
                     identifier_samples.append({"row": row, "col": col, "value": text[:120]})
-                if len(identifier_samples) >= 12:
+                if len(identifier_samples) >= 16:
                     break
             payload.append(
                 {
                     "source": source_rel,
-                    "sheet": sheet,
+                    "requested_sheet": requested_sheet,
+                    "actual_sheet": actual_sheet,
                     "max_row": model.max_row,
                     "max_col": model.max_col,
                     "layout": None if layout is None else {
