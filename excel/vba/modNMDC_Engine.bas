@@ -99,10 +99,16 @@ Public Function NMDC_RunEngine(ByVal commandName As String, Optional ByVal extra
     Dim exchangePath As String
     Dim cmd As String
     Dim shell As Object
-    Dim process As Object
+    Dim fso As Object
     Dim exitCode As Long
     Dim startedAt As Date
     Dim tick As Long
+    Dim runToken As String
+    Dim launcherPath As String
+    Dim completionPath As String
+    Dim stdoutPath As String
+    Dim stderrPath As String
+    Dim engineDetail As String
 
     enginePath = NMDC_EnginePath()
     runtimePath = NMDC_RuntimePath()
@@ -130,28 +136,49 @@ Public Function NMDC_RunEngine(ByVal commandName As String, Optional ByVal extra
         Exit Function
     End If
 
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FolderExists(runtimePath) Then fso.CreateFolder runtimePath
+
     cmd = NMDC_Quote(enginePath) & " " & commandName & _
           " --state-dir " & NMDC_Quote(runtimePath) & _
           " --exchange-dir " & NMDC_Quote(exchangePath) & _
           " --config-dir " & NMDC_Quote(NMDC_ConfigPath())
     If Len(Trim$(extraArgs)) > 0 Then cmd = cmd & " " & extraArgs
 
+    runToken = Format$(Now, "yyyymmdd_hhnnss") & "_" & CStr(CLng(Timer * 1000))
+    launcherPath = fso.BuildPath(runtimePath, "nmdc_engine_" & runToken & ".cmd")
+    completionPath = fso.BuildPath(runtimePath, "nmdc_engine_" & runToken & ".done")
+    stdoutPath = fso.BuildPath(runtimePath, "nmdc_engine_" & runToken & ".out.txt")
+    stderrPath = fso.BuildPath(runtimePath, "nmdc_engine_" & runToken & ".err.txt")
+
+    NMDC_WriteHiddenLauncher launcherPath, completionPath, stdoutPath, stderrPath, cmd
+
     Set shell = CreateObject("WScript.Shell")
     startedAt = Now
     tick = 0
     Application.Cursor = xlWait
 
-    ' Exec is intentionally asynchronous. Excel stays responsive while the
-    ' packaged engine works, and the status bar shows a live activity bar.
-    Set process = shell.Exec(cmd)
-    Do While process.Status = 0
+    ' Run the generated command script hidden and return immediately. Excel then
+    ' polls the completion marker, so the UI stays responsive with no black console window.
+    shell.Run NMDC_Quote(launcherPath), 0, False
+
+    Do While Not fso.FileExists(completionPath)
         tick = tick + 1
         NMDC_ShowEngineProgress commandName, startedAt, tick
         DoEvents
         Sleep 140
+        If DateDiff("s", startedAt, Now) > 14400 Then
+            Err.Raise vbObjectError + 904, "NMDC Engine", "The engine did not finish within four hours."
+        End If
     Loop
 
-    exitCode = process.ExitCode
+    exitCode = CLng(Val(Trim$(NMDC_ReadTextFile(completionPath))))
+    If exitCode <> 0 Then
+        engineDetail = Trim$(NMDC_ReadTextFile(stderrPath))
+        If Len(engineDetail) = 0 Then engineDetail = Trim$(NMDC_ReadTextFile(stdoutPath))
+        If Len(engineDetail) > 4000 Then engineDetail = Left$(engineDetail, 4000)
+    End If
+
     Application.Cursor = xlDefault
     Application.StatusBar = False
     NMDC_RunEngine = exitCode
@@ -159,18 +186,68 @@ Public Function NMDC_RunEngine(ByVal commandName As String, Optional ByVal extra
     If exitCode <> 0 Then
         NMDC_LogError "ENGINE_EXIT_CODE", _
             "The requested action did not complete successfully.", _
-            "Engine exit code: " & CStr(exitCode) & ". Command: " & commandName
+            "Engine exit code: " & CStr(exitCode) & ". Command: " & commandName & _
+            IIf(Len(engineDetail) > 0, ". Engine message: " & engineDetail, "")
     End If
+
+    NMDC_DeleteIfExists launcherPath
+    NMDC_DeleteIfExists completionPath
+    NMDC_DeleteIfExists stdoutPath
+    NMDC_DeleteIfExists stderrPath
     Exit Function
 
 Handler:
     Application.Cursor = xlDefault
     Application.StatusBar = False
+    NMDC_DeleteIfExists launcherPath
+    NMDC_DeleteIfExists completionPath
+    NMDC_DeleteIfExists stdoutPath
+    NMDC_DeleteIfExists stderrPath
     NMDC_LogError "VBA_ENGINE_LAUNCH_ERROR", _
-        "Excel could not start the NMDC Index engine.", _
+        "Excel could not start or monitor the NMDC Index engine.", _
         Err.Number & " - " & Err.Description & "; " & NMDC_PathDiagnostics()
     NMDC_RunEngine = 9002
 End Function
+
+Private Sub NMDC_WriteHiddenLauncher(ByVal launcherPath As String, ByVal completionPath As String, _
+                                     ByVal stdoutPath As String, ByVal stderrPath As String, _
+                                     ByVal commandLine As String)
+    Dim fso As Object
+    Dim file As Object
+    Dim safeCommand As String
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    safeCommand = Replace(commandLine, "%", "%%")
+    Set file = fso.OpenTextFile(launcherPath, 2, True)
+    file.WriteLine "@echo off"
+    file.WriteLine safeCommand & " 1> " & NMDC_Quote(stdoutPath) & " 2> " & NMDC_Quote(stderrPath)
+    file.WriteLine "set ""NMDC_EXIT=%ERRORLEVEL%"""
+    file.WriteLine "> " & NMDC_Quote(completionPath) & " echo %NMDC_EXIT%"
+    file.WriteLine "exit /b %NMDC_EXIT%"
+    file.Close
+End Sub
+
+Private Function NMDC_ReadTextFile(ByVal filePath As String) As String
+    On Error GoTo Missing
+    Dim fso As Object
+    Dim file As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FileExists(filePath) Then Exit Function
+    Set file = fso.OpenTextFile(filePath, 1, False)
+    NMDC_ReadTextFile = file.ReadAll
+    file.Close
+    Exit Function
+Missing:
+    NMDC_ReadTextFile = ""
+End Function
+
+Private Sub NMDC_DeleteIfExists(ByVal filePath As String)
+    On Error Resume Next
+    If Len(filePath) = 0 Then Exit Sub
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If fso.FileExists(filePath) Then fso.DeleteFile filePath, True
+End Sub
 
 Private Sub NMDC_ShowEngineProgress(ByVal commandName As String, ByVal startedAt As Date, ByVal tick As Long)
     Dim phaseText As String
