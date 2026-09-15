@@ -1,6 +1,12 @@
 Attribute VB_Name = "modNMDC_Engine"
 Option Explicit
 
+#If VBA7 Then
+Private Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As LongPtr)
+#Else
+Private Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
+#End If
+
 Private Const ENGINE_RELATIVE_PATH As String = "engine\nmdc_index_engine.exe"
 Private Const RUNTIME_RELATIVE_PATH As String = "runtime"
 Private Const EXCHANGE_RELATIVE_PATH As String = "excel_exchange"
@@ -93,7 +99,10 @@ Public Function NMDC_RunEngine(ByVal commandName As String, Optional ByVal extra
     Dim exchangePath As String
     Dim cmd As String
     Dim shell As Object
+    Dim process As Object
     Dim exitCode As Long
+    Dim startedAt As Date
+    Dim tick As Long
 
     enginePath = NMDC_EnginePath()
     runtimePath = NMDC_RuntimePath()
@@ -128,8 +137,23 @@ Public Function NMDC_RunEngine(ByVal commandName As String, Optional ByVal extra
     If Len(Trim$(extraArgs)) > 0 Then cmd = cmd & " " & extraArgs
 
     Set shell = CreateObject("WScript.Shell")
-    ' WindowStyle=0 hides the console. WaitOnReturn=True keeps Excel informed of success/failure.
-    exitCode = shell.Run(cmd, 0, True)
+    startedAt = Now
+    tick = 0
+    Application.Cursor = xlWait
+
+    ' Exec is intentionally asynchronous. Excel stays responsive while the
+    ' packaged engine works, and the status bar shows a live activity bar.
+    Set process = shell.Exec(cmd)
+    Do While process.Status = 0
+        tick = tick + 1
+        NMDC_ShowEngineProgress commandName, startedAt, tick
+        DoEvents
+        Sleep 140
+    Loop
+
+    exitCode = process.ExitCode
+    Application.Cursor = xlDefault
+    Application.StatusBar = False
     NMDC_RunEngine = exitCode
 
     If exitCode <> 0 Then
@@ -140,11 +164,49 @@ Public Function NMDC_RunEngine(ByVal commandName As String, Optional ByVal extra
     Exit Function
 
 Handler:
+    Application.Cursor = xlDefault
+    Application.StatusBar = False
     NMDC_LogError "VBA_ENGINE_LAUNCH_ERROR", _
         "Excel could not start the NMDC Index engine.", _
         Err.Number & " - " & Err.Description & "; " & NMDC_PathDiagnostics()
     NMDC_RunEngine = 9002
 End Function
+
+Private Sub NMDC_ShowEngineProgress(ByVal commandName As String, ByVal startedAt As Date, ByVal tick As Long)
+    Dim phaseText As String
+    Dim elapsedSeconds As Long
+    Dim barWidth As Long
+    Dim blockWidth As Long
+    Dim position As Long
+    Dim progressBar As String
+
+    Select Case LCase$(commandName)
+        Case "stage"
+            phaseText = "Scanning and analysing source workbooks"
+        Case "export-excel"
+            phaseText = "Preparing Excel review tables"
+        Case "approve"
+            phaseText = "Approving staged update"
+        Case "hold"
+            phaseText = "Placing staged update on hold"
+        Case "reject"
+            phaseText = "Rejecting staged update"
+        Case "user-flag"
+            phaseText = "Saving user review flag"
+        Case Else
+            phaseText = "Running " & commandName
+    End Select
+
+    barWidth = 22
+    blockWidth = 5
+    position = (tick Mod (barWidth - blockWidth + 1)) + 1
+    progressBar = "[" & String$(position - 1, ChrW(183)) & String$(blockWidth, ChrW(9632)) & _
+                  String$(barWidth - blockWidth - position + 1, ChrW(183)) & "]"
+    elapsedSeconds = DateDiff("s", startedAt, Now)
+
+    Application.StatusBar = "NMDC Document Index - " & phaseText & " " & progressBar & _
+                            "  Elapsed: " & CStr(elapsedSeconds) & " s"
+End Sub
 
 Public Function NMDC_ConfigValue(ByVal keyName As String) As String
     On Error GoTo Handler
