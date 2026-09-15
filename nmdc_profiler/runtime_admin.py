@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import stat
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,6 +38,41 @@ def _append_history(state_dir: Path, payload: Dict[str, Any]) -> None:
         handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str) + "\n")
 
 
+def _make_writable_and_retry(function: Any, path: str, _exc_info: Any) -> None:
+    """Allow rmtree to remove read-only files commonly produced by sync tools on Windows."""
+    os.chmod(path, stat.S_IWRITE | stat.S_IREAD)
+    function(path)
+
+
+def _remove_path_with_retries(target: Path, attempts: int = 8) -> None:
+    """Remove one runtime area, tolerating short Windows/OneDrive locks."""
+    last_error: OSError | None = None
+    for attempt in range(attempts):
+        try:
+            if not target.exists():
+                return
+            if target.is_dir():
+                shutil.rmtree(target, onerror=_make_writable_and_retry)
+            else:
+                try:
+                    os.chmod(target, stat.S_IWRITE | stat.S_IREAD)
+                except OSError:
+                    pass
+                target.unlink()
+            return
+        except OSError as exc:
+            last_error = exc
+            if attempt + 1 < attempts:
+                time.sleep(0.25 * (attempt + 1))
+
+    detail = f"{last_error.__class__.__name__}: {last_error}" if last_error else "unknown Windows file lock"
+    raise PermissionError(
+        "The NMDC runtime area is locked by Windows or OneDrive and could not be reset after retries: "
+        f"{target}. Close any Excel/Explorer window using the package, wait for OneDrive sync to finish, "
+        f"then press Reset All Records again. Technical detail: {detail}"
+    ) from last_error
+
+
 def reset_runtime_state(state_dir: Path) -> Dict[str, Any]:
     """Delete indexed/staged runtime records while preserving source DATA, config and audit history."""
     state_dir = Path(state_dir)
@@ -43,10 +80,7 @@ def reset_runtime_state(state_dir: Path) -> Dict[str, Any]:
     for name in ("approved", "staging", "cache", "user_flags", "profile"):
         target = state_dir / name
         if target.exists():
-            if target.is_dir():
-                shutil.rmtree(target)
-            else:
-                target.unlink()
+            _remove_path_with_retries(target)
             removed.append(name)
     result = {
         "decision": "RESET",
