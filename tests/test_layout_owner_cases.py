@@ -60,7 +60,7 @@ class OwnerLayoutCasesTests(unittest.TestCase):
         )
         self.assertEqual(flag["code"], "UNRECOGNIZED_LAYOUT_DATA")
         self.assertIn("no safe first data row", flag["message"])
-        self.assertIn("example document number", flag["recommended_action"])
+        self.assertIn("engine should resolve known empty registers automatically", flag["recommended_action"])
 
 
 if __name__ == "__main__":
