@@ -70,6 +70,19 @@ Private Sub NMDC_SetRefreshStatus(ByVal currentStep As Long, ByVal totalSteps As
     DoEvents
 End Sub
 
+Private Sub NMDC_ResetTableViewForRefresh(ByVal table As ListObject)
+    On Error Resume Next
+
+    ' Never resize or replace rows while a ListObject is filtered or sorted.
+    ' Hidden/filter state can otherwise make the refreshed display appear to
+    ' mix old and new rows even though the underlying array assignment is valid.
+    If table.Parent.FilterMode Then table.Parent.ShowAllData
+    If table.Sort.SortFields.Count > 0 Then table.Sort.SortFields.Clear
+    table.ShowAutoFilter = True
+
+    On Error GoTo 0
+End Sub
+
 Public Function NMDC_LoadCsvToTable(ByVal csvPath As String, ByVal sheetName As String, ByVal tableName As String) As Boolean
     On Error GoTo Handler
 
@@ -110,6 +123,8 @@ Public Function NMDC_LoadCsvToTable(ByVal csvPath As String, ByVal sheetName As 
     If tableRows < 1 Then tableRows = 1
     headerRow = table.HeaderRowRange.Row
     firstColumn = table.Range.Column
+
+    NMDC_ResetTableViewForRefresh table
 
     If Not table.DataBodyRange Is Nothing Then
         On Error Resume Next
@@ -581,9 +596,12 @@ Private Sub NMDC_ApplyReviewFlagValidation(ByVal table As ListObject)
     statusRange.Validation.InputTitle = "Review status"
     statusRange.Validation.InputMessage = "OPEN = unresolved; ACKNOWLEDGED = reviewed; RESOLVED = closed; DEFERRED = postponed."
 
-    decisionRange.Interior.Color = RGB(234, 244, 251)
-    commentRange.Interior.Color = RGB(255, 247, 219)
-    statusRange.Interior.Color = RGB(234, 246, 236)
+    decisionRange.Interior.Pattern = xlNone
+    commentRange.Interior.Pattern = xlNone
+    statusRange.Interior.Pattern = xlNone
+    decisionRange.Font.ColorIndex = xlAutomatic
+    commentRange.Font.ColorIndex = xlAutomatic
+    statusRange.Font.ColorIndex = xlAutomatic
     Exit Sub
 Handler:
     NMDC_LogError "REVIEW_DROPDOWN_ERROR", _
