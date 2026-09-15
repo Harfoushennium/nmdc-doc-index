@@ -27,11 +27,12 @@ class Owner2369AndResetRegressionTests(unittest.TestCase):
         self.assertIn("2369-PP-OF-003", sample_docs)
         self.assertIn("2369-AP-0001", sample_docs)
 
-    def test_excel_source_hyperlinks_disable_table_formula_autofill(self):
+    def test_excel_uses_native_hyperlinks_not_listobject_calculated_formulas(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
-        self.assertIn("NMDC_AssignRowSpecificTableFormulas", text)
+        self.assertIn("Hyperlinks.Add Anchor:=targetCell", text)
         self.assertIn("Application.AutoCorrect.AutoFillFormulasInLists = False", text)
-        self.assertIn("Application.AutoCorrect.AutoFillFormulasInLists = previousAutoFill", text)
+        self.assertNotIn('formulas(rowIndex, 1) = "=HYPERLINK(', text)
+        self.assertNotIn("NMDC_AssignRowSpecificTableFormulas", text)
 
     def test_reset_retries_a_transient_runtime_lock(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -52,10 +53,12 @@ class Owner2369AndResetRegressionTests(unittest.TestCase):
             self.assertEqual(calls["count"], 2)
             self.assertFalse(target.exists())
 
-    def test_setup_normalizes_merged_ui_ranges(self):
+    def test_setup_normalizes_merged_ui_ranges_without_formatting_all_excel_columns(self):
         setup = (ROOT / "packaging" / "Create_NMDC_Document_Index.vbs").read_text(encoding="utf-8")
         self.assertIn("NormalizeMergedUiRanges workbook", setup)
         self.assertIn("Sub NormalizeMergedUiRanges", setup)
+        self.assertIn('ws.Range("A1:L33").Font.Name = "Aptos"', setup)
+        self.assertNotIn('ws.Cells.Font.Name = "Aptos"', setup)
 
 
 if __name__ == "__main__":
