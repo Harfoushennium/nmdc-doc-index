@@ -160,8 +160,9 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertNotIn("temp.Cells.ClearContents", text)
         self.assertNotIn('Destination:=ws.Range("A1")', text)
         self.assertIn("NMDC_ActivateDocumentLinks table", text)
-        self.assertIn('=HYPERLINK(', text)
-        self.assertIn("column.DataBodyRange.Formula = formulas", text)
+        self.assertIn("Hyperlinks.Add Anchor:=targetCell", text)
+        self.assertIn("Application.AutoCorrect.AutoFillFormulasInLists = False", text)
+        self.assertNotIn('formulas(rowIndex, 1) = "=HYPERLINK(', text)
 
     def test_csv_refresh_keeps_identifiers_text_but_types_dates_and_numbers(self):
         refresh = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
