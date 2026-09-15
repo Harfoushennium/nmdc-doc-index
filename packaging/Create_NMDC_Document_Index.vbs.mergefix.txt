@@ -1,1 +1,0 @@
-The actual merge normalization has been validated in the owner test package. This placeholder documents that setup must call NormalizeMergedUiRanges before save. It is temporary and will be removed before final release.
