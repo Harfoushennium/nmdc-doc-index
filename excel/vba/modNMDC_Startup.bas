@@ -28,21 +28,21 @@ Public Sub NMDC_ApplyWorkbookGuidance()
     On Error GoTo Handler
 
     NMDC_SetSheetBanner "Master Documents", _
-        "SYSTEM OUTPUT - READ ONLY. One row per extracted document. Use filters and hyperlinks to review the index. Report corrections through Review Flags or Flag Wrong Data."
+        "SYSTEM OUTPUT - READ ONLY. One row per extracted document. Filters and sorts are reset automatically whenever data is refreshed so rows cannot become mixed. Use filters and hyperlinks after refresh to review the index."
     NMDC_SetSheetBanner "Revisions", _
-        "SYSTEM OUTPUT - READ ONLY. One row per extracted document revision. Do not type corrections directly into this table."
+        "SYSTEM OUTPUT - READ ONLY. One row per extracted document revision. Filters and sorts are reset on refresh. Do not type corrections directly into this table."
     NMDC_SetSheetBanner "Transactions", _
-        "SYSTEM OUTPUT - READ ONLY. One row per extracted event/transaction. Use Source File / Document Link to verify the source record."
+        "SYSTEM OUTPUT - READ ONLY. One row per extracted event/transaction. Filters and sorts are reset on refresh. Use Source File / Document Link to verify the source record."
     NMDC_SetSheetBanner "Pending Update", _
-        "REVIEW ONLY - NO USER INPUT ON THIS SHEET. This table shows what will change if the staged update is approved. Make review decisions only in Review Flags, then use Approve / Hold / Reject from Home."
+        "REVIEW ONLY - NO USER INPUT ON THIS SHEET. This table shows what will change if the staged update is approved. Filters and sorts are reset on refresh. Make decisions only in Review Flags, then use Approve / Hold / Reject from Home."
     NMDC_SetSheetBanner "Review Flags", _
-        "USER ACTION SHEET. Editable fields are User Decision, User Comment and Resolution Status. Decisions record your review; they do NOT edit the source workbook or silently rewrite extracted data. See the notes on each column header before choosing a decision."
+        "USER ACTION SHEET. Editable fields are User Decision, User Comment and Resolution Status. Filters and sorts are reset on refresh. Decisions record your review; they do NOT edit the source workbook or silently rewrite extracted data."
     NMDC_SetSheetBanner "User Decisions", _
         "AUDIT TRAIL. This sheet records user/owner decisions and overrides. Treat existing rows as read only; use the workbook actions to create new decisions."
     NMDC_SetSheetBanner "Configuration", _
         "CONFIGURATION. Edit only supported user settings. Package/runtime paths are system settings created by setup. Read each column note before changing a value."
     NMDC_SetSheetBanner "Rules & Mappings", _
-        "USER CONFIGURATION. Rules control classification/extraction scope. Use dropdowns where provided, read header notes, then save/stage the rules for review."
+        "SIMPLE RULE EDITOR. Use Add Simple Rule, then choose from the dropdowns: Enabled -> Source Family -> Look In (Match Scope) -> Match Method -> Match Words -> Discipline / Category / Subcategory -> Include. CONTAINS is recommended for normal users; REGEX and the hidden advanced columns are for exceptional cases only. Rules are validated before any scan is staged."
     NMDC_SetSheetBanner "Update History", _
         "AUDIT OUTPUT - READ ONLY. One row per scan/decision. This is the history of staged, approved, held, rejected and review actions."
     NMDC_SetSheetBanner "Error Log", _
@@ -58,6 +58,7 @@ Public Sub NMDC_ApplyWorkbookGuidance()
     NMDC_ApplyNamedTableGuidance "Rules & Mappings", "ClassificationRules"
     NMDC_ApplyNamedTableGuidance "Update History", "UpdateHistory"
     NMDC_ApplyNamedTableGuidance "Error Log", "ErrorLog"
+    NMDC_ConfigureRulesUserExperience
     Exit Sub
 
 Handler:
@@ -74,8 +75,13 @@ Public Sub NMDC_ApplyTableGuidance(ByVal table As ListObject)
     Dim headerCell As Range
 
     table.TableStyle = "TableStyleMedium2"
+    table.ShowTableStyleRowStripes = False
+    table.ShowTableStyleColumnStripes = False
+    table.ShowAutoFilter = True
+
     table.Range.Font.Name = "Aptos"
     table.Range.Font.Size = 10
+    table.Range.Font.ColorIndex = xlAutomatic
     table.Range.VerticalAlignment = xlCenter
 
     With table.HeaderRowRange
@@ -87,12 +93,24 @@ Public Sub NMDC_ApplyTableGuidance(ByVal table As ListObject)
         .HorizontalAlignment = xlCenter
         .VerticalAlignment = xlCenter
         .WrapText = True
-        .RowHeight = 32
+        .RowHeight = 34
     End With
 
     If Not table.DataBodyRange Is Nothing Then
-        table.DataBodyRange.Rows.RowHeight = 19
-        table.DataBodyRange.VerticalAlignment = xlCenter
+        With table.DataBodyRange
+            .Interior.Pattern = xlNone
+            .Font.Name = "Aptos"
+            .Font.Size = 10
+            .Font.ColorIndex = xlAutomatic
+            .Font.Bold = False
+            .HorizontalAlignment = xlLeft
+            .VerticalAlignment = xlCenter
+            .WrapText = False
+            .Rows.RowHeight = 20
+            .Borders.LineStyle = xlContinuous
+            .Borders.Color = RGB(225, 230, 235)
+            .Borders.Weight = xlHairline
+        End With
     End If
 
     For Each column In table.ListColumns
@@ -107,8 +125,10 @@ Public Sub NMDC_ApplyTableGuidance(ByVal table As ListObject)
         End If
         On Error GoTo Handler
         NMDC_SetColumnWidth column
+        NMDC_ApplyColumnAlignment column
     Next column
 
+    NMDC_AdjustTableRows table
     NMDC_StyleUserInputColumns table
     Exit Sub
 Handler:
@@ -128,14 +148,21 @@ End Sub
 
 Private Sub NMDC_SetSheetBanner(ByVal sheetName As String, ByVal bannerText As String)
     Dim ws As Worksheet
+    Dim bannerAddress As String
     Set ws = ThisWorkbook.Worksheets(sheetName)
 
+    If StrComp(sheetName, "Rules & Mappings", vbTextCompare) = 0 Then
+        bannerAddress = "A4:R4"
+    Else
+        bannerAddress = "A4:O4"
+    End If
+
     On Error Resume Next
-    ws.Range("A4:O4").UnMerge
-    ws.Range("A4:O4").Merge
+    ws.Range(bannerAddress).UnMerge
+    ws.Range(bannerAddress).Merge
     On Error GoTo 0
 
-    With ws.Range("A4:O4")
+    With ws.Range(bannerAddress)
         .Value = bannerText
         .Interior.Color = RGB(255, 247, 219)
         .Font.Name = "Aptos"
@@ -144,7 +171,7 @@ Private Sub NMDC_SetSheetBanner(ByVal sheetName As String, ByVal bannerText As S
         .Font.Color = RGB(96, 72, 0)
         .WrapText = True
         .VerticalAlignment = xlCenter
-        .RowHeight = 44
+        .RowHeight = 54
     End With
 End Sub
 
@@ -165,9 +192,60 @@ Private Sub NMDC_SetColumnWidth(ByVal column As ListColumn)
             column.Range.ColumnWidth = 19
         Case "PROJECT NO.", "DOCUMENT NO.", "COMPANY DOCUMENT NO.", "REVISION", "LATEST REVISION", "EVENT TYPE", "EVENT STATUS", "FLAG CODE", "USER DECISION", "RESOLUTION STATUS", "DECISION TYPE"
             column.Range.ColumnWidth = 22
+        Case "DISCIPLINE", "CATEGORY", "SUBCATEGORY"
+            column.Range.ColumnWidth = 24
         Case Else
             column.Range.ColumnWidth = 16
     End Select
+End Sub
+
+Private Sub NMDC_ApplyColumnAlignment(ByVal column As ListColumn)
+    If column.DataBodyRange Is Nothing Then Exit Sub
+
+    Dim headerName As String
+    headerName = UCase$(Trim$(CStr(column.Name)))
+
+    Select Case headerName
+        Case "PROJECT NO.", "REVISION", "LATEST REVISION", "SOURCE ROW", _
+             "DATE/TIME", "EVENT DATE", "LATEST EVENT DATE", "SOURCE MODIFIED DATE", _
+             "CREATED AT", "UPDATED AT", "FLAG LEVEL", "FLAG CODE", "EVENT STATUS", _
+             "USER DECISION", "RESOLUTION STATUS", "DECISION TYPE", "ENABLED", "PRIORITY", _
+             "SOURCE_FAMILY", "MATCH_SCOPE", "MATCH_TYPE", "INCLUDE", "MIN_CONFIDENCE", _
+             "STOP_ON_MATCH", "NEW SOURCES", "CHANGED SOURCES", "REMOVED SOURCES", _
+             "ADDED RECORDS", "MODIFIED RECORDS", "REMOVED RECORDS", "REVIEW FLAGS", "CONFLICT FLAGS"
+            column.DataBodyRange.HorizontalAlignment = xlCenter
+        Case Else
+            column.DataBodyRange.HorizontalAlignment = xlLeft
+    End Select
+End Sub
+
+Private Sub NMDC_AdjustTableRows(ByVal table As ListObject)
+    If table.DataBodyRange Is Nothing Then Exit Sub
+
+    Dim column As ListColumn
+    Dim rowCount As Long
+    Dim headerName As String
+
+    rowCount = table.DataBodyRange.Rows.Count
+    For Each column In table.ListColumns
+        headerName = UCase$(Trim$(CStr(column.Name)))
+        Select Case headerName
+            Case "DOCUMENT TITLE", "PLAIN-ENGLISH PROBLEM", "RECOMMENDED USER ACTION", _
+                 "PLAIN-ENGLISH SUMMARY", "USER COMMENT", "TECHNICAL DETAIL", "NOTES", "USER NOTE"
+                If Not column.DataBodyRange Is Nothing Then column.DataBodyRange.WrapText = True
+        End Select
+    Next column
+
+    If rowCount <= 2500 Then
+        table.DataBodyRange.Rows.AutoFit
+        Dim oneRow As Range
+        For Each oneRow In table.DataBodyRange.Rows
+            If oneRow.RowHeight < 20 Then oneRow.RowHeight = 20
+            If oneRow.RowHeight > 60 Then oneRow.RowHeight = 60
+        Next oneRow
+    Else
+        table.DataBodyRange.Rows.RowHeight = 20
+    End If
 End Sub
 
 Private Sub NMDC_StyleUserInputColumns(ByVal table As ListObject)
@@ -178,25 +256,284 @@ Private Sub NMDC_StyleUserInputColumns(ByVal table As ListObject)
         On Error Resume Next
         Set target = table.ListColumns("User Decision").DataBodyRange
         On Error GoTo 0
-        If Not target Is Nothing Then target.Interior.Color = RGB(234, 244, 251)
+        If Not target Is Nothing Then
+            target.Interior.Pattern = xlNone
+            target.Font.ColorIndex = xlAutomatic
+        End If
 
         Set target = Nothing
         On Error Resume Next
         Set target = table.ListColumns("User Comment").DataBodyRange
         On Error GoTo 0
-        If Not target Is Nothing Then target.Interior.Color = RGB(255, 247, 219)
+        If Not target Is Nothing Then
+            target.Interior.Pattern = xlNone
+            target.Font.ColorIndex = xlAutomatic
+        End If
 
         Set target = Nothing
         On Error Resume Next
         Set target = table.ListColumns("Resolution Status").DataBodyRange
         On Error GoTo 0
-        If Not target Is Nothing Then target.Interior.Color = RGB(234, 246, 236)
+        If Not target Is Nothing Then
+            target.Interior.Pattern = xlNone
+            target.Font.ColorIndex = xlAutomatic
+        End If
     End If
 End Sub
 
+Public Sub NMDC_ConfigureRulesUserExperience()
+    On Error GoTo Handler
+
+    Dim ws As Worksheet
+    Dim table As ListObject
+    Set ws = ThisWorkbook.Worksheets("Rules & Mappings")
+    Set table = ws.ListObjects("ClassificationRules")
+
+    NMDC_ApplyRulesListValidation table, "Enabled", "YES,NO", "Enable rule", "YES = use this rule; NO = keep it but do not use it."
+    NMDC_ApplyRulesListValidation table, "Source_Family", "ANY,METHODS,TECH", "Source family", "ANY = all sources; METHODS = methods registers only; TECH = technical registers only."
+    NMDC_ApplyRulesListValidation table, "Match_Scope", "FILE,WORKSHEET,SECTION,HEADER,DOC_NUMBER,TITLE", "Where should Excel look?", "Choose FILE, WORKSHEET, SECTION, HEADER, DOC_NUMBER or TITLE."
+    NMDC_ApplyRulesListValidation table, "Match_Type", "CONTAINS,EXACT,FUZZY,REGEX", "How should it match?", "CONTAINS is recommended. EXACT requires the complete text. FUZZY allows similar text. REGEX is advanced."
+    NMDC_ApplyRulesListValidation table, "Include", "YES,NO", "Keep or exclude?", "YES = classify/include matching data; NO = exclude matching content."
+    NMDC_ApplyRulesListValidation table, "Stop_On_Match", "YES,NO", "Stop after match?", "YES is normally safest; later lower-priority rules will not override this match."
+    NMDC_ApplyRulesWholeNumberValidation table, "Priority", 1, 999999
+    NMDC_ApplyRulesDecimalValidation table, "Min_Confidence", 0, 1
+
+    NMDC_SetRulesAdvancedVisibility table, True
+    NMDC_CreateRulesToolbar ws, table
+    Exit Sub
+Handler:
+    NMDC_LogError "RULES_UX_ERROR", _
+        "Excel could not apply the simple Rules & Mappings editor.", _
+        Err.Number & " - " & Err.Description
+End Sub
+
+Private Sub NMDC_ApplyRulesListValidation(ByVal table As ListObject, ByVal columnName As String, ByVal listValues As String, ByVal titleText As String, ByVal messageText As String)
+    Dim target As Range
+    On Error Resume Next
+    Set target = table.ListColumns(columnName).DataBodyRange
+    On Error GoTo 0
+    If target Is Nothing Then Exit Sub
+
+    On Error Resume Next
+    target.Validation.Delete
+    On Error GoTo 0
+    target.Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Operator:=xlBetween, Formula1:=listValues
+    target.Validation.IgnoreBlank = True
+    target.Validation.InCellDropdown = True
+    target.Validation.ShowInput = True
+    target.Validation.InputTitle = titleText
+    target.Validation.InputMessage = messageText
+End Sub
+
+Private Sub NMDC_ApplyRulesWholeNumberValidation(ByVal table As ListObject, ByVal columnName As String, ByVal minimumValue As Long, ByVal maximumValue As Long)
+    Dim target As Range
+    On Error Resume Next
+    Set target = table.ListColumns(columnName).DataBodyRange
+    On Error GoTo 0
+    If target Is Nothing Then Exit Sub
+
+    On Error Resume Next
+    target.Validation.Delete
+    On Error GoTo 0
+    target.Validation.Add Type:=xlValidateWholeNumber, AlertStyle:=xlValidAlertStop, Operator:=xlBetween, _
+        Formula1:=CStr(minimumValue), Formula2:=CStr(maximumValue)
+    target.Validation.IgnoreBlank = False
+    target.Validation.ShowInput = True
+    target.Validation.InputTitle = "Rule priority"
+    target.Validation.InputMessage = "Lower numbers run first. Add Simple Rule creates a safe next priority automatically."
+End Sub
+
+Private Sub NMDC_ApplyRulesDecimalValidation(ByVal table As ListObject, ByVal columnName As String, ByVal minimumValue As Double, ByVal maximumValue As Double)
+    Dim target As Range
+    On Error Resume Next
+    Set target = table.ListColumns(columnName).DataBodyRange
+    On Error GoTo 0
+    If target Is Nothing Then Exit Sub
+
+    On Error Resume Next
+    target.Validation.Delete
+    On Error GoTo 0
+    target.Validation.Add Type:=xlValidateDecimal, AlertStyle:=xlValidAlertStop, Operator:=xlBetween, _
+        Formula1:=CStr(minimumValue), Formula2:=CStr(maximumValue)
+    target.Validation.IgnoreBlank = True
+    target.Validation.ShowInput = True
+    target.Validation.InputTitle = "Confidence"
+    target.Validation.InputMessage = "Use a value from 0 to 1. This is an advanced setting; 0.9 is the normal default."
+End Sub
+
+Private Sub NMDC_CreateRulesToolbar(ByVal ws As Worksheet, ByVal table As ListObject)
+    Dim shape As Shape
+    Dim area As Range
+    Dim button As Shape
+
+    On Error Resume Next
+    ws.Shapes("NMDC_Rules_Add").Delete
+    ws.Shapes("NMDC_Rules_Advanced").Delete
+    ws.Shapes("NMDC_Rules_Guide").Delete
+    On Error GoTo 0
+
+    Set area = ws.Range("A2:C3")
+    Set button = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width, area.Height)
+    button.Name = "NMDC_Rules_Add"
+    button.OnAction = "NMDC_AddSimpleRule"
+    button.TextFrame.Characters.Text = "Add Simple Rule"
+    NMDC_FormatRulesButton button, RGB(46, 125, 50)
+
+    Set area = ws.Range("D2:F3")
+    Set button = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width, area.Height)
+    button.Name = "NMDC_Rules_Advanced"
+    button.OnAction = "NMDC_ToggleRulesAdvancedColumns"
+    button.TextFrame.Characters.Text = "Show / Hide Advanced"
+    NMDC_FormatRulesButton button, RGB(91, 100, 112)
+
+    Set area = ws.Range("G2:R3")
+    Set shape = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width, area.Height)
+    shape.Name = "NMDC_Rules_Guide"
+    shape.TextFrame.Characters.Text = "Normal edit: choose dropdowns and type ordinary words in Match_Words. Use CONTAINS for most rules. Advanced fields and REGEX are hidden by default because they can change extraction behavior significantly."
+    shape.Fill.ForeColor.RGB = RGB(247, 249, 252)
+    shape.Line.ForeColor.RGB = RGB(216, 225, 232)
+    shape.TextFrame.Characters.Font.Name = "Aptos"
+    shape.TextFrame.Characters.Font.Size = 10
+    shape.TextFrame.Characters.Font.Color = RGB(31, 41, 55)
+    shape.TextFrame.VerticalAlignment = 3
+End Sub
+
+Private Sub NMDC_FormatRulesButton(ByVal button As Shape, ByVal fillColor As Long)
+    button.TextFrame.HorizontalAlignment = -4108
+    button.TextFrame.VerticalAlignment = 3
+    button.Fill.ForeColor.RGB = fillColor
+    button.Line.ForeColor.RGB = fillColor
+    button.TextFrame.Characters.Font.Name = "Aptos"
+    button.TextFrame.Characters.Font.Size = 10
+    button.TextFrame.Characters.Font.Bold = True
+    button.TextFrame.Characters.Font.Color = RGB(255, 255, 255)
+End Sub
+
+Private Sub NMDC_SetRulesAdvancedVisibility(ByVal table As ListObject, ByVal hideAdvanced As Boolean)
+    Dim names As Variant
+    Dim item As Variant
+    names = Array("Rule_ID", "Priority", "Exclude_Words", "Path_Qualifier", _
+                  "Requires_Discipline", "Requires_Category", "Min_Confidence", "Stop_On_Match")
+
+    For Each item In names
+        On Error Resume Next
+        table.ListColumns(CStr(item)).Range.EntireColumn.Hidden = hideAdvanced
+        On Error GoTo 0
+    Next item
+End Sub
+
+Public Sub NMDC_ToggleRulesAdvancedColumns()
+    On Error GoTo Handler
+
+    Dim table As ListObject
+    Dim currentlyHidden As Boolean
+    Set table = ThisWorkbook.Worksheets("Rules & Mappings").ListObjects("ClassificationRules")
+
+    currentlyHidden = table.ListColumns("Rule_ID").Range.EntireColumn.Hidden
+    NMDC_SetRulesAdvancedVisibility table, Not currentlyHidden
+    Exit Sub
+Handler:
+    MsgBox "Excel could not change the Rules & Mappings view." & vbCrLf & Err.Description, _
+           vbExclamation, "NMDC Document Index"
+End Sub
+
+Public Sub NMDC_AddSimpleRule()
+    On Error GoTo Handler
+
+    Dim ws As Worksheet
+    Dim table As ListObject
+    Dim newRow As ListRow
+    Dim newId As String
+    Dim newPriority As Long
+
+    Set ws = ThisWorkbook.Worksheets("Rules & Mappings")
+    Set table = ws.ListObjects("ClassificationRules")
+    Set newRow = table.ListRows.Add
+
+    newId = NMDC_NextUserRuleId(table)
+    newPriority = NMDC_NextRulePriority(table)
+
+    NMDC_SetRuleCell table, newRow, "Rule_ID", newId
+    NMDC_SetRuleCell table, newRow, "Enabled", "YES"
+    NMDC_SetRuleCell table, newRow, "Priority", newPriority
+    NMDC_SetRuleCell table, newRow, "Source_Family", "ANY"
+    NMDC_SetRuleCell table, newRow, "Match_Scope", "WORKSHEET"
+    NMDC_SetRuleCell table, newRow, "Match_Type", "CONTAINS"
+    NMDC_SetRuleCell table, newRow, "Match_Words", ""
+    NMDC_SetRuleCell table, newRow, "Discipline", ""
+    NMDC_SetRuleCell table, newRow, "Category", ""
+    NMDC_SetRuleCell table, newRow, "Subcategory", ""
+    NMDC_SetRuleCell table, newRow, "Include", "YES"
+    NMDC_SetRuleCell table, newRow, "Min_Confidence", 0.9
+    NMDC_SetRuleCell table, newRow, "Stop_On_Match", "YES"
+    NMDC_SetRuleCell table, newRow, "Notes", "User rule - describe the purpose in plain English"
+
+    NMDC_ConfigureRulesUserExperience
+    ws.Activate
+    newRow.Range.Cells(1, table.ListColumns("Match_Words").Index).Select
+    MsgBox "A new simple rule was added." & vbCrLf & vbCrLf & _
+           "1. Choose where to look and how to match." & vbCrLf & _
+           "2. Type the word or phrase to match." & vbCrLf & _
+           "3. Enter the Discipline, Category and Subcategory result." & vbCrLf & _
+           "4. Run Update Changed Files or Full Rescan; the rules will be validated before staging.", _
+           vbInformation, "NMDC Document Index"
+    Exit Sub
+Handler:
+    MsgBox "Excel could not add a new rule." & vbCrLf & Err.Description, vbExclamation, "NMDC Document Index"
+End Sub
+
+Private Sub NMDC_SetRuleCell(ByVal table As ListObject, ByVal row As ListRow, ByVal columnName As String, ByVal value As Variant)
+    row.Range.Cells(1, table.ListColumns(columnName).Index).Value = value
+End Sub
+
+Private Function NMDC_NextUserRuleId(ByVal table As ListObject) As String
+    Dim index As Long
+    Dim candidate As String
+    index = 1
+    Do
+        candidate = "USR" & Format$(index, "000")
+        If Not NMDC_RuleIdExists(table, candidate) Then
+            NMDC_NextUserRuleId = candidate
+            Exit Function
+        End If
+        index = index + 1
+    Loop
+End Function
+
+Private Function NMDC_RuleIdExists(ByVal table As ListObject, ByVal candidate As String) As Boolean
+    Dim row As ListRow
+    Dim colIndex As Long
+    colIndex = table.ListColumns("Rule_ID").Index
+    For Each row In table.ListRows
+        If StrComp(Trim$(CStr(row.Range.Cells(1, colIndex).Value)), candidate, vbTextCompare) = 0 Then
+            NMDC_RuleIdExists = True
+            Exit Function
+        End If
+    Next row
+End Function
+
+Private Function NMDC_NextRulePriority(ByVal table As ListObject) As Long
+    Dim row As ListRow
+    Dim colIndex As Long
+    Dim value As Variant
+    Dim maximum As Long
+
+    colIndex = table.ListColumns("Priority").Index
+    maximum = 0
+    For Each row In table.ListRows
+        value = row.Range.Cells(1, colIndex).Value
+        If IsNumeric(value) Then
+            If CLng(value) > maximum Then maximum = CLng(value)
+        End If
+    Next row
+    NMDC_NextRulePriority = maximum + 10
+End Function
+
 Private Function NMDC_HeaderHelp(ByVal tableName As String, ByVal headerName As String) As String
     Dim h As String
+    Dim isRules As Boolean
     h = UCase$(Trim$(headerName))
+    isRules = (StrComp(tableName, "ClassificationRules", vbTextCompare) = 0)
 
     Select Case h
         Case "FLAG LEVEL"
@@ -212,11 +549,23 @@ Private Function NMDC_HeaderHelp(ByVal tableName As String, ByVal headerName As 
         Case "SOURCE FAMILY"
             NMDC_HeaderHelp = "SYSTEM OUTPUT - READ ONLY. High-level source group such as METHODS or TECH, derived from the source location/rules."
         Case "DISCIPLINE"
-            NMDC_HeaderHelp = "SYSTEM OUTPUT - READ ONLY in index tables. Classification discipline assigned by the approved Rules & Mappings."
+            If isRules Then
+                NMDC_HeaderHelp = "USER INPUT. Classification discipline to assign when this rule matches, for example MARINE OPERATIONS or OFFSHORE INSTALLATION."
+            Else
+                NMDC_HeaderHelp = "SYSTEM OUTPUT - READ ONLY. Classification discipline assigned by the approved Rules & Mappings."
+            End If
         Case "CATEGORY"
-            NMDC_HeaderHelp = "SYSTEM OUTPUT - READ ONLY in index tables. Main document classification assigned by the approved rules."
+            If isRules Then
+                NMDC_HeaderHelp = "USER INPUT. Main classification to assign when this rule matches, for example DRAWING, PROCEDURE or DOCUMENT."
+            Else
+                NMDC_HeaderHelp = "SYSTEM OUTPUT - READ ONLY. Main document classification assigned by the approved rules."
+            End If
         Case "SUBCATEGORY"
-            NMDC_HeaderHelp = "SYSTEM OUTPUT - READ ONLY in index tables. Detailed document classification assigned by the approved rules."
+            If isRules Then
+                NMDC_HeaderHelp = "USER INPUT. More detailed classification to assign when this rule matches, for example ANCHOR PATTERN or INSTALLATION PROCEDURE."
+            Else
+                NMDC_HeaderHelp = "SYSTEM OUTPUT - READ ONLY. Detailed document classification assigned by the approved rules."
+            End If
         Case "DOCUMENT NO."
             NMDC_HeaderHelp = "SYSTEM OUTPUT - READ ONLY. NMDC/document identifier extracted from the source register. Preserved as text to avoid changing leading zeroes or formatting."
         Case "DOCUMENT TITLE"
@@ -306,35 +655,39 @@ Private Function NMDC_HeaderHelp(ByVal tableName As String, ByVal headerName As 
         Case "CURRENT VALUE"
             NMDC_HeaderHelp = "USER/SYSTEM CONFIGURATION VALUE. Change only supported user settings. Setup-managed engine/runtime/configuration paths should normally be left unchanged."
         Case "RULE_ID"
-            NMDC_HeaderHelp = "RULE IDENTIFIER. Keep unique and stable. Used to audit which classification rule matched a source."
+            NMDC_HeaderHelp = "ADVANCED RULE IDENTIFIER. Add Simple Rule creates this automatically. Keep it unique and stable because the index uses it for audit history."
         Case "ENABLED"
-            NMDC_HeaderHelp = "USER INPUT - DROPDOWN YES/NO. YES allows the rule to participate; NO keeps the rule but disables it."
+            NMDC_HeaderHelp = "USER INPUT - DROPDOWN. YES = use the rule. NO = keep the rule in the sheet but ignore it during classification."
         Case "PRIORITY"
-            NMDC_HeaderHelp = "USER INPUT. Numeric order used when multiple rules may match; lower number is evaluated earlier."
+            NMDC_HeaderHelp = "ADVANCED USER INPUT. Lower numbers run first. Add Simple Rule assigns a safe next priority automatically."
         Case "SOURCE_FAMILY"
-            NMDC_HeaderHelp = "USER INPUT. Restricts the rule to a source family (for example METHODS/TECH) or ANY."
+            If isRules Then
+                NMDC_HeaderHelp = "USER INPUT - DROPDOWN. ANY = all registers; METHODS = methods registers only; TECH = technical/document registers only."
+            Else
+                NMDC_HeaderHelp = "SYSTEM OUTPUT - READ ONLY. High-level source group such as METHODS or TECH."
+            End If
         Case "MATCH_SCOPE"
-            NMDC_HeaderHelp = "USER INPUT. Defines whether matching applies to file name/path, worksheet or another supported scope."
+            NMDC_HeaderHelp = "USER INPUT - DROPDOWN. Choose where to look: FILE = file/path name; WORKSHEET = sheet/tab name; SECTION = section name; HEADER = table headers; DOC_NUMBER = document number; TITLE = document title."
         Case "MATCH_TYPE"
-            NMDC_HeaderHelp = "USER INPUT. Matching method such as CONTAINS or REGEX. Use only supported values because invalid rules are rejected."
+            NMDC_HeaderHelp = "USER INPUT - DROPDOWN. CONTAINS is recommended for normal users. EXACT requires the complete text. FUZZY accepts similar text. REGEX is advanced and should only be used when necessary."
         Case "MATCH_WORDS"
-            NMDC_HeaderHelp = "USER INPUT - FREE TEXT. Keyword/pattern used by the rule. For REGEX rules this is a regular expression."
+            NMDC_HeaderHelp = "USER INPUT. For CONTAINS or EXACT, type ordinary words or a phrase exactly as you expect to see it. REGEX patterns are advanced and are not required for normal rules."
         Case "EXCLUDE_WORDS"
-            NMDC_HeaderHelp = "USER INPUT - FREE TEXT. Optional words/patterns that prevent this rule from matching."
+            NMDC_HeaderHelp = "ADVANCED USER INPUT. Optional pattern that prevents this rule from matching. Leave blank unless you need an explicit exception."
         Case "PATH_QUALIFIER"
-            NMDC_HeaderHelp = "USER INPUT - FREE TEXT. Optional path condition used to narrow where the rule applies."
+            NMDC_HeaderHelp = "ADVANCED USER INPUT. Optional source-path restriction. Leave blank for normal rules."
         Case "REQUIRES_DISCIPLINE"
-            NMDC_HeaderHelp = "USER INPUT. Optional prerequisite discipline required before this rule can match."
+            NMDC_HeaderHelp = "ADVANCED USER INPUT. Optional existing discipline that must already be assigned before this rule is allowed to refine a record."
         Case "REQUIRES_CATEGORY"
-            NMDC_HeaderHelp = "USER INPUT. Optional prerequisite category required before this rule can match."
+            NMDC_HeaderHelp = "ADVANCED USER INPUT. Optional existing category that must already be assigned before this rule is allowed to refine a record."
         Case "INCLUDE"
-            NMDC_HeaderHelp = "USER INPUT - DROPDOWN YES/NO. YES includes matching content in extraction; NO excludes matching content from the index."
+            NMDC_HeaderHelp = "USER INPUT - DROPDOWN. YES = classify/include matching content. NO = intentionally exclude matching content from the index."
         Case "MIN_CONFIDENCE"
-            NMDC_HeaderHelp = "USER INPUT. Minimum confidence threshold required for the rule result to be accepted."
+            NMDC_HeaderHelp = "ADVANCED USER INPUT. Value from 0 to 1. Mainly used with FUZZY rules; 0.9 is the normal default."
         Case "STOP_ON_MATCH"
-            NMDC_HeaderHelp = "USER INPUT - YES/NO. YES stops evaluating lower-priority rules once this rule matches."
+            NMDC_HeaderHelp = "ADVANCED USER INPUT - YES/NO. YES normally prevents lower-priority rules from changing the result after this rule matches."
         Case "NOTES"
-            NMDC_HeaderHelp = "USER INPUT / DOCUMENTATION. Plain-English explanation of the rule purpose for future users and reviewers."
+            NMDC_HeaderHelp = "USER INPUT / DOCUMENTATION. Describe the rule purpose in plain English so another user can understand why it exists."
         Case "DECISION ID"
             NMDC_HeaderHelp = "AUDIT OUTPUT - READ ONLY. Unique identity of a recorded user decision."
         Case "USER"
