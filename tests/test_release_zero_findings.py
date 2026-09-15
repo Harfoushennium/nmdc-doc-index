@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
 from nmdc_profiler.layout_compat import install_layout_compatibility
-from nmdc_profiler.runtime_engine import build_runtime_catalog
+from nmdc_profiler.runtime_engine import build_runtime_catalog, stage_runtime_update
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -62,6 +63,23 @@ class ReleaseZeroFindingsTests(unittest.TestCase):
             )
             self.assertEqual(populated_seen, EXPECTED_POPULATED)
             self.assertGreater(total_records, 39000)
+
+    def test_clean_first_full_stage_has_zero_review_and_conflict_flags(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = Path(tmp) / "state"
+            summary = stage_runtime_update(
+                data_dir=ROOT / "DATA",
+                state_dir=state_dir,
+                config_dir=ROOT / "config",
+                full_rescan=True,
+            )
+            run_id = str(summary["run_id"])
+            flags = json.loads((state_dir / "staging" / run_id / "flags.json").read_text(encoding="utf-8"))
+            self.assertEqual(flags, [], "Clean current DATA must stage with an empty Review Flags dataset: " + repr(flags))
+            self.assertEqual(int(summary.get("review_flags", -1)), 0)
+            self.assertEqual(int(summary.get("blocking_flags", -1)), 0)
+            self.assertEqual(summary.get("status"), "STAGED")
+            self.assertGreater(int(summary.get("staged_records", 0)), 39000)
 
 
 if __name__ == "__main__":
