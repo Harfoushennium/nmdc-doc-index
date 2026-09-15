@@ -5,7 +5,7 @@
 
 ## Purpose
 
-This plan turns the owner’s reliability and usability findings into hard release gates. The normal Excel product must extract the current known `DATA/` corpus without asking the owner to diagnose parser layouts, without reporting routine lifecycle notifications as errors, and without requiring manual table cleanup after every refresh.
+This plan turns the owner’s reliability findings into hard release gates. The normal Excel product must extract the current known `DATA/` corpus without asking the owner to diagnose parser layouts and without reporting routine source lifecycle notifications as errors.
 
 A **clean current-data Full Rescan** is accepted only when:
 
@@ -16,13 +16,10 @@ A **clean current-data Full Rescan** is accepted only when:
 - `Error Log` contains **0 extraction/refresh errors**;
 - routine additions/changes remain visible in `Pending Update`/history instead of `Review Flags`;
 - source-file and document hyperlinks point to the exact row-specific target;
-- active Excel filters/sorts cannot corrupt or visually mix refreshed table rows;
-- all user-facing tables are consistently formatted without manual cleanup;
-- `Rules & Mappings` is usable by a non-coder through a simple editor with dropdowns and hidden advanced settings;
 - the generated workbook opens without the slow-workbook metadata warning, merge warning, or black console window;
 - source `DATA/` remains unchanged.
 
-Real future faults such as a locked/corrupt source, an actually ambiguous duplicate, or a non-overridable conflict must still fail safely and remain visible. The product must never hide a genuine data-integrity problem merely to reach zero findings.
+Real future faults such as a persistently locked/corrupt source, an actually ambiguous duplicate, or a non-overridable conflict must still fail safely and remain visible. The product must never hide a genuine data-integrity problem merely to reach zero findings.
 
 ## Gate A — Real-data extraction completeness
 
@@ -62,47 +59,9 @@ Real future faults such as a locked/corrupt source, an actually ambiguous duplic
 4. The source base workbook must not contain a formatted M:XFD tail on Home.
 5. Generated workbook must not show Excel’s “99% unused formatting and metadata” warning in owner acceptance testing.
 6. Refresh must use manual calculation/events/screen-update suppression and batch typed conversions.
+7. Active filters and sort fields must be cleared before table resize/repopulation so stale hidden/sorted row state cannot mix refreshed data.
 
-## Gate E — Filter-safe table refresh
-
-1. Before any table is cleared, resized, or repopulated, active worksheet/table filters must be cleared.
-2. Active sort fields must be cleared before row replacement so stale sort state cannot reorder or mix the new dataset.
-3. Filter dropdowns must remain available after refresh.
-4. After refresh, every row must correspond to the correct underlying record regardless of which filter was active before the refresh.
-5. Owner acceptance must explicitly test a filtered table, run an update, then verify the refreshed table is unfiltered and row identities/links remain correct.
-
-## Gate F — Professional table presentation
-
-1. All data-body rows use Aptos 10, automatic font color and no fill color.
-2. Table headers remain visually distinct and professional.
-3. Row striping must not reintroduce unwanted body fill colors.
-4. Text fields are left aligned; short codes, dates, statuses, priorities and counts are consistently centered.
-5. Long user-facing text columns wrap; large extraction tables avoid expensive full-row AutoFit.
-6. Smaller tables AutoFit rows with practical minimum/maximum row heights.
-7. Column widths are standardized by field type.
-8. Light borders, consistent vertical alignment and valid filters remain after every refresh.
-9. Review Flags user-input cells must not require manual fill/font correction after refresh.
-
-## Gate G — Rules & Mappings non-coder UX
-
-1. The sheet must clearly identify itself as a **Simple Rule Editor**.
-2. A normal user must be able to create a rule without manually entering a technical Rule_ID or Priority.
-3. `Add Simple Rule` must generate a unique user rule ID, next priority, normal defaults and place the cursor in `Match_Words`.
-4. Normal dropdowns must exist for:
-   - Enabled: `YES/NO`;
-   - Source Family: `ANY/METHODS/TECH`;
-   - Match Scope: `FILE/WORKSHEET/SECTION/HEADER/DOC_NUMBER/TITLE`;
-   - Match Type: `CONTAINS/EXACT/FUZZY/REGEX`;
-   - Include: `YES/NO`;
-   - Stop on Match: `YES/NO`.
-5. `CONTAINS` must be presented as the recommended normal-user match type; `REGEX` must be described as advanced.
-6. Advanced fields are hidden by default and can be shown/hidden with one button.
-7. Rule headers must explain in plain English what the field does, including the difference between matching input and classification output.
-8. Discipline/Category/Subcategory must be described as editable classification results on the Rules sheet, not as read-only index outputs.
-9. Priority and Min Confidence use numeric validation.
-10. Existing rule validation/export safety remains unchanged: invalid rules must stop staging rather than be silently accepted.
-
-## Gate H — Excel UX and data presentation
+## Gate E — Excel UX and data presentation
 
 1. No merged-cell warning on open.
 2. No visible CMD/console window during engine execution.
@@ -111,8 +70,31 @@ Real future faults such as a locked/corrupt source, an actually ambiguous duplic
 5. `Pending Update` is explicitly review-only; decisions belong in `Review Flags` only when a genuine actionable anomaly exists.
 6. Empty Error Log/Review Flags tables remain valid Excel tables with headers and filters.
 7. Quoted commas/newlines in CSV exchange data must not split one logical row into multiple Excel rows.
+8. Body rows use professional default presentation: Aptos 10, automatic font color, no body fill, consistent alignment, sensible widths/heights, light borders and wrapping only where useful.
+9. Small tables AutoFit row height within safe limits; large extraction tables use compact stable row height to preserve performance.
 
-## Gate I — Safety and negative tests
+## Gate F — Rules & Mappings non-coder UX
+
+1. Default view must be understandable without knowledge of regex, parser internals or configuration file formats.
+2. Normal user controls must include Add Simple Rule and Show/Hide Advanced.
+3. Advanced technical columns are hidden by default.
+4. Normal choices use dropdowns: Enabled, Source Family, Match Scope, Match Type, Include and Stop on Match.
+5. `CONTAINS` is the normal-user matching method; `REGEX` is visibly advanced.
+6. Add Simple Rule generates a safe Rule ID / Priority and sensible defaults.
+7. Discipline, Category and Subcategory are clearly described as the classification outputs the rule assigns.
+8. Invalid/duplicate rules must fail validation before staging; they must never be silently accepted.
+
+## Gate G — Source access resilience
+
+1. Valid Excel/OneDrive source workbooks that return a transient Windows sharing/permission error must be retried automatically before the scan fails.
+2. Retry handling must cover both profiling and content hashing.
+3. If direct access continues to fail, the engine should attempt a temporary read-only snapshot before declaring the source unavailable.
+4. A persistent access failure must become one clear `SOURCE_HASH_ERROR`/blocking source-access finding instead of crashing the packaged engine with exit code 2.
+5. A persistently unavailable source must never be treated as removed from the approved index.
+6. The recommended action must tell the user to close the source workbook if open and wait for OneDrive synchronization before retrying.
+7. Regression tests must verify transient PermissionError recovery and the real Project 2369 source remains readable in the repository baseline.
+
+## Gate H — Safety and negative tests
 
 1. A locked/unreadable source must produce a clear genuine error and must not silently disappear from the approved index.
 2. A failed stage must not change the approved pointer/data.
@@ -121,7 +103,7 @@ Real future faults such as a locked/corrupt source, an actually ambiguous duplic
 5. Non-overridable conflicts must remain blocking.
 6. Source `DATA/` must remain byte-for-byte untouched by profiling/extraction tests.
 
-## Gate J — Determinism and packaging
+## Gate I — Determinism and packaging
 
 1. Linux and Windows real-data extraction must be deterministic.
 2. Cycle 1 profiler/classification, Cycle 2 sentinel, Cycle 3 full extraction, and Production Excel Package workflows must all pass on the final HEAD.
@@ -134,18 +116,17 @@ Real future faults such as a locked/corrupt source, an actually ambiguous duplic
 After all automated gates are green, the owner should:
 
 1. close all source Excel workbooks and wait for OneDrive sync to settle;
-2. extract the final package into a new local non-OneDrive test folder;
+2. extract the final package into a new test folder;
 3. run `Create_NMDC_Document_Index.vbs`;
 4. open the fresh workbook and confirm no performance/merge warning appears;
 5. select the real DATA folder and run **Full Rescan / Rebuild All**;
 6. confirm Review Flags is empty and Error Log contains no extraction/refresh error;
 7. sample Source File and Document Link hyperlinks across multiple projects and confirm every link opens the correct file;
-8. apply a filter and sort to Master Documents, run an update, then confirm the table refreshes unfiltered with no mixed rows or wrong links;
-9. verify the table body uses no fill, automatic font color, consistent alignment/row height and professional widths without manual correction;
-10. open Rules & Mappings, add a simple rule, confirm the normal fields use understandable dropdowns and the advanced fields are hidden until requested;
-11. verify Pending Update remains a review-only change preview;
-12. test Reset All Records and rerun Full Rescan;
-13. do **not** approve the staged update until these checks are accepted.
+8. verify Pending Update remains a review-only change preview;
+9. apply a table filter/sort, refresh, and confirm the refreshed table resets cleanly without mixed rows;
+10. confirm Rules & Mappings simple view is usable without editing technical fields;
+11. test Reset All Records and rerun Full Rescan;
+12. do **not** approve the staged update until these checks are accepted.
 
 ## Release rule
 
