@@ -69,20 +69,23 @@ def _date_like_identifier(value: str) -> bool:
 
 def _header_candidate_score(model, row: int, extractor) -> int:
     """Prefer a real table header over document-number labels in workbook title blocks."""
-    band_end = min(model.max_row, row + 4)
     score = 0
+    # Only inspect the candidate row and the immediately following row. Looking
+    # four rows ahead can make a title-block label inherit the score of the real
+    # table header below it (as happened in the 7279 NAVAL MARINE sheet).
     for (candidate_row, _col), value in model.cells.items():
-        if not row <= candidate_row <= band_end:
+        if candidate_row not in {row, row + 1}:
             continue
+        weight = 2 if candidate_row == row else 1
         if extractor._is_title_header(value):
-            score += 12
+            score += 12 * weight
         if extractor._is_company_doc_header(value):
-            score += 10
+            score += 10 * weight
         if extractor._is_revision_header(value):
-            score += 8
+            score += 8 * weight
         n = norm_text(value)
         if any(token in n for token in ("status", "submission plan", "issue date", "schedule date", "transmittal")):
-            score += 2
+            score += 2 * weight
     return score
 
 
@@ -128,10 +131,6 @@ def _safe_empty_register(root: Path, review: Mapping[str, Any], extractor, full_
                 continue
             if norm_text(text) in placeholder_values or _date_like_identifier(text):
                 continue
-            # A genuine identifier means the sheet is populated and must remain
-            # visible unless the parser can extract it. Non-header text in an
-            # identity column below the header band is also treated conservatively
-            # as possible data rather than silently accepting the sheet as empty.
             if extractor._looks_identifier(text):
                 return False
             if row > band_end and not (
