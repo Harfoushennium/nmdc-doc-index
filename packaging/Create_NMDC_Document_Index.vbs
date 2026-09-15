@@ -230,7 +230,8 @@ Sub StyleHomeDashboard(ByVal wb)
     Dim ws
     Set ws = wb.Worksheets("Home")
 
-    ws.Cells.Font.Name = "Aptos"
+    ' Format only the visible dashboard area. Formatting ws.Cells styles all 16,384 columns and triggers Excel's slow-workbook warning.
+    ws.Range("A1:L33").Font.Name = "Aptos"
     ws.Range("A1:L33").Interior.Color = RGB(247, 249, 252)
 
     With ws.Range("A1:L1")
