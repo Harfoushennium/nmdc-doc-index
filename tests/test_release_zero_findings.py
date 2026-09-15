@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import csv
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
+from nmdc_profiler.excel_bridge import export_excel_exchange
 from nmdc_profiler.layout_compat import install_layout_compatibility
 from nmdc_profiler.runtime_engine import build_runtime_catalog, stage_runtime_update
 
@@ -21,6 +23,11 @@ BARGE_SOURCE = "METHODS/2. Barges Sketch Deliverables.xlsx"
 
 def canon(value: str) -> str:
     return " ".join((value or "").split()).casefold()
+
+
+def read_csv_rows(path: Path):
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        return list(csv.DictReader(handle))
 
 
 class ReleaseZeroFindingsTests(unittest.TestCase):
@@ -70,9 +77,10 @@ class ReleaseZeroFindingsTests(unittest.TestCase):
             self.assertEqual(catalog.selection_statuses.get(BARGE_SOURCE), "SELECTED")
             self.assertGreater(total_records, 39000)
 
-    def test_clean_first_full_stage_has_zero_review_and_conflict_flags(self):
+    def test_clean_first_full_stage_and_excel_exchange_have_zero_findings(self):
         with tempfile.TemporaryDirectory() as tmp:
             state_dir = Path(tmp) / "state"
+            exchange_dir = Path(tmp) / "exchange"
             summary = stage_runtime_update(
                 data_dir=ROOT / "DATA",
                 state_dir=state_dir,
@@ -87,6 +95,7 @@ class ReleaseZeroFindingsTests(unittest.TestCase):
             self.assertEqual(int(summary.get("blocking_flags", -1)), 0)
             self.assertEqual(summary.get("status"), "STAGED")
             self.assertGreater(int(summary.get("staged_records", 0)), 39000)
+
             records = [json.loads(line) for line in (stage_dir / "records.jsonl").read_text(encoding="utf-8").splitlines() if line]
             self.assertTrue(
                 any(
@@ -96,6 +105,13 @@ class ReleaseZeroFindingsTests(unittest.TestCase):
                 ),
                 "Standalone barge sketch register must be extracted in the clean staged dataset",
             )
+
+            exported = export_excel_exchange(state_dir, exchange_dir)
+            self.assertEqual(exported["flags"], 0)
+            self.assertEqual(exported["errors"], 0)
+            self.assertEqual(read_csv_rows(exchange_dir / "flags.csv"), [])
+            self.assertEqual(read_csv_rows(exchange_dir / "errors.csv"), [])
+            self.assertGreater(exported["pending_rows"], 39000)
 
 
 if __name__ == "__main__":
