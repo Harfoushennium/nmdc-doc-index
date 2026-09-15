@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any, Callable, List, Mapping, Tuple
@@ -7,6 +8,16 @@ from typing import Any, Callable, List, Mapping, Tuple
 from .core import norm_text
 
 _INSTALLED = False
+
+# These are normal lifecycle notifications, not extraction findings. They are
+# already represented by Pending Update, dashboard counts and Update History.
+_NON_ACTIONABLE_STAGE_CODES = {
+    "SOURCE_NEW",
+    "SOURCE_CHANGED",
+    "PARSER_VERSION_CHANGED",
+    "CONFIG_CHANGED",
+    "CACHE_MISSING",
+}
 
 
 def _extended_document_header(text: str) -> bool:
@@ -70,9 +81,6 @@ def _date_like_identifier(value: str) -> bool:
 def _header_candidate_score(model, row: int, extractor) -> int:
     """Prefer a real table header over document-number labels in workbook title blocks."""
     score = 0
-    # Only inspect the candidate row and the immediately following row. Looking
-    # four rows ahead can make a title-block label inherit the score of the real
-    # table header below it (as happened in the 7279 NAVAL MARINE sheet).
     for (candidate_row, _col), value in model.cells.items():
         if candidate_row not in {row, row + 1}:
             continue
@@ -143,14 +151,73 @@ def _safe_empty_register(root: Path, review: Mapping[str, Any], extractor, full_
     return True
 
 
-def install_layout_compatibility() -> None:
-    """Install conservative runtime-only layout compatibility extensions.
+def _rewrite_latest_stage_without_notifications(state_dir: Path, summary: Mapping[str, Any]) -> dict[str, Any]:
+    """Keep Review Flags for actionable anomalies only.
 
-    Existing recognized layouts are untouched. The fallback broadens known
-    document-identifier labels, prefers table headers over title-block labels,
-    and retries header discovery through row 60. Runtime review filtering closes
-    a worksheet automatically only when its recognized identity columns contain
-    no real records. Populated unfamiliar layouts remain in Review Flags.
+    New/changed/reprocessed-source notifications remain fully visible in Pending
+    Update, dashboard counts, source decisions and Update History. They are not
+    parser findings and therefore must not ask the user for a Review Flags
+    decision.
+    """
+    corrected = dict(summary)
+    run_id = str(corrected.get("run_id", ""))
+    if not run_id:
+        return corrected
+    stage_dir = Path(state_dir) / "staging" / run_id
+    flags_path = stage_dir / "flags.json"
+    summary_path = stage_dir / "summary.json"
+    if not flags_path.exists() or not summary_path.exists():
+        return corrected
+
+    try:
+        flags = json.loads(flags_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return corrected
+    kept = [
+        dict(flag)
+        for flag in flags
+        if str(flag.get("code", "")).strip().upper() not in _NON_ACTIONABLE_STAGE_CODES
+    ]
+    if len(kept) == len(flags):
+        return corrected
+
+    blocking = sum(1 for flag in kept if str(flag.get("level", "")).upper() == "CONFLICT")
+    review_count = sum(1 for flag in kept if str(flag.get("level", "")).upper() == "REVIEW")
+    corrected["blocking_flags"] = blocking
+    corrected["review_flags"] = review_count
+    corrected["status"] = "REVIEW_REQUIRED" if blocking else "STAGED"
+
+    flags_path.write_text(json.dumps(kept, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+    summary_path.write_text(json.dumps(corrected, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+
+    # Keep the most recent STAGED history row consistent with the corrected
+    # summary so dashboard/history counts never disagree with Review Flags.
+    history_path = Path(state_dir) / "logs" / "history.jsonl"
+    if history_path.exists():
+        try:
+            lines = history_path.read_text(encoding="utf-8").splitlines()
+            for index in range(len(lines) - 1, -1, -1):
+                row = json.loads(lines[index])
+                if str(row.get("event", "")) == "STAGED" and str(row.get("run_id", "")) == run_id:
+                    row["blocking_flags"] = blocking
+                    row["review_flags"] = review_count
+                    row["status"] = corrected["status"]
+                    lines[index] = json.dumps(row, ensure_ascii=False, sort_keys=True)
+                    history_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+                    break
+        except (OSError, json.JSONDecodeError):
+            pass
+    return corrected
+
+
+def install_layout_compatibility() -> None:
+    """Install conservative runtime layout and clean-review compatibility.
+
+    Known engineering identifier labels are recognized, real table headers are
+    preferred over title-block labels, and empty registers are accepted only
+    after identity columns are proven to contain no document rows. Review Flags
+    are reserved for actionable anomalies; ordinary source lifecycle notices
+    remain in Pending Update/history instead.
     """
     global _INSTALLED
     if _INSTALLED:
@@ -162,6 +229,7 @@ def install_layout_compatibility() -> None:
     original_header_candidates = extractor._header_candidates
     original_flag_from_review = runtime_engine._flag_from_review
     original_runtime_run_full_extraction = runtime_engine.run_full_extraction
+    original_stage_update = runtime_engine.stage_update
 
     def is_doc_header(text: str) -> bool:
         return original_is_doc_header(text) or _extended_document_header(text)
@@ -187,26 +255,18 @@ def install_layout_compatibility() -> None:
             flag["code"] = "UNRECOGNIZED_LAYOUT_HEADER"
             flag["message"] = (
                 "The worksheet contains candidate register content, but the parser could not find a recognized "
-                "document-number/identifier header in the header area. The runtime also checks common engineering "
-                "labels such as NMDC Energy Number, NPCC Doc No., Contractor Document No., Procedure No., Setup Plan No., "
-                "Anchor Pattern No. and Cut List No."
+                "document-number/identifier header in the header area."
             )
             flag["recommended_action"] = (
-                "Open the Source File and named Source Sheet. If it contains register data, compare the identifier "
-                "column heading with an extracted project and choose NEEDS PARSER/MAPPING FIX with a short comment. "
-                "If the sheet is intentionally empty, choose NO ACTION REQUIRED."
+                "This is an extraction defect requiring parser/mapping correction; do not manually classify the source as bad."
             )
         elif "LAYOUT_FIRST_DATA_ROW_NOT_FOUND" in diagnostics:
             flag["code"] = "UNRECOGNIZED_LAYOUT_DATA"
             flag["message"] = (
-                "The worksheet header was recognized, but no safe first data row with a document/company identifier "
-                "could be confirmed. This commonly means the sheet is empty, uses placeholder-only rows, or its "
-                "document identifiers use a pattern the parser does not yet recognize."
+                "The worksheet header was recognized, but no safe document row could be confirmed."
             )
             flag["recommended_action"] = (
-                "Open the Source File and named Source Sheet. If there are real document rows, choose "
-                "NEEDS PARSER/MAPPING FIX and add an example document number in User Comment. If there are no real "
-                "records, choose NO ACTION REQUIRED."
+                "This is an extraction defect unless the register is empty; the engine should resolve known empty registers automatically."
             )
         return flag
 
@@ -261,8 +321,16 @@ def install_layout_compatibility() -> None:
 
         return records, reconciliation, kept_reviews
 
+    def clean_stage_update(*args, **kwargs):
+        summary = original_stage_update(*args, **kwargs)
+        state_dir = kwargs.get("state_dir")
+        if state_dir is None:
+            return summary
+        return _rewrite_latest_stage_without_notifications(Path(state_dir), summary)
+
     extractor._is_doc_header = is_doc_header
     extractor._header_candidates = header_candidates
     runtime_engine._flag_from_review = review_flag
     runtime_engine.run_full_extraction = runtime_run_full_extraction
+    runtime_engine.stage_update = clean_stage_update
     _INSTALLED = True
