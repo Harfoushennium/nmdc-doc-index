@@ -11,6 +11,7 @@ from nmdc_profiler.layout_compat import install_layout_compatibility
 from nmdc_profiler.review_decisions import apply_review_decisions
 from nmdc_profiler.runtime_admin import reset_runtime_state, undo_last_approval
 from nmdc_profiler.runtime_engine import record_user_flag, stage_runtime_update
+from nmdc_profiler.source_access import install_resilient_source_access
 from nmdc_profiler.update_engine import approve_stage, hold_stage, reject_stage
 
 
@@ -102,6 +103,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         if args.command == "stage":
+            install_resilient_source_access()
             install_layout_compatibility()
             result = stage_runtime_update(
                 data_dir=args.data_dir,
