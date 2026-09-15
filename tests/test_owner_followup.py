@@ -44,10 +44,52 @@ class OwnerFollowupTests(unittest.TestCase):
         self.assertIn("NMDC_ActivateSourceLinks table", refresh)
         self.assertIn('NMDC_ActivateSourceColumn table, "Source File"', refresh)
         self.assertIn("Set column = table.ListColumns(columnName)", refresh)
-        self.assertIn('ScreenTip:="Open source workbook"', refresh)
+        self.assertIn('=HYPERLINK(', refresh)
+        self.assertIn("column.DataBodyRange.Formula = formulas", refresh)
         self.assertIn("ACKNOWLEDGED,NO ACTION REQUIRED,NEEDS SOURCE CORRECTION,NEEDS PARSER/MAPPING FIX,HOLD FOR REVIEW", setup)
         self.assertIn("OPEN,ACKNOWLEDGED,RESOLVED,DEFERRED", setup)
         self.assertIn("YES,NO", setup)
+
+    def test_workbook_guidance_explains_inputs_outputs_and_pending_update(self):
+        startup = (ROOT / "excel" / "vba" / "modNMDC_Startup.bas").read_text(encoding="utf-8")
+        self.assertIn("Public Sub NMDC_ApplyWorkbookGuidance", startup)
+        self.assertIn("REVIEW ONLY - NO USER INPUT ON THIS SHEET", startup)
+        self.assertIn("USER ACTION SHEET", startup)
+        self.assertIn('Case "USER DECISION"', startup)
+        self.assertIn("NEEDS SOURCE CORRECTION = source workbook must be corrected and rescanned", startup)
+        self.assertIn("NEEDS PARSER/MAPPING FIX = parser/rule needs correction and a new scan", startup)
+        self.assertIn("Saving a decision records it; it does not silently rewrite extracted data", startup)
+        self.assertIn('Case "RESOLUTION STATUS"', startup)
+        self.assertIn('Case "CHANGE TYPE"', startup)
+        self.assertIn('Case "REVIEW REQUIRED"', startup)
+        self.assertIn("headerCell.AddComment noteText", startup)
+
+    def test_table_presentation_is_standardized_and_user_inputs_are_highlighted(self):
+        startup = (ROOT / "excel" / "vba" / "modNMDC_Startup.bas").read_text(encoding="utf-8")
+        refresh = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
+        self.assertIn('table.TableStyle = "TableStyleMedium2"', startup)
+        self.assertIn('table.Range.Font.Name = "Aptos"', startup)
+        self.assertIn("table.HeaderRowRange", startup)
+        self.assertIn("NMDC_SetColumnWidth column", startup)
+        self.assertIn("NMDC_StyleUserInputColumns table", startup)
+        self.assertIn("NMDC_ApplyTableGuidance table", refresh)
+
+    def test_refresh_uses_fast_mode_and_batch_column_operations(self):
+        refresh = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
+        self.assertIn("Application.Calculation = xlCalculationManual", refresh)
+        self.assertIn("Application.EnableEvents = False", refresh)
+        self.assertIn("NMDC_ConvertDateColumn column", refresh)
+        self.assertIn("NMDC_ConvertNumericColumn column", refresh)
+        self.assertIn("column.DataBodyRange.Formula = formulas", refresh)
+        self.assertIn("NMDC_SetRefreshStatus 8, 8", refresh)
+
+    def test_engine_progress_keeps_excel_responsive(self):
+        engine = (ROOT / "excel" / "vba" / "modNMDC_Engine.bas").read_text(encoding="utf-8")
+        self.assertIn("Set process = shell.Exec(cmd)", engine)
+        self.assertIn("Do While process.Status = 0", engine)
+        self.assertIn("NMDC_ShowEngineProgress commandName", engine)
+        self.assertIn("DoEvents", engine)
+        self.assertIn("Elapsed:", engine)
 
     def test_home_has_reset_undo_and_save_review_decision_controls(self):
         setup = (ROOT / "packaging" / "Create_NMDC_Document_Index.vbs").read_text(encoding="utf-8")
