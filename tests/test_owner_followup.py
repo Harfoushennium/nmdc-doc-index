@@ -83,13 +83,15 @@ class OwnerFollowupTests(unittest.TestCase):
         self.assertIn("column.DataBodyRange.Formula = formulas", refresh)
         self.assertIn("NMDC_SetRefreshStatus 8, 8", refresh)
 
-    def test_engine_progress_keeps_excel_responsive(self):
+    def test_engine_progress_keeps_excel_responsive_without_visible_console(self):
         engine = (ROOT / "excel" / "vba" / "modNMDC_Engine.bas").read_text(encoding="utf-8")
-        self.assertIn("Set process = shell.Exec(cmd)", engine)
-        self.assertIn("Do While process.Status = 0", engine)
+        self.assertIn('shell.Run NMDC_Quote(launcherPath), 0, False', engine)
+        self.assertIn("Do While Not fso.FileExists(completionPath)", engine)
         self.assertIn("NMDC_ShowEngineProgress commandName", engine)
         self.assertIn("DoEvents", engine)
         self.assertIn("Elapsed:", engine)
+        self.assertIn("Engine message:", engine)
+        self.assertNotIn("shell.Exec(cmd)", engine)
 
     def test_home_has_reset_undo_and_save_review_decision_controls(self):
         setup = (ROOT / "packaging" / "Create_NMDC_Document_Index.vbs").read_text(encoding="utf-8")
