@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import Any, Callable, List, Mapping, Tuple
 
 from .core import norm_text
@@ -26,6 +28,18 @@ def _extended_document_header(text: str) -> bool:
         "cut-list number",
         "nmdc energy number",
         "nmdc energy no",
+        "nmdc document no",
+        "nmdc document number",
+        "nmdc doc no",
+        "nmdc doc number",
+        "npcc document no",
+        "npcc document number",
+        "npcc doc no",
+        "npcc doc number",
+        "contractor document no",
+        "contractor document number",
+        "contractor doc no",
+        "contractor doc number",
     }
     if n in exact:
         return True
@@ -44,24 +58,74 @@ def _review_diagnostics(review: Mapping[str, Any]) -> str:
     return f"{reason};{warning_text}".upper()
 
 
+def _date_like_identifier(value: str) -> bool:
+    text = str(value or "").strip()
+    return bool(
+        re.fullmatch(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}", text)
+        or re.fullmatch(r"\d{4}[/-]\d{1,2}[/-]\d{1,2}", text)
+        or re.fullmatch(r"\d{1,2}-[A-Za-z]{3}-\d{2,4}", text)
+    )
+
+
+def _safe_empty_register(root: Path, review: Mapping[str, Any], extractor, full_extractor) -> bool:
+    """Return True only when a recognized register contains no real identifier-like data anywhere below its header."""
+    if "LAYOUT_FIRST_DATA_ROW_NOT_FOUND" not in _review_diagnostics(review):
+        return False
+
+    source_file = str(review.get("Source File", "") or "").strip()
+    worksheet = str(review.get("Worksheet", "") or "").strip()
+    if not source_file or not worksheet:
+        return False
+
+    source = Path(root) / source_file
+    if not source.exists():
+        return False
+
+    try:
+        actual_sheet = full_extractor.resolve_sheet_name(source, worksheet)
+        model = extractor.read_sheet_model(source, Path(root), actual_sheet)
+    except Exception:
+        return False
+
+    headers = extractor._header_candidates(model, extractor._is_doc_header)
+    if not headers:
+        return False
+    header_start = headers[0][0]
+
+    # If any non-date identifier-like token exists below the recognized header,
+    # keep the worksheet in Review Flags. That protects populated unfamiliar
+    # layouts from being silently treated as empty.
+    for (row, _col), value in model.cells.items():
+        if row <= header_start:
+            continue
+        text = str(value or "").strip()
+        if _date_like_identifier(text):
+            continue
+        if extractor._looks_identifier(text):
+            return False
+    return True
+
+
 def install_layout_compatibility() -> None:
     """Install conservative runtime-only layout compatibility extensions.
 
-    Existing recognized layouts are untouched. The fallback only broadens known
-    document-identifier header labels and, when the original first-30-row scan
-    finds nothing, retries the same predicate through row 60. Runtime review
-    flags also preserve the concrete parser reason so Excel tells the owner why
-    a worksheet needs review instead of showing only a generic layout message.
+    Existing recognized layouts are untouched. The fallback broadens known
+    document-identifier labels and, when the original first-30-row scan finds
+    nothing, retries the same predicate through row 60. Runtime-only review
+    filtering also closes a worksheet automatically *only* when its header is
+    recognized and no real identifier-like data exists anywhere below it.
+    Populated unfamiliar layouts remain in Review Flags.
     """
     global _INSTALLED
     if _INSTALLED:
         return
 
-    from . import extractor, runtime_engine
+    from . import extractor, full_extractor, runtime_engine
 
     original_is_doc_header = extractor._is_doc_header
     original_header_candidates = extractor._header_candidates
     original_flag_from_review = runtime_engine._flag_from_review
+    original_runtime_run_full_extraction = runtime_engine.run_full_extraction
 
     def is_doc_header(text: str) -> bool:
         return original_is_doc_header(text) or _extended_document_header(text)
@@ -84,7 +148,8 @@ def install_layout_compatibility() -> None:
             flag["message"] = (
                 "The worksheet contains candidate register content, but the parser could not find a recognized "
                 "document-number/identifier header in the header area. The runtime also checks common engineering "
-                "labels such as NMDC Energy Number, Procedure No., Setup Plan No., Anchor Pattern No. and Cut List No."
+                "labels such as NMDC Energy Number, NPCC Doc No., Contractor Document No., Procedure No., Setup Plan No., "
+                "Anchor Pattern No. and Cut List No."
             )
             flag["recommended_action"] = (
                 "Open the Source File and named Source Sheet. If it contains register data, compare the identifier "
@@ -105,7 +170,59 @@ def install_layout_compatibility() -> None:
             )
         return flag
 
+    def runtime_run_full_extraction(root, work_items, selected_inventory, initial_review, rules):
+        records, reconciliation, reviews = original_runtime_run_full_extraction(
+            root, work_items, selected_inventory, initial_review, rules
+        )
+
+        accepted_empty: set[tuple[str, str]] = set()
+        kept_reviews = []
+        for review in reviews:
+            if _safe_empty_register(Path(root), review, extractor, full_extractor):
+                accepted_empty.add(
+                    (
+                        str(review.get("Source File", "")).casefold(),
+                        re.sub(r"\s+", " ", str(review.get("Worksheet", ""))).strip().casefold(),
+                    )
+                )
+            else:
+                kept_reviews.append(review)
+
+        if accepted_empty:
+            reconciliation = dict(reconciliation)
+            worksheets = [dict(row) for row in reconciliation.get("worksheets", [])]
+            for row in worksheets:
+                key = (
+                    str(row.get("source_file", "")).casefold(),
+                    re.sub(r"\s+", " ", str(row.get("requested_worksheet", row.get("worksheet", "")))).strip().casefold(),
+                )
+                if key in accepted_empty:
+                    row["status"] = "EMPTY_ACCEPTED"
+                    row["reason"] = "Recognized register contains no document rows"
+                    warnings = list(row.get("warnings", []) or [])
+                    if "EMPTY_REGISTER_NO_DATA" not in warnings:
+                        warnings.append("EMPTY_REGISTER_NO_DATA")
+                    row["warnings"] = warnings
+            reconciliation["worksheets"] = worksheets
+
+            summary = dict(reconciliation.get("summary", {}))
+            summary["worksheets_review_required"] = sum(
+                1
+                for row in worksheets
+                if str(row.get("status", "")) not in {"INCLUDE", "EMPTY_ACCEPTED"}
+                or (
+                    str(row.get("status", "")) == "INCLUDE"
+                    and int(row.get("event_records", 0) or 0) <= 0
+                )
+            )
+            summary["empty_worksheets_accepted"] = len(accepted_empty)
+            summary["review_queue_items"] = len(kept_reviews)
+            reconciliation["summary"] = summary
+
+        return records, reconciliation, kept_reviews
+
     extractor._is_doc_header = is_doc_header
     extractor._header_candidates = header_candidates
     runtime_engine._flag_from_review = review_flag
+    runtime_engine.run_full_extraction = runtime_run_full_extraction
     _INSTALLED = True
