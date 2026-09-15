@@ -44,8 +44,9 @@ class OwnerFollowupTests(unittest.TestCase):
         self.assertIn("NMDC_ActivateSourceLinks table", refresh)
         self.assertIn('NMDC_ActivateSourceColumn table, "Source File"', refresh)
         self.assertIn("Set column = table.ListColumns(columnName)", refresh)
-        self.assertIn('=HYPERLINK(', refresh)
-        self.assertIn("column.DataBodyRange.Formula = formulas", refresh)
+        self.assertIn("Hyperlinks.Add Anchor:=targetCell", refresh)
+        self.assertIn("Application.AutoCorrect.AutoFillFormulasInLists = False", refresh)
+        self.assertNotIn('formulas(rowIndex, 1) = "=HYPERLINK(', refresh)
         self.assertIn("ACKNOWLEDGED,NO ACTION REQUIRED,NEEDS SOURCE CORRECTION,NEEDS PARSER/MAPPING FIX,HOLD FOR REVIEW", setup)
         self.assertIn("OPEN,ACKNOWLEDGED,RESOLVED,DEFERRED", setup)
         self.assertIn("YES,NO", setup)
@@ -74,13 +75,13 @@ class OwnerFollowupTests(unittest.TestCase):
         self.assertIn("NMDC_StyleUserInputColumns table", startup)
         self.assertIn("NMDC_ApplyTableGuidance table", refresh)
 
-    def test_refresh_uses_fast_mode_and_batch_column_operations(self):
+    def test_refresh_uses_fast_mode_and_typed_batch_operations(self):
         refresh = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
         self.assertIn("Application.Calculation = xlCalculationManual", refresh)
         self.assertIn("Application.EnableEvents = False", refresh)
         self.assertIn("NMDC_ConvertDateColumn column", refresh)
         self.assertIn("NMDC_ConvertNumericColumn column", refresh)
-        self.assertIn("column.DataBodyRange.Formula = formulas", refresh)
+        self.assertIn("Hyperlinks.Add Anchor:=targetCell", refresh)
         self.assertIn("NMDC_SetRefreshStatus 8, 8", refresh)
 
     def test_engine_progress_keeps_excel_responsive_without_visible_console(self):
@@ -206,6 +207,8 @@ class OwnerFollowupTests(unittest.TestCase):
             "Setup Plan No",
             "Anchor Pattern Number",
             "Cut List No.",
+            "NPCC Doc No.",
+            "Contractor Document No.",
         ):
             self.assertTrue(_extended_document_header(header), header)
 
