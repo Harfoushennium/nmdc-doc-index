@@ -117,6 +117,7 @@ AttachHomeButtons workbook
 ConfigureReviewFlags workbook
 ApplyUserDropdowns workbook
 workbook.Worksheets("System Data").Visible = 2
+NormalizeMergedUiRanges workbook
 workbook.Save
 workbook.Close True
 excel.Quit
@@ -422,6 +423,33 @@ Sub ApplyTableDropdown(ByVal table, ByVal columnName, ByVal listValues)
     target.Validation.Add xlValidateList, xlValidAlertStop, xlBetween, listValues
     target.Validation.IgnoreBlank = True
     target.Validation.InCellDropdown = True
+End Sub
+
+Sub NormalizeMergedUiRanges(ByVal wb)
+    Dim ws, scanRange, cell, mergeArea, seen, address, topValue
+
+    ' The source workbook contains many merged UI blocks. Some builder-generated
+    ' files retain duplicate values in the hidden cells underneath a merge. Excel
+    ' then warns on the next open that merging will discard those values. Normalize
+    ' only the UI area (rows 1-40), never the extracted data tables below it.
+    For Each ws In wb.Worksheets
+        Set seen = CreateObject("Scripting.Dictionary")
+        Set scanRange = ws.Range("A1:Z40")
+        For Each cell In scanRange.Cells
+            If cell.MergeCells Then
+                Set mergeArea = cell.MergeArea
+                address = mergeArea.Address
+                If Not seen.Exists(address) Then
+                    seen.Add address, True
+                    topValue = mergeArea.Cells(1, 1).Value
+                    mergeArea.UnMerge
+                    ws.Range(address).ClearContents
+                    ws.Range(address).Cells(1, 1).Value = topValue
+                    ws.Range(address).Merge
+                End If
+            End If
+        Next
+    Next
 End Sub
 
 Sub ShowFailure(ByVal friendlyMessage)
