@@ -86,13 +86,15 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn("exact pending run ID", contract["approval_binding_rule"])
         self.assertIn("do not open or announce", contract["stale_review_rule"])
 
-    def test_vba_launcher_keeps_excel_responsive_and_waits_for_result(self):
+    def test_vba_launcher_hides_console_keeps_excel_responsive_and_waits_for_result(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Engine.bas").read_text(encoding="utf-8")
-        self.assertIn('Set process = shell.Exec(cmd)', text)
-        self.assertIn("Do While process.Status = 0", text)
+        self.assertIn('shell.Run NMDC_Quote(launcherPath), 0, False', text)
+        self.assertIn("Do While Not fso.FileExists(completionPath)", text)
         self.assertIn("NMDC_ShowEngineProgress commandName", text)
         self.assertIn("DoEvents", text)
-        self.assertIn("exitCode = process.ExitCode", text)
+        self.assertIn('exitCode = CLng(Val(Trim$(NMDC_ReadTextFile(completionPath))))', text)
+        self.assertIn("Engine message:", text)
+        self.assertNotIn("shell.Exec(cmd)", text)
         self.assertNotIn("cmd.exe", text.lower())
         self.assertNotIn("powershell", text.lower())
         self.assertIn("ENGINE_MISSING", text)
