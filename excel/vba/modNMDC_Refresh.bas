@@ -382,10 +382,13 @@ Private Sub NMDC_ActivateDocumentLinks(ByVal table As ListObject)
 
     Dim column As ListColumn
     Dim values As Variant
-    Dim formulas() As Variant
     Dim rowCount As Long
     Dim rowIndex As Long
     Dim target As String
+    Dim targetCell As Range
+    Dim previousAutoFill As Boolean
+    Dim errNumber As Long
+    Dim errDescription As String
 
     Set column = Nothing
     On Error Resume Next
@@ -396,7 +399,13 @@ Private Sub NMDC_ActivateDocumentLinks(ByVal table As ListObject)
 
     rowCount = column.DataBodyRange.Rows.Count
     values = column.DataBodyRange.Value2
-    ReDim formulas(1 To rowCount, 1 To 1)
+    previousAutoFill = Application.AutoCorrect.AutoFillFormulasInLists
+    Application.AutoCorrect.AutoFillFormulasInLists = False
+
+    On Error Resume Next
+    column.DataBodyRange.Hyperlinks.Delete
+    On Error GoTo Handler
+    column.DataBodyRange.NumberFormat = "General"
 
     For rowIndex = 1 To rowCount
         If rowCount = 1 Then
@@ -404,20 +413,26 @@ Private Sub NMDC_ActivateDocumentLinks(ByVal table As ListObject)
         Else
             target = Trim$(CStr(values(rowIndex, 1)))
         End If
+
+        Set targetCell = column.DataBodyRange.Cells(rowIndex, 1)
+        targetCell.ClearContents
         If Len(target) > 0 Then
-            formulas(rowIndex, 1) = "=HYPERLINK(""" & NMDC_EscapeFormulaText(target) & """,""Open document"")"
-        Else
-            formulas(rowIndex, 1) = ""
+            targetCell.Value2 = "Open document"
+            table.Parent.Hyperlinks.Add Anchor:=targetCell, Address:=target, TextToDisplay:="Open document"
         End If
     Next rowIndex
 
-    column.DataBodyRange.NumberFormat = "General"
-    NMDC_AssignRowSpecificTableFormulas column.DataBodyRange, formulas
+    Application.AutoCorrect.AutoFillFormulasInLists = previousAutoFill
     Exit Sub
 Handler:
+    errNumber = Err.Number
+    errDescription = Err.Description
+    On Error Resume Next
+    Application.AutoCorrect.AutoFillFormulasInLists = previousAutoFill
+    On Error GoTo 0
     NMDC_LogError "HYPERLINK_REFRESH_ERROR", _
         "Excel loaded the index, but one or more document links could not be activated.", _
-        table.Name & " | " & Err.Number & " - " & Err.Description
+        table.Name & " | " & errNumber & " - " & errDescription
 End Sub
 
 Private Sub NMDC_ActivateSourceLinks(ByVal table As ListObject)
@@ -434,20 +449,25 @@ Handler:
 End Sub
 
 Private Sub NMDC_ActivateSourceColumn(ByVal table As ListObject, ByVal columnName As String)
+    On Error GoTo Handler
+
     Dim column As ListColumn
     Dim values As Variant
-    Dim formulas() As Variant
     Dim rowCount As Long
     Dim rowIndex As Long
     Dim sourceText As String
     Dim addressText As String
     Dim dataFolder As String
     Dim fso As Object
+    Dim targetCell As Range
+    Dim previousAutoFill As Boolean
+    Dim errNumber As Long
+    Dim errDescription As String
 
     Set column = Nothing
     On Error Resume Next
     Set column = table.ListColumns(columnName)
-    On Error GoTo 0
+    On Error GoTo Handler
     If column Is Nothing Then Exit Sub
     If column.DataBodyRange Is Nothing Then Exit Sub
 
@@ -455,7 +475,13 @@ Private Sub NMDC_ActivateSourceColumn(ByVal table As ListObject, ByVal columnNam
     dataFolder = Trim$(NMDC_ConfigValue("Data Folder"))
     rowCount = column.DataBodyRange.Rows.Count
     values = column.DataBodyRange.Value2
-    ReDim formulas(1 To rowCount, 1 To 1)
+    previousAutoFill = Application.AutoCorrect.AutoFillFormulasInLists
+    Application.AutoCorrect.AutoFillFormulasInLists = False
+
+    On Error Resume Next
+    column.DataBodyRange.Hyperlinks.Delete
+    On Error GoTo Handler
+    column.DataBodyRange.NumberFormat = "@"
 
     For rowIndex = 1 To rowCount
         If rowCount = 1 Then
@@ -464,6 +490,10 @@ Private Sub NMDC_ActivateSourceColumn(ByVal table As ListObject, ByVal columnNam
             sourceText = Trim$(CStr(values(rowIndex, 1)))
         End If
 
+        Set targetCell = column.DataBodyRange.Cells(rowIndex, 1)
+        targetCell.ClearContents
+        targetCell.Value2 = sourceText
+
         If Len(sourceText) > 0 Then
             addressText = sourceText
             If Len(dataFolder) > 0 Then
@@ -471,31 +501,12 @@ Private Sub NMDC_ActivateSourceColumn(ByVal table As ListObject, ByVal columnNam
                     addressText = fso.BuildPath(dataFolder, Replace(sourceText, "/", "\"))
                 End If
             End If
-            formulas(rowIndex, 1) = "=HYPERLINK(""" & NMDC_EscapeFormulaText(addressText) & """,""" & _
-                                     NMDC_EscapeFormulaText(sourceText) & """)"
-        Else
-            formulas(rowIndex, 1) = ""
+            table.Parent.Hyperlinks.Add Anchor:=targetCell, Address:=addressText, TextToDisplay:=sourceText
         End If
     Next rowIndex
 
-    column.DataBodyRange.NumberFormat = "General"
-    NMDC_AssignRowSpecificTableFormulas column.DataBodyRange, formulas
-End Sub
-
-' Legacy regression marker only: column.DataBodyRange.Formula = formulas
-' Direct assignment is intentionally replaced because ListObject calculated-column autofill can copy row 1 to every row.
-Private Sub NMDC_AssignRowSpecificTableFormulas(ByVal targetRange As Range, ByRef formulas As Variant)
-    Dim previousAutoFill As Boolean
-    Dim errNumber As Long
-    Dim errDescription As String
-
-    On Error GoTo Handler
-    previousAutoFill = Application.AutoCorrect.AutoFillFormulasInLists
-    Application.AutoCorrect.AutoFillFormulasInLists = False
-    targetRange.Formula = formulas
     Application.AutoCorrect.AutoFillFormulasInLists = previousAutoFill
     Exit Sub
-
 Handler:
     errNumber = Err.Number
     errDescription = Err.Description
@@ -503,13 +514,8 @@ Handler:
     Application.AutoCorrect.AutoFillFormulasInLists = previousAutoFill
     On Error GoTo 0
     If errNumber = 0 Then errNumber = vbObjectError + 322
-    Err.Raise errNumber, "NMDC Hyperlink Refresh", _
-        "Excel could not preserve row-specific hyperlink formulas. " & errDescription
+    Err.Raise errNumber, "NMDC Source Hyperlink Refresh", errDescription
 End Sub
-
-Private Function NMDC_EscapeFormulaText(ByVal text As String) As String
-    NMDC_EscapeFormulaText = Replace(text, Chr$(34), Chr$(34) & Chr$(34))
-End Function
 
 Private Sub NMDC_EnhanceReviewFlagGuidance(ByVal table As ListObject)
     On Error GoTo Handler
