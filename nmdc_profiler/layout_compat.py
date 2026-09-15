@@ -217,7 +217,9 @@ def install_layout_compatibility() -> None:
     preferred over title-block labels, and empty registers are accepted only
     after identity columns are proven to contain no document rows. Review Flags
     are reserved for actionable anomalies; ordinary source lifecycle notices
-    remain in Pending Update/history instead.
+    remain in Pending Update/history instead. The known standalone barge-sketch
+    register is selected without inventing a project number because its document
+    identity is independent of a project folder/name.
     """
     global _INSTALLED
     if _INSTALLED:
@@ -230,6 +232,7 @@ def install_layout_compatibility() -> None:
     original_flag_from_review = runtime_engine._flag_from_review
     original_runtime_run_full_extraction = runtime_engine.run_full_extraction
     original_stage_update = runtime_engine.stage_update
+    original_assign_selection = runtime_engine.assign_selection
 
     def is_doc_header(text: str) -> bool:
         return original_is_doc_header(text) or _extended_document_header(text)
@@ -248,6 +251,25 @@ def install_layout_compatibility() -> None:
             )
         return sorted(found)
 
+    def runtime_assign_selection(workbooks, rules):
+        exact_groups, version_groups = original_assign_selection(workbooks, rules)
+        for workbook in workbooks:
+            if (
+                str(workbook.get("selected_excluded_status", "")).upper() == "REVIEW_REQUIRED"
+                and str(workbook.get("logical_register_identity", "")).upper() == "BARGE_SKETCH_REGISTER"
+                and not list(workbook.get("inferred_project_numbers", []) or [])
+            ):
+                workbook["selected_excluded_status"] = "SELECTED"
+                workbook["selection_exclusion_reason"] = (
+                    "Standalone barge sketch register; project identity is not required for document extraction"
+                )
+                workbook["warnings"] = [
+                    warning
+                    for warning in list(workbook.get("warnings", []) or [])
+                    if warning not in {"PROJECT_ID_NOT_INFERRED", "PROJECT_ID_INTERNAL_NOT_FOUND"}
+                ]
+        return exact_groups, version_groups
+
     def review_flag(review: Mapping[str, Any]) -> dict[str, str]:
         flag = original_flag_from_review(review)
         diagnostics = _review_diagnostics(review)
@@ -258,12 +280,13 @@ def install_layout_compatibility() -> None:
                 "document-number/identifier header in the header area."
             )
             flag["recommended_action"] = (
-                "This is an extraction defect requiring parser/mapping correction; do not manually classify the source as bad."
+                "NEEDS PARSER/MAPPING FIX: this is an extraction defect requiring parser/mapping correction; "
+                "do not manually classify the source as bad."
             )
         elif "LAYOUT_FIRST_DATA_ROW_NOT_FOUND" in diagnostics:
             flag["code"] = "UNRECOGNIZED_LAYOUT_DATA"
             flag["message"] = (
-                "The worksheet header was recognized, but no safe document row could be confirmed."
+                "The worksheet header was recognized, but no safe first data row could be confirmed."
             )
             flag["recommended_action"] = (
                 "This is an extraction defect unless the register is empty; the engine should resolve known empty registers automatically."
@@ -330,6 +353,7 @@ def install_layout_compatibility() -> None:
 
     extractor._is_doc_header = is_doc_header
     extractor._header_candidates = header_candidates
+    runtime_engine.assign_selection = runtime_assign_selection
     runtime_engine._flag_from_review = review_flag
     runtime_engine.run_full_extraction = runtime_run_full_extraction
     runtime_engine.stage_update = clean_stage_update
