@@ -5,25 +5,70 @@ Public Function NMDC_RefreshExchangeData() As Boolean
     On Error GoTo Handler
 
     Dim refreshOk As Boolean
-    refreshOk = True
+    Dim previousCalculation As XlCalculation
+    Dim previousScreenUpdating As Boolean
+    Dim previousEnableEvents As Boolean
 
+    refreshOk = True
+    previousCalculation = Application.Calculation
+    previousScreenUpdating = Application.ScreenUpdating
+    previousEnableEvents = Application.EnableEvents
+
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+    Application.Calculation = xlCalculationManual
+
+    NMDC_SetRefreshStatus 1, 8, "Master Documents"
     If Not NMDC_LoadCsvToTable(NMDC_ExchangePath() & "\master_documents.csv", "Master Documents", "MasterDocuments") Then refreshOk = False
+
+    NMDC_SetRefreshStatus 2, 8, "Revisions"
     If Not NMDC_LoadCsvToTable(NMDC_ExchangePath() & "\revisions.csv", "Revisions", "RevisionRegister") Then refreshOk = False
+
+    NMDC_SetRefreshStatus 3, 8, "Transactions"
     If Not NMDC_LoadCsvToTable(NMDC_ExchangePath() & "\events.csv", "Transactions", "EventRegister") Then refreshOk = False
+
+    NMDC_SetRefreshStatus 4, 8, "Pending Update"
     If Not NMDC_LoadCsvToTable(NMDC_ExchangePath() & "\pending_update.csv", "Pending Update", "PendingUpdate") Then refreshOk = False
+
+    NMDC_SetRefreshStatus 5, 8, "Review Flags"
     If Not NMDC_LoadCsvToTable(NMDC_ExchangePath() & "\flags.csv", "Review Flags", "ReviewFlags") Then refreshOk = False
+
+    NMDC_SetRefreshStatus 6, 8, "Update History"
     If Not NMDC_LoadCsvToTable(NMDC_ExchangePath() & "\history.csv", "Update History", "UpdateHistory") Then refreshOk = False
+
+    NMDC_SetRefreshStatus 7, 8, "Error Log"
     If Not NMDC_LoadErrorCsvPreserveLocal(NMDC_ExchangePath() & "\errors.csv") Then refreshOk = False
+
+    NMDC_SetRefreshStatus 8, 8, "Dashboard"
     If Not NMDC_LoadDashboard(NMDC_ExchangePath() & "\dashboard.csv") Then refreshOk = False
 
+    NMDC_ApplyWorkbookGuidance
+
+CleanExit:
+    Application.Calculation = previousCalculation
+    Application.EnableEvents = previousEnableEvents
+    Application.ScreenUpdating = previousScreenUpdating
+    Application.StatusBar = False
     NMDC_RefreshExchangeData = refreshOk
     Exit Function
+
 Handler:
+    refreshOk = False
     NMDC_LogError "EXCEL_REFRESH_ERROR", _
         "Excel could not refresh one or more NMDC Index tables.", _
         Err.Number & " - " & Err.Description
-    NMDC_RefreshExchangeData = False
+    Resume CleanExit
 End Function
+
+Private Sub NMDC_SetRefreshStatus(ByVal currentStep As Long, ByVal totalSteps As Long, ByVal labelText As String)
+    Dim filled As Long
+    Dim bar As String
+    filled = Int((currentStep / totalSteps) * 20)
+    bar = "[" & String$(filled, "=") & String$(20 - filled, ".") & "]"
+    Application.StatusBar = "NMDC Document Index - refreshing " & labelText & " " & bar & _
+                            "  " & CStr(currentStep) & "/" & CStr(totalSteps)
+    DoEvents
+End Sub
 
 Public Function NMDC_LoadCsvToTable(ByVal csvPath As String, ByVal sheetName As String, ByVal tableName As String) As Boolean
     On Error GoTo Handler
@@ -59,7 +104,6 @@ Public Function NMDC_LoadCsvToTable(ByVal csvPath As String, ByVal sheetName As 
         Exit Function
     End If
 
-    Application.ScreenUpdating = False
     If Not NMDC_ParseCsvFile(csvPath, headers, data, dataCount, columnCount) Then GoTo ImportFailed
 
     tableRows = dataCount
@@ -87,9 +131,6 @@ Public Function NMDC_LoadCsvToTable(ByVal csvPath As String, ByVal sheetName As 
         End If
         table.DataBodyRange.Value2 = data
     Else
-        ' Excel can expose an empty ListObject with DataBodyRange = Nothing even
-        ' when the requested resize includes one blank row. Keep a structural row
-        ' for filters, but never dereference DataBodyRange unless it exists.
         If table.ListRows.Count = 0 Then table.ListRows.Add
         If Not table.DataBodyRange Is Nothing Then table.DataBodyRange.ClearContents
     End If
@@ -99,18 +140,16 @@ Public Function NMDC_LoadCsvToTable(ByVal csvPath As String, ByVal sheetName As 
     NMDC_ActivateSourceLinks table
     NMDC_EnhanceReviewFlagGuidance table
     NMDC_ApplyReviewFlagValidation table
+    NMDC_ApplyTableGuidance table
 
-    Application.ScreenUpdating = True
     NMDC_LoadCsvToTable = True
     Exit Function
 
 ImportFailed:
-    Application.ScreenUpdating = True
     NMDC_LoadCsvToTable = False
     Exit Function
 
 Handler:
-    Application.ScreenUpdating = True
     NMDC_LogError "CSV_IMPORT_ERROR", _
         "Excel could not load " & sheetName & ".", _
         "Table: " & tableName & " | File: " & csvPath & " | " & Err.Number & " - " & Err.Description
@@ -162,6 +201,7 @@ Public Function NMDC_LoadErrorCsvPreserveLocal(ByVal csvPath As String) As Boole
     Next rowValues
     NMDC_ApplyTypedFormatting table
     NMDC_ActivateSourceLinks table
+    NMDC_ApplyTableGuidance table
 
     NMDC_LoadErrorCsvPreserveLocal = True
     Exit Function
@@ -186,8 +226,6 @@ Private Sub NMDC_ApplyTypedFormatting(ByVal table As ListObject)
     On Error GoTo Handler
 
     Dim column As ListColumn
-    Dim cell As Range
-    Dim parsedDate As Date
     Dim headerName As String
 
     If table.DataBodyRange Is Nothing Then Exit Sub
@@ -195,21 +233,9 @@ Private Sub NMDC_ApplyTypedFormatting(ByVal table As ListObject)
     For Each column In table.ListColumns
         headerName = CStr(column.Name)
         If NMDC_IsDateHeader(headerName) Then
-            For Each cell In column.DataBodyRange.Cells
-                If Len(Trim$(CStr(cell.Value))) > 0 Then
-                    If NMDC_TryParseDate(cell.Value, parsedDate) Then cell.Value = parsedDate
-                End If
-            Next cell
-            If NMDC_IsDateTimeHeader(headerName) Then
-                column.DataBodyRange.NumberFormat = "dd-mmm-yyyy hh:mm"
-            Else
-                column.DataBodyRange.NumberFormat = "dd-mmm-yyyy"
-            End If
+            NMDC_ConvertDateColumn column, NMDC_IsDateTimeHeader(headerName)
         ElseIf NMDC_IsNumericHeader(headerName) Then
-            For Each cell In column.DataBodyRange.Cells
-                If Len(Trim$(CStr(cell.Value))) > 0 And IsNumeric(cell.Value) Then cell.Value = CDbl(cell.Value)
-            Next cell
-            column.DataBodyRange.NumberFormat = "#,##0"
+            NMDC_ConvertNumericColumn column
         Else
             column.DataBodyRange.NumberFormat = "@"
         End If
@@ -219,6 +245,69 @@ Handler:
     NMDC_LogError "TABLE_FORMAT_ERROR", _
         "Excel loaded the data but could not apply all field formats.", _
         table.Name & " | " & Err.Number & " - " & Err.Description
+End Sub
+
+Private Sub NMDC_ConvertDateColumn(ByVal column As ListColumn, ByVal includeTime As Boolean)
+    Dim values As Variant
+    Dim outputValues() As Variant
+    Dim rowCount As Long
+    Dim rowIndex As Long
+    Dim rawValue As Variant
+    Dim parsedDate As Date
+
+    If column.DataBodyRange Is Nothing Then Exit Sub
+    rowCount = column.DataBodyRange.Rows.Count
+    values = column.DataBodyRange.Value2
+    ReDim outputValues(1 To rowCount, 1 To 1)
+
+    For rowIndex = 1 To rowCount
+        If rowCount = 1 Then
+            rawValue = values
+        Else
+            rawValue = values(rowIndex, 1)
+        End If
+        If Len(Trim$(CStr(rawValue))) > 0 And NMDC_TryParseDate(rawValue, parsedDate) Then
+            outputValues(rowIndex, 1) = parsedDate
+        Else
+            outputValues(rowIndex, 1) = rawValue
+        End If
+    Next rowIndex
+
+    column.DataBodyRange.Value2 = outputValues
+    If includeTime Then
+        column.DataBodyRange.NumberFormat = "dd-mmm-yyyy hh:mm"
+    Else
+        column.DataBodyRange.NumberFormat = "dd-mmm-yyyy"
+    End If
+End Sub
+
+Private Sub NMDC_ConvertNumericColumn(ByVal column As ListColumn)
+    Dim values As Variant
+    Dim outputValues() As Variant
+    Dim rowCount As Long
+    Dim rowIndex As Long
+    Dim rawValue As Variant
+
+    If column.DataBodyRange Is Nothing Then Exit Sub
+    rowCount = column.DataBodyRange.Rows.Count
+    values = column.DataBodyRange.Value2
+    ReDim outputValues(1 To rowCount, 1 To 1)
+
+    For rowIndex = 1 To rowCount
+        If rowCount = 1 Then
+            rawValue = values
+        Else
+            rawValue = values(rowIndex, 1)
+        End If
+        If Len(Trim$(CStr(rawValue))) > 0 And IsNumeric(rawValue) Then
+            outputValues(rowIndex, 1) = CDbl(rawValue)
+        Else
+            outputValues(rowIndex, 1) = rawValue
+        End If
+    Next rowIndex
+
+    column.DataBodyRange.Value2 = outputValues
+    column.DataBodyRange.NumberFormat = "#,##0"
 End Sub
 
 Private Function NMDC_IsDateHeader(ByVal headerName As String) As Boolean
@@ -292,7 +381,10 @@ Private Sub NMDC_ActivateDocumentLinks(ByVal table As ListObject)
     On Error GoTo Handler
 
     Dim column As ListColumn
-    Dim cell As Range
+    Dim values As Variant
+    Dim formulas() As Variant
+    Dim rowCount As Long
+    Dim rowIndex As Long
     Dim target As String
 
     Set column = Nothing
@@ -302,21 +394,25 @@ Private Sub NMDC_ActivateDocumentLinks(ByVal table As ListObject)
     If column Is Nothing Then Exit Sub
     If column.DataBodyRange Is Nothing Then Exit Sub
 
-    For Each cell In column.DataBodyRange.Cells
-        target = Trim$(CStr(cell.Value))
-        If Len(target) > 0 Then
-            On Error Resume Next
-            cell.Hyperlinks.Delete
-            On Error GoTo Handler
-            If Left$(target, 1) = "#" Then
-                table.Parent.Hyperlinks.Add Anchor:=cell, Address:="", SubAddress:=Mid$(target, 2), _
-                    TextToDisplay:="Open document", ScreenTip:="Open the source document"
-            Else
-                table.Parent.Hyperlinks.Add Anchor:=cell, Address:=target, _
-                    TextToDisplay:="Open document", ScreenTip:="Open the source document"
-            End If
+    rowCount = column.DataBodyRange.Rows.Count
+    values = column.DataBodyRange.Value2
+    ReDim formulas(1 To rowCount, 1 To 1)
+
+    For rowIndex = 1 To rowCount
+        If rowCount = 1 Then
+            target = Trim$(CStr(values))
+        Else
+            target = Trim$(CStr(values(rowIndex, 1)))
         End If
-    Next cell
+        If Len(target) > 0 Then
+            formulas(rowIndex, 1) = "=HYPERLINK(""" & NMDC_EscapeFormulaText(target) & """,""Open document"")"
+        Else
+            formulas(rowIndex, 1) = ""
+        End If
+    Next rowIndex
+
+    column.DataBodyRange.NumberFormat = "General"
+    column.DataBodyRange.Formula = formulas
     Exit Sub
 Handler:
     NMDC_LogError "HYPERLINK_REFRESH_ERROR", _
@@ -339,7 +435,10 @@ End Sub
 
 Private Sub NMDC_ActivateSourceColumn(ByVal table As ListObject, ByVal columnName As String)
     Dim column As ListColumn
-    Dim cell As Range
+    Dim values As Variant
+    Dim formulas() As Variant
+    Dim rowCount As Long
+    Dim rowIndex As Long
     Dim sourceText As String
     Dim addressText As String
     Dim dataFolder As String
@@ -354,9 +453,17 @@ Private Sub NMDC_ActivateSourceColumn(ByVal table As ListObject, ByVal columnNam
 
     Set fso = CreateObject("Scripting.FileSystemObject")
     dataFolder = Trim$(NMDC_ConfigValue("Data Folder"))
+    rowCount = column.DataBodyRange.Rows.Count
+    values = column.DataBodyRange.Value2
+    ReDim formulas(1 To rowCount, 1 To 1)
 
-    For Each cell In column.DataBodyRange.Cells
-        sourceText = Trim$(CStr(cell.Value))
+    For rowIndex = 1 To rowCount
+        If rowCount = 1 Then
+            sourceText = Trim$(CStr(values))
+        Else
+            sourceText = Trim$(CStr(values(rowIndex, 1)))
+        End If
+
         If Len(sourceText) > 0 Then
             addressText = sourceText
             If Len(dataFolder) > 0 Then
@@ -364,14 +471,20 @@ Private Sub NMDC_ActivateSourceColumn(ByVal table As ListObject, ByVal columnNam
                     addressText = fso.BuildPath(dataFolder, Replace(sourceText, "/", "\"))
                 End If
             End If
-            On Error Resume Next
-            cell.Hyperlinks.Delete
-            table.Parent.Hyperlinks.Add Anchor:=cell, Address:=addressText, _
-                TextToDisplay:=sourceText, ScreenTip:="Open source workbook"
-            On Error GoTo 0
+            formulas(rowIndex, 1) = "=HYPERLINK(""" & NMDC_EscapeFormulaText(addressText) & """,""" & _
+                                     NMDC_EscapeFormulaText(sourceText) & """)"
+        Else
+            formulas(rowIndex, 1) = ""
         End If
-    Next cell
+    Next rowIndex
+
+    column.DataBodyRange.NumberFormat = "General"
+    column.DataBodyRange.Formula = formulas
 End Sub
+
+Private Function NMDC_EscapeFormulaText(ByVal text As String) As String
+    NMDC_EscapeFormulaText = Replace(text, Chr$(34), Chr$(34) & Chr$(34))
+End Function
 
 Private Sub NMDC_EnhanceReviewFlagGuidance(ByVal table As ListObject)
     On Error GoTo Handler
@@ -382,20 +495,21 @@ Private Sub NMDC_EnhanceReviewFlagGuidance(ByVal table As ListObject)
     Dim codeCol As Long
     Dim problemCol As Long
     Dim actionCol As Long
+    Dim flagCode As String
 
     codeCol = table.ListColumns("Flag Code").Index
     problemCol = table.ListColumns("Plain-English Problem").Index
     actionCol = table.ListColumns("Recommended User Action").Index
 
     For Each row In table.ListRows
-        If UCase$(Trim$(CStr(row.Range.Cells(1, codeCol).Value))) = "UNRECOGNIZED_LAYOUT" Then
+        flagCode = UCase$(Trim$(CStr(row.Range.Cells(1, codeCol).Value)))
+        If flagCode = "UNRECOGNIZED_LAYOUT" Then
             row.Range.Cells(1, problemCol).Value = _
                 "The parser could not identify a safe document-number/data-row layout automatically. " & _
-                "This can happen when the sheet is empty, when the identifier header uses a different label, " & _
-                "or when the header/data starts in an unusual position. It does not necessarily mean the workbook is badly formatted."
+                "This does not necessarily mean the workbook is badly formatted."
             row.Range.Cells(1, actionCol).Value = _
-                "Open the Source File link and check the named Source Sheet. If it is empty, choose NO ACTION REQUIRED. " & _
-                "If it contains normal register data, choose NEEDS PARSER/MAPPING FIX and add a short User Comment, then Save Review Decisions."
+                "Open the Source File and named Source Sheet. If it is empty, choose NO ACTION REQUIRED. " & _
+                "If it contains normal register data, choose NEEDS PARSER/MAPPING FIX and explain the expected layout in User Comment."
         End If
     Next row
     Exit Sub
@@ -423,12 +537,18 @@ Private Sub NMDC_ApplyReviewFlagValidation(ByVal table As ListObject)
         Formula1:="ACKNOWLEDGED,NO ACTION REQUIRED,NEEDS SOURCE CORRECTION,NEEDS PARSER/MAPPING FIX,HOLD FOR REVIEW"
     decisionRange.Validation.IgnoreBlank = True
     decisionRange.Validation.InCellDropdown = True
+    decisionRange.Validation.ShowInput = True
+    decisionRange.Validation.InputTitle = "What should happen?"
+    decisionRange.Validation.InputMessage = "Select a review decision. The decision records your review; it does not directly rewrite source/extracted data. See the header note for each choice."
 
     statusRange.Validation.Delete
     statusRange.Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Operator:=xlBetween, _
         Formula1:="OPEN,ACKNOWLEDGED,RESOLVED,DEFERRED"
     statusRange.Validation.IgnoreBlank = True
     statusRange.Validation.InCellDropdown = True
+    statusRange.Validation.ShowInput = True
+    statusRange.Validation.InputTitle = "Review status"
+    statusRange.Validation.InputMessage = "OPEN = unresolved; ACKNOWLEDGED = reviewed; RESOLVED = closed; DEFERRED = postponed."
 
     decisionRange.Interior.Color = RGB(234, 244, 251)
     commentRange.Interior.Color = RGB(255, 247, 219)
