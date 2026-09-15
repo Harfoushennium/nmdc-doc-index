@@ -86,9 +86,13 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn("exact pending run ID", contract["approval_binding_rule"])
         self.assertIn("do not open or announce", contract["stale_review_rule"])
 
-    def test_vba_launcher_hides_console_and_waits_for_result(self):
+    def test_vba_launcher_keeps_excel_responsive_and_waits_for_result(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Engine.bas").read_text(encoding="utf-8")
-        self.assertIn('shell.Run(cmd, 0, True)', text)
+        self.assertIn('Set process = shell.Exec(cmd)', text)
+        self.assertIn("Do While process.Status = 0", text)
+        self.assertIn("NMDC_ShowEngineProgress commandName", text)
+        self.assertIn("DoEvents", text)
+        self.assertIn("exitCode = process.ExitCode", text)
         self.assertNotIn("cmd.exe", text.lower())
         self.assertNotIn("powershell", text.lower())
         self.assertIn("ENGINE_MISSING", text)
@@ -154,7 +158,8 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertNotIn("temp.Cells.ClearContents", text)
         self.assertNotIn('Destination:=ws.Range("A1")', text)
         self.assertIn("NMDC_ActivateDocumentLinks table", text)
-        self.assertIn('TextToDisplay:="Open document"', text)
+        self.assertIn('=HYPERLINK(', text)
+        self.assertIn("column.DataBodyRange.Formula = formulas", text)
 
     def test_csv_refresh_keeps_identifiers_text_but_types_dates_and_numbers(self):
         refresh = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
