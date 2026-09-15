@@ -67,8 +67,27 @@ def _date_like_identifier(value: str) -> bool:
     )
 
 
+def _header_candidate_score(model, row: int, extractor) -> int:
+    """Prefer a real table header over document-number labels in workbook title blocks."""
+    band_end = min(model.max_row, row + 4)
+    score = 0
+    for (candidate_row, _col), value in model.cells.items():
+        if not row <= candidate_row <= band_end:
+            continue
+        if extractor._is_title_header(value):
+            score += 12
+        if extractor._is_company_doc_header(value):
+            score += 10
+        if extractor._is_revision_header(value):
+            score += 8
+        n = norm_text(value)
+        if any(token in n for token in ("status", "submission plan", "issue date", "schedule date", "transmittal")):
+            score += 2
+    return score
+
+
 def _safe_empty_register(root: Path, review: Mapping[str, Any], extractor, full_extractor) -> bool:
-    """Return True only when a recognized register contains no real identifier-like data anywhere below its header."""
+    """Return True only when recognized identity columns contain no real record values."""
     if "LAYOUT_FIRST_DATA_ROW_NOT_FOUND" not in _review_diagnostics(review):
         return False
 
@@ -90,19 +109,38 @@ def _safe_empty_register(root: Path, review: Mapping[str, Any], extractor, full_
     headers = extractor._header_candidates(model, extractor._is_doc_header)
     if not headers:
         return False
-    header_start = headers[0][0]
+    header_start, document_col = headers[0]
+    band_end = min(model.max_row, header_start + 4)
+    company_candidates = [
+        (row, col)
+        for (row, col), value in model.cells.items()
+        if header_start <= row <= band_end and extractor._is_company_doc_header(value)
+    ]
+    identity_cols = {document_col}
+    if company_candidates:
+        identity_cols.add(sorted(company_candidates)[0][1])
 
-    # If any non-date identifier-like token exists below the recognized header,
-    # keep the worksheet in Review Flags. That protects populated unfamiliar
-    # layouts from being silently treated as empty.
-    for (row, _col), value in model.cells.items():
-        if row <= header_start:
-            continue
-        text = str(value or "").strip()
-        if _date_like_identifier(text):
-            continue
-        if extractor._looks_identifier(text):
-            return False
+    placeholder_values = {"-", "--", "n/a", "na", "nil", "none", "tbd", "to be advised", "to be confirmed"}
+    for row in range(header_start + 1, model.max_row + 1):
+        for col in identity_cols:
+            text = str(model.value(row, col) or "").strip()
+            if not text:
+                continue
+            if norm_text(text) in placeholder_values or _date_like_identifier(text):
+                continue
+            # A genuine identifier means the sheet is populated and must remain
+            # visible unless the parser can extract it. Non-header text in an
+            # identity column below the header band is also treated conservatively
+            # as possible data rather than silently accepting the sheet as empty.
+            if extractor._looks_identifier(text):
+                return False
+            if row > band_end and not (
+                extractor._is_doc_header(text)
+                or extractor._is_company_doc_header(text)
+                or extractor._is_title_header(text)
+                or extractor._is_revision_header(text)
+            ):
+                return False
     return True
 
 
@@ -110,11 +148,10 @@ def install_layout_compatibility() -> None:
     """Install conservative runtime-only layout compatibility extensions.
 
     Existing recognized layouts are untouched. The fallback broadens known
-    document-identifier labels and, when the original first-30-row scan finds
-    nothing, retries the same predicate through row 60. Runtime-only review
-    filtering also closes a worksheet automatically *only* when its header is
-    recognized and no real identifier-like data exists anywhere below it.
-    Populated unfamiliar layouts remain in Review Flags.
+    document-identifier labels, prefers table headers over title-block labels,
+    and retries header discovery through row 60. Runtime review filtering closes
+    a worksheet automatically only when its recognized identity columns contain
+    no real records. Populated unfamiliar layouts remain in Review Flags.
     """
     global _INSTALLED
     if _INSTALLED:
@@ -132,13 +169,17 @@ def install_layout_compatibility() -> None:
 
     def header_candidates(model, predicate: Callable[[str], bool]) -> List[Tuple[int, int]]:
         found = original_header_candidates(model, predicate)
-        if found:
-            return found
-        out: List[Tuple[int, int]] = []
-        for (row, col), value in model.cells.items():
-            if row <= min(model.max_row, 60) and predicate(value):
-                out.append((row, col))
-        return sorted(out)
+        if not found:
+            found = []
+            for (row, col), value in model.cells.items():
+                if row <= min(model.max_row, 60) and predicate(value):
+                    found.append((row, col))
+        if predicate is is_doc_header and found:
+            return sorted(
+                found,
+                key=lambda item: (-_header_candidate_score(model, item[0], extractor), item[0], item[1]),
+            )
+        return sorted(found)
 
     def review_flag(review: Mapping[str, Any]) -> dict[str, str]:
         flag = original_flag_from_review(review)
