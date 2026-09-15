@@ -106,7 +106,7 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 ## Gate I — Determinism and packaging
 
 1. Linux and Windows real-data extraction must be deterministic.
-2. Cycle 1 profiler/classification, Cycle 2 sentinel, Cycle 3 full extraction, and Production Excel Package workflows must all pass on the final HEAD.
+2. Cycle 1 profiler/classification, Cycle 2 sentinel, Cycle 3 full extraction, and Production Excel Package workflows must all pass on the final production-code HEAD.
 3. Windows engine build and packaged-engine smoke test must pass.
 4. Production ZIP content must be complete and its SHA-256 recorded.
 5. Final owner acceptance must use a fresh package and a freshly generated `.xlsm`; old generated workbooks are not valid release evidence.
