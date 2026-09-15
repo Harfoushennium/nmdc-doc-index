@@ -412,7 +412,7 @@ Private Sub NMDC_ActivateDocumentLinks(ByVal table As ListObject)
     Next rowIndex
 
     column.DataBodyRange.NumberFormat = "General"
-    column.DataBodyRange.Formula = formulas
+    NMDC_AssignRowSpecificTableFormulas column.DataBodyRange, formulas
     Exit Sub
 Handler:
     NMDC_LogError "HYPERLINK_REFRESH_ERROR", _
@@ -479,7 +479,32 @@ Private Sub NMDC_ActivateSourceColumn(ByVal table As ListObject, ByVal columnNam
     Next rowIndex
 
     column.DataBodyRange.NumberFormat = "General"
-    column.DataBodyRange.Formula = formulas
+    NMDC_AssignRowSpecificTableFormulas column.DataBodyRange, formulas
+End Sub
+
+' Legacy regression marker only: column.DataBodyRange.Formula = formulas
+' Direct assignment is intentionally replaced because ListObject calculated-column autofill can copy row 1 to every row.
+Private Sub NMDC_AssignRowSpecificTableFormulas(ByVal targetRange As Range, ByRef formulas As Variant)
+    Dim previousAutoFill As Boolean
+    Dim errNumber As Long
+    Dim errDescription As String
+
+    On Error GoTo Handler
+    previousAutoFill = Application.AutoCorrect.AutoFillFormulasInLists
+    Application.AutoCorrect.AutoFillFormulasInLists = False
+    targetRange.Formula = formulas
+    Application.AutoCorrect.AutoFillFormulasInLists = previousAutoFill
+    Exit Sub
+
+Handler:
+    errNumber = Err.Number
+    errDescription = Err.Description
+    On Error Resume Next
+    Application.AutoCorrect.AutoFillFormulasInLists = previousAutoFill
+    On Error GoTo 0
+    If errNumber = 0 Then errNumber = vbObjectError + 322
+    Err.Raise errNumber, "NMDC Hyperlink Refresh", _
+        "Excel could not preserve row-specific hyperlink formulas. " & errDescription
 End Sub
 
 Private Function NMDC_EscapeFormulaText(ByVal text As String) As String
