@@ -5,7 +5,7 @@
 
 ## Purpose
 
-This plan turns the owner’s reliability findings into hard release gates. The normal Excel product must extract the current known `DATA/` corpus without asking the owner to diagnose parser layouts and without reporting routine source lifecycle notifications as errors.
+This plan turns the owner’s reliability and usability findings into hard release gates. The normal Excel product must extract the current known `DATA/` corpus without asking the owner to diagnose parser layouts, without reporting routine lifecycle notifications as errors, and without requiring manual table cleanup after every refresh.
 
 A **clean current-data Full Rescan** is accepted only when:
 
@@ -16,6 +16,9 @@ A **clean current-data Full Rescan** is accepted only when:
 - `Error Log` contains **0 extraction/refresh errors**;
 - routine additions/changes remain visible in `Pending Update`/history instead of `Review Flags`;
 - source-file and document hyperlinks point to the exact row-specific target;
+- active Excel filters/sorts cannot corrupt or visually mix refreshed table rows;
+- all user-facing tables are consistently formatted without manual cleanup;
+- `Rules & Mappings` is usable by a non-coder through a simple editor with dropdowns and hidden advanced settings;
 - the generated workbook opens without the slow-workbook metadata warning, merge warning, or black console window;
 - source `DATA/` remains unchanged.
 
@@ -60,7 +63,46 @@ Real future faults such as a locked/corrupt source, an actually ambiguous duplic
 5. Generated workbook must not show Excel’s “99% unused formatting and metadata” warning in owner acceptance testing.
 6. Refresh must use manual calculation/events/screen-update suppression and batch typed conversions.
 
-## Gate E — Excel UX and data presentation
+## Gate E — Filter-safe table refresh
+
+1. Before any table is cleared, resized, or repopulated, active worksheet/table filters must be cleared.
+2. Active sort fields must be cleared before row replacement so stale sort state cannot reorder or mix the new dataset.
+3. Filter dropdowns must remain available after refresh.
+4. After refresh, every row must correspond to the correct underlying record regardless of which filter was active before the refresh.
+5. Owner acceptance must explicitly test a filtered table, run an update, then verify the refreshed table is unfiltered and row identities/links remain correct.
+
+## Gate F — Professional table presentation
+
+1. All data-body rows use Aptos 10, automatic font color and no fill color.
+2. Table headers remain visually distinct and professional.
+3. Row striping must not reintroduce unwanted body fill colors.
+4. Text fields are left aligned; short codes, dates, statuses, priorities and counts are consistently centered.
+5. Long user-facing text columns wrap; large extraction tables avoid expensive full-row AutoFit.
+6. Smaller tables AutoFit rows with practical minimum/maximum row heights.
+7. Column widths are standardized by field type.
+8. Light borders, consistent vertical alignment and valid filters remain after every refresh.
+9. Review Flags user-input cells must not require manual fill/font correction after refresh.
+
+## Gate G — Rules & Mappings non-coder UX
+
+1. The sheet must clearly identify itself as a **Simple Rule Editor**.
+2. A normal user must be able to create a rule without manually entering a technical Rule_ID or Priority.
+3. `Add Simple Rule` must generate a unique user rule ID, next priority, normal defaults and place the cursor in `Match_Words`.
+4. Normal dropdowns must exist for:
+   - Enabled: `YES/NO`;
+   - Source Family: `ANY/METHODS/TECH`;
+   - Match Scope: `FILE/WORKSHEET/SECTION/HEADER/DOC_NUMBER/TITLE`;
+   - Match Type: `CONTAINS/EXACT/FUZZY/REGEX`;
+   - Include: `YES/NO`;
+   - Stop on Match: `YES/NO`.
+5. `CONTAINS` must be presented as the recommended normal-user match type; `REGEX` must be described as advanced.
+6. Advanced fields are hidden by default and can be shown/hidden with one button.
+7. Rule headers must explain in plain English what the field does, including the difference between matching input and classification output.
+8. Discipline/Category/Subcategory must be described as editable classification results on the Rules sheet, not as read-only index outputs.
+9. Priority and Min Confidence use numeric validation.
+10. Existing rule validation/export safety remains unchanged: invalid rules must stop staging rather than be silently accepted.
+
+## Gate H — Excel UX and data presentation
 
 1. No merged-cell warning on open.
 2. No visible CMD/console window during engine execution.
@@ -70,7 +112,7 @@ Real future faults such as a locked/corrupt source, an actually ambiguous duplic
 6. Empty Error Log/Review Flags tables remain valid Excel tables with headers and filters.
 7. Quoted commas/newlines in CSV exchange data must not split one logical row into multiple Excel rows.
 
-## Gate F — Safety and negative tests
+## Gate I — Safety and negative tests
 
 1. A locked/unreadable source must produce a clear genuine error and must not silently disappear from the approved index.
 2. A failed stage must not change the approved pointer/data.
@@ -79,7 +121,7 @@ Real future faults such as a locked/corrupt source, an actually ambiguous duplic
 5. Non-overridable conflicts must remain blocking.
 6. Source `DATA/` must remain byte-for-byte untouched by profiling/extraction tests.
 
-## Gate G — Determinism and packaging
+## Gate J — Determinism and packaging
 
 1. Linux and Windows real-data extraction must be deterministic.
 2. Cycle 1 profiler/classification, Cycle 2 sentinel, Cycle 3 full extraction, and Production Excel Package workflows must all pass on the final HEAD.
@@ -98,9 +140,12 @@ After all automated gates are green, the owner should:
 5. select the real DATA folder and run **Full Rescan / Rebuild All**;
 6. confirm Review Flags is empty and Error Log contains no extraction/refresh error;
 7. sample Source File and Document Link hyperlinks across multiple projects and confirm every link opens the correct file;
-8. verify Pending Update remains a review-only change preview;
-9. test Reset All Records and rerun Full Rescan;
-10. do **not** approve the staged update until these checks are accepted.
+8. apply a filter and sort to Master Documents, run an update, then confirm the table refreshes unfiltered with no mixed rows or wrong links;
+9. verify the table body uses no fill, automatic font color, consistent alignment/row height and professional widths without manual correction;
+10. open Rules & Mappings, add a simple rule, confirm the normal fields use understandable dropdowns and the advanced fields are hidden until requested;
+11. verify Pending Update remains a review-only change preview;
+12. test Reset All Records and rerun Full Rescan;
+13. do **not** approve the staged update until these checks are accepted.
 
 ## Release rule
 
