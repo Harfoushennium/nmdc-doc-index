@@ -45,16 +45,16 @@ Planned Collaboration ID: `NMDC-DOC-INDEX-001`
 
 ### ChatGPT
 
-- Planner/architect.
-- Independent reviewer of Hermes implementation.
-- Reviews actual diffs, tests and generated outputs.
-- Does not delegate final approval to Hermes.
+- May act as planner, architect, implementer, or reviewer according to the active PR.
+- Must state its active role in important PR comments.
+- Reviews actual diffs, tests and generated outputs rather than relying only on reports.
+- Must not claim owner approval or merge authority.
 
 ### Hermes
 
-- Implementer/executor, preferably using a low-cost model.
-- Must follow the current agreed specification.
-- Must not approve its own work.
+- May act as implementer/executor when assigned through the active collaboration.
+- Must follow the current agreed specification and identify its role in important PR comments.
+- Must not approve its own work when independent review is required.
 - Must not merge unless the user explicitly authorizes it.
 
 ### GitHub
@@ -62,42 +62,23 @@ Planned Collaboration ID: `NMDC-DOC-INDEX-001`
 - Source of truth and communication/audit bridge.
 - Implementation should occur through a feature branch and PR once collaboration starts.
 
+Independent review may be requested by the owner, but is not automatically required for every phase. The active PR dashboard records the current role and review arrangement.
+
 ## 5. Current status
 
-**Planning/specification is complete. Implementation has not started.**
+**Cycles 1–3 and the incremental staged-approval engine are implemented and merged.**
 
-The next intended implementation cycle is:
+Merged sequence:
 
-### Cycle 1 — Read-only Source Profiler
+- PR #3 — approved Cycle 1 profiler integration;
+- PR #4 — Classification Model v2;
+- PR #5 — Cycle 2 sentinel lossless extractor;
+- PR #6 — Cycle 3 full extraction and conflict controls;
+- PR #7 — incremental update and staged approval engine.
 
-Do not build the final index yet.
+Current active work is PR #8, branch `08-excel-user-interface`, for the Excel-only user interface and engine-integration layer. Its current PR title/status and the single `AGENT COLLABORATION — CURRENT STATUS` dashboard comment are authoritative. Do not assume the HEAD or review state from this file; live-fetch the PR first.
 
-Required outputs are expected to include:
-
-- `source_inventory.csv`
-- `workbook_profiles.json`
-- `source_selection_report.md`
-- `classification_discovery.csv`
-
-Cycle 1 must discover and report, at minimum:
-
-- all candidate workbooks;
-- source family;
-- trustworthy source modified timestamps;
-- logical duplicate/superseded groups;
-- exact byte duplicates;
-- which file is selected and why;
-- excluded files/sheets and reasons;
-- encrypted/unreadable workbooks;
-- worksheets and used ranges;
-- likely header rows;
-- merged-cell ranges/patterns;
-- hyperlink presence;
-- candidate classification and matching rule;
-- unknown/ambiguous classifications;
-- project-number mismatches between workbook/path and internal content.
-
-No final `NMDC_DOCUMENT_INDEX.xlsx` should be produced as the implementation deliverable for Cycle 1.
+The production `.xlsm`, actual macro attachment, packaged Windows executable, and end-to-end Microsoft Excel validation remain incomplete until explicitly implemented and tested. The future document-folder/hyperlink scanner must not begin before the core Excel/runtime path is proven.
 
 ## 6. Non-negotiable technical rules
 
@@ -252,19 +233,33 @@ Avoid:
 
 ## 11. Planned implementation sequence
 
-1. Cycle 1 — read-only Source Profiler.
-2. Independent review of profiler diff and outputs.
-3. Cycle 2 — sentinel lossless extractor on difficult representative workbooks.
-4. Independent review and row-level verification.
-5. Cycle 3 — full selected-source extraction and reconciliation.
-6. Cycle 4 — final XLSX + canonical CSV.
-7. Cycle 5 — local refresh wrapper + GitHub Actions automation.
+1. ✅ Cycle 1 — read-only Source Profiler.
+2. ✅ Classification Model v2.
+3. ✅ Cycle 2 — sentinel lossless extractor.
+4. ✅ Cycle 3 — full selected-source extraction and reconciliation.
+5. ✅ Incremental update and staged approval engine.
+6. 🔄 Excel-only UI and engine-integration contract (PR #8).
+7. ⏳ Production `.xlsm`, packaged Windows engine, and Microsoft Excel end-to-end validation.
+8. ⏳ Future document-folder scan and hyperlink enrichment, only after the core product is stable.
 
 Do not skip directly to a later cycle unless the user and planner explicitly change the plan.
 
 ## 12. PR/review expectations
 
-When collaboration starts, Hermes should provide a structured report in the PR containing:
+PR titles use the exact format:
+
+`[SEQ][STATUS] Title`
+
+- `SEQ` is the actual GitHub PR number.
+- Active status flow: `DRAFT -> REVIEW -> CHANGES -> REVIEW -> READY -> MERGED`.
+- Use `BLOCKED` when applicable.
+
+Maintain one human-readable top-level comment headed `AGENT COLLABORATION — CURRENT STATUS` and update it in place. Every important PR comment must identify:
+
+- `Written by`
+- `Role`
+
+Implementation reporting is role-based; it is not restricted to Hermes. A useful implementation/status report includes:
 
 - Collaboration ID;
 - cycle number;
@@ -293,4 +288,4 @@ If you are a fresh LLM/agent arriving at this repository:
 3. Determine the current collaboration cycle from the PR discussion and repository artifacts.
 4. Continue from the last accepted state; do not re-ask the user for requirements already recorded here.
 5. If implementation and documentation conflict, stop and surface the conflict to the planner/user rather than guessing.
-6. If no collaboration PR exists yet, the next planned action is to start `NMDC-DOC-INDEX-001`, Cycle 1, with the read-only profiler scope defined above.
+6. If no collaboration PR exists, inspect the merged history and current product status to plan the next numbered phase; do not restart a completed cycle.
