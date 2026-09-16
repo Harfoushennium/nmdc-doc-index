@@ -57,7 +57,7 @@ class Owner2369AndResetRegressionTests(unittest.TestCase):
         setup = (ROOT / "packaging" / "Create_NMDC_Document_Index.vbs").read_text(encoding="utf-8")
         self.assertIn("NormalizeMergedUiRanges workbook", setup)
         self.assertIn("Sub NormalizeMergedUiRanges", setup)
-        self.assertIn('ws.Range("A1:L33").Font.Name = "Aptos"', setup)
+        self.assertIn('ws.Range("A1:L42").Font.Name = "Aptos"', setup)
         self.assertNotIn('ws.Cells.Font.Name = "Aptos"', setup)
 
 
