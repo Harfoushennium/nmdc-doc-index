@@ -14,6 +14,10 @@ def _normalize(value: str) -> str:
     return str(value or "").replace("\\", "/").lstrip("/").casefold()
 
 
+def _as_checked(value: Any) -> bool:
+    return str(value or "").strip().casefold() in {"true", "yes", "1", "on", "checked", "include", "included"}
+
+
 def read_source_exclusions(path: Path) -> Dict[str, Dict[str, str]]:
     path = Path(path)
     if not path.exists():
@@ -90,4 +94,60 @@ def set_source_selection(config_dir: Path, source_file: str, *, include: bool, r
         "source_file": clean_source,
         "excluded_sources": len(ordered),
         "config_file": str(path),
+    }
+
+
+def set_source_selections_from_file(config_dir: Path, selections_file: Path) -> Dict[str, Any]:
+    """Persist all owner source checkboxes in one atomic configuration update.
+
+    Expected CSV columns are ``Source File``, ``Include in Index?`` and optional
+    ``Owner Note``. Checked rows remove any owner exclusion; unchecked rows add
+    one. The complete file is processed in one engine launch so selecting many
+    sources does not start many scans or repeatedly rewrite the configuration.
+    """
+    selections_file = Path(selections_file)
+    if not selections_file.exists():
+        raise FileNotFoundError(f"Source-selection decisions file not found: {selections_file}")
+
+    config_dir = Path(config_dir)
+    target = config_dir / "source_exclusions.csv"
+    current = read_source_exclusions(target)
+    processed = 0
+    included = 0
+    excluded = 0
+
+    with selections_file.open(newline="", encoding="utf-8-sig") as handle:
+        reader = csv.DictReader(handle)
+        required = {"Source File", "Include in Index?"}
+        missing = required.difference(reader.fieldnames or [])
+        if missing:
+            raise ValueError("Source-selection decisions are missing required column(s): " + ", ".join(sorted(missing)))
+
+        for raw in reader:
+            clean_source = str(raw.get("Source File", "") or "").replace("\\", "/").lstrip("/").strip()
+            if not clean_source:
+                continue
+            normalized = _normalize(clean_source)
+            if _as_checked(raw.get("Include in Index?", "")):
+                current.pop(normalized, None)
+                included += 1
+            else:
+                note = str(raw.get("Owner Note", "") or "").strip()
+                current[normalized] = {
+                    "Relative_Path": clean_source,
+                    "Enabled": "YES",
+                    "Reason": note or "Owner excluded using Source Selection checkbox",
+                }
+                excluded += 1
+            processed += 1
+
+    ordered = [current[key] for key in sorted(current)]
+    _write_rows(target, ordered)
+    return {
+        "decision": "BATCH_SOURCE_SELECTION_SAVED",
+        "processed_sources": processed,
+        "checked_included": included,
+        "unchecked_excluded": excluded,
+        "excluded_sources": len(ordered),
+        "config_file": str(target),
     }
