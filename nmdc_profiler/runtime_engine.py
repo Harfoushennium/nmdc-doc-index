@@ -14,6 +14,7 @@ from .project_identity import apply_project_identity_overrides, load_project_ide
 from .reporting import write_outputs
 from .rules import Rule, load_rules
 from .selection import assign_selection
+from .source_cache import prepare_local_source_cache
 from .update_engine import (
     DEFAULT_PARSER_VERSION,
     approve_stage,
@@ -188,17 +189,28 @@ def stage_runtime_update(
     full_rescan: bool,
     parser_version: str = DEFAULT_PARSER_VERSION,
 ) -> Dict[str, Any]:
+    original_data_dir = Path(data_dir).resolve()
+    state_dir = Path(state_dir).resolve()
     rules_path = resolve_config_file(config_dir, "classification_rules.csv")
     overrides_path = resolve_config_file(config_dir, "project_identity_overrides.csv")
+
+    # Scan/extract from a persistent local mirror. The source tree is only opened
+    # when a workbook is new or changed, avoiding repeated OneDrive hydration and
+    # repeated cloud-file reads during profiling, hashing and extraction.
+    working_data_dir, cache_stats = prepare_local_source_cache(
+        original_data_dir,
+        state_dir / "source_cache",
+    )
     catalog = build_runtime_catalog(
-        data_dir,
+        working_data_dir,
         rules_path,
         overrides_path,
-        Path(state_dir) / "profile" / "current",
+        state_dir / "profile" / "current",
     )
-    return stage_update(
-        data_dir=Path(data_dir),
-        state_dir=Path(state_dir),
+    result = stage_update(
+        data_dir=working_data_dir,
+        manifest_data_dir=original_data_dir,
+        state_dir=state_dir,
         processor=catalog.process,
         config_paths=[rules_path, overrides_path],
         parser_version=parser_version,
@@ -207,6 +219,8 @@ def stage_runtime_update(
         initial_flags=catalog.initial_flags,
         post_process_flags=catalog.drain_processor_flags,
     )
+    result["source_cache"] = cache_stats
+    return result
 
 
 def _append_jsonl(path: Path, rows: Iterable[Mapping[str, Any]]) -> None:
