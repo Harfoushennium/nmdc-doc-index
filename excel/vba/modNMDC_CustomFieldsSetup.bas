@@ -113,3 +113,61 @@ Handler:
         "Excel could not add the Custom Fields & Keywords Home button.", _
         Err.Number & " - " & Err.Description
 End Sub
+
+' Core CSV refresh intentionally owns only canonical Master Documents columns.
+' If it trims the table back to those core columns, this lightweight check
+' notices the missing enabled custom field and rebuilds the enrichment layer
+' the next time Master Documents is activated or clicked.
+Public Sub NMDC_EnsureCustomFieldsCurrent(ByVal Sh As Object)
+    On Error GoTo SoftFail
+
+    Dim ws As Worksheet
+    Dim definitions As ListObject
+    Dim master As ListObject
+    Dim row As ListRow
+    Dim fieldName As String
+    Dim enabledValue As Variant
+    Dim target As ListColumn
+
+    If Sh Is Nothing Then Exit Sub
+    If TypeName(Sh) <> "Worksheet" Then Exit Sub
+    Set ws = Sh
+    If StrComp(ws.Name, "Master Documents", vbTextCompare) <> 0 Then Exit Sub
+
+    Set definitions = ThisWorkbook.Worksheets("Custom Fields").ListObjects("CustomFields")
+    Set master = ws.ListObjects("MasterDocuments")
+    If definitions.DataBodyRange Is Nothing Then Exit Sub
+
+    For Each row In definitions.ListRows
+        fieldName = Trim$(CStr(row.Range.Cells(1, definitions.ListColumns("Field Name").Index).Value))
+        enabledValue = row.Range.Cells(1, definitions.ListColumns("Enabled?").Index).Value
+        If Len(fieldName) > 0 And NMDC_CustomSetupChecked(enabledValue) Then
+            Set target = Nothing
+            On Error Resume Next
+            Set target = master.ListColumns(fieldName)
+            On Error GoTo SoftFail
+            If target Is Nothing Then
+                Application.Run "NMDC_ApplyCustomFieldsToMaster", False
+                Exit Sub
+            End If
+        End If
+    Next row
+    Exit Sub
+
+SoftFail:
+    ' This guard must never interrupt normal worksheet navigation.
+End Sub
+
+Private Function NMDC_CustomSetupChecked(ByVal value As Variant) As Boolean
+    If VarType(value) = vbBoolean Then
+        NMDC_CustomSetupChecked = CBool(value)
+        Exit Function
+    End If
+
+    Select Case UCase$(Trim$(CStr(value)))
+        Case "TRUE", "YES", "Y", "1", "ON", "CHECKED"
+            NMDC_CustomSetupChecked = True
+        Case Else
+            NMDC_CustomSetupChecked = False
+    End Select
+End Function
