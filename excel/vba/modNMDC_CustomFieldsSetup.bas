@@ -30,6 +30,7 @@ Public Sub NMDC_EnsureCustomFieldsStructure()
 
     NMDC_EnsureCustomFieldsHomeButton
     NMDC_InstallCustomFieldSelectionEvent
+    NMDC_UpgradeCustomFieldCheckboxes
     Exit Sub
 
 Handler:
@@ -116,15 +117,12 @@ Handler:
 End Sub
 
 Public Sub NMDC_UpgradeCustomFieldCheckboxes()
-    ' Replace the legacy Form Control checkboxes created by older builds with the
-    ' modern Microsoft 365 in-cell Checkbox used by the owner (TRUE/FALSE cell value).
+    ' Replace any legacy Form Control checkboxes with the modern Microsoft 365
+    ' in-cell Checkbox control used by the owner (TRUE/FALSE cell value).
     On Error GoTo SoftFail
 
     Dim ws As Worksheet
-    Dim table As ListObject
-    Dim column As ListColumn
     Dim rowIndex As Long
-    Dim value As Variant
     Dim item As Object
 
     Set ws = ThisWorkbook.Worksheets("Custom Fields")
@@ -139,23 +137,35 @@ Public Sub NMDC_UpgradeCustomFieldCheckboxes()
     Next rowIndex
     On Error GoTo SoftFail
 
-    For Each table In Array(ws.ListObjects("CustomFields"), ws.ListObjects("KeywordMappings"))
-        Set column = table.ListColumns("Enabled?")
-        If Not column.DataBodyRange Is Nothing Then
-            For rowIndex = 1 To column.DataBodyRange.Rows.Count
-                value = column.DataBodyRange.Cells(rowIndex, 1).Value
-                column.DataBodyRange.Cells(rowIndex, 1).Value = NMDC_CustomSetupChecked(value)
-            Next rowIndex
-            column.DataBodyRange.CellControl.SetCheckbox
-            column.DataBodyRange.HorizontalAlignment = xlCenter
-            column.Range.ColumnWidth = 11
-        End If
-    Next table
+    NMDC_UpgradeOneCustomCheckboxColumn ws.ListObjects("CustomFields")
+    NMDC_UpgradeOneCustomCheckboxColumn ws.ListObjects("KeywordMappings")
     Exit Sub
 
 SoftFail:
-    ' Native checkboxes are a usability enhancement. Never block indexing if a
-    ' workbook is opened in an older Excel version that lacks CellControl.
+    ' Never block indexing if an older Excel version lacks CellControl.
+End Sub
+
+Private Sub NMDC_UpgradeOneCustomCheckboxColumn(ByVal table As ListObject)
+    On Error GoTo SoftFail
+
+    Dim column As ListColumn
+    Dim rowIndex As Long
+    Dim value As Variant
+
+    Set column = table.ListColumns("Enabled?")
+    If column.DataBodyRange Is Nothing Then Exit Sub
+
+    For rowIndex = 1 To column.DataBodyRange.Rows.Count
+        value = column.DataBodyRange.Cells(rowIndex, 1).Value
+        column.DataBodyRange.Cells(rowIndex, 1).Value = NMDC_CustomSetupChecked(value)
+    Next rowIndex
+
+    column.DataBodyRange.CellControl.SetCheckbox
+    column.DataBodyRange.HorizontalAlignment = xlCenter
+    column.Range.ColumnWidth = 11
+    Exit Sub
+
+SoftFail:
 End Sub
 
 ' Core CSV refresh intentionally owns only canonical Master Documents columns.
