@@ -390,7 +390,6 @@ Public Function NMDC_ApplyCustomFieldsToMaster(Optional ByVal showMessage As Boo
 NextField:
     Next fieldRow
 
-    NMDC_LiveFilterEnsureHelper master
     NMDC_RebuildCustomFieldCheckboxes
     NMDC_ApplyCustomFieldsUX
 
@@ -511,42 +510,11 @@ Handler:
 End Sub
 
 Public Sub NMDC_CustomCheckboxClicked()
-    On Error GoTo Handler
-
-    Dim ws As Worksheet
-    Dim callerName As String
-    Dim table As ListObject
-    Dim prefix As String
-    Dim rowIndex As Long
-    Dim checkBox As Object
-    Dim targetCell As Range
-
-    Set ws = ThisWorkbook.Worksheets(NMDC_CUSTOM_SHEET)
-    callerName = CStr(Application.Caller)
-
-    If Left$(callerName, Len(NMDC_FIELD_CHECK_PREFIX)) = NMDC_FIELD_CHECK_PREFIX Then
-        Set table = ws.ListObjects(NMDC_FIELDS_TABLE)
-        prefix = NMDC_FIELD_CHECK_PREFIX
-    ElseIf Left$(callerName, Len(NMDC_MAP_CHECK_PREFIX)) = NMDC_MAP_CHECK_PREFIX Then
-        Set table = ws.ListObjects(NMDC_MAPPINGS_TABLE)
-        prefix = NMDC_MAP_CHECK_PREFIX
-    Else
-        Exit Sub
-    End If
-
-    Set checkBox = ws.CheckBoxes(callerName)
-    rowIndex = checkBox.TopLeftCell.Row - table.DataBodyRange.Row + 1
-    If rowIndex < 1 Or rowIndex > table.ListRows.Count Then Exit Sub
-
-    Set targetCell = table.ListColumns("Enabled?").DataBodyRange.Cells(rowIndex, 1)
-    targetCell.Value = (checkBox.Value = xlOn)
-    targetCell.NumberFormat = ";;;"
-    Exit Sub
-
-Handler:
-    NMDC_LogError "CUSTOM_FIELD_CHECKBOX_CLICK_ERROR", _
-        "Excel could not record the Custom Fields checkbox selection.", _
-        Err.Number & " - " & Err.Description
+    ' Compatibility stub for stale workbooks that still contain a legacy
+    ' Form Control checkbox. Fresh builds use native in-cell checkboxes.
+    On Error Resume Next
+    NMDC_RebuildCustomFieldCheckboxes
+    On Error GoTo 0
 End Sub
 
 Public Sub NMDC_SaveCustomFieldConfiguration()
@@ -1019,7 +987,6 @@ Private Sub NMDC_CustomBuildCheckboxes( _
     Dim rowIndex As Long
     Dim targetCell As Range
     Dim keyText As String
-    Dim checkBox As Object
     Dim isIncluded As Boolean
 
     If table.DataBodyRange Is Nothing Then Exit Sub
@@ -1030,18 +997,11 @@ Private Sub NMDC_CustomBuildCheckboxes( _
         If Len(keyText) > 0 Then
             isIncluded = NMDC_CustomCheckedValue(targetCell.Value)
             targetCell.Value = isIncluded
-            targetCell.NumberFormat = ";;;"
+            targetCell.NumberFormat = "General"
             targetCell.HorizontalAlignment = xlCenter
-
-            Set checkBox = table.Parent.CheckBoxes.Add( _
-                targetCell.Left + (targetCell.Width - 13) / 2, _
-                targetCell.Top + (targetCell.Height - 13) / 2, 13, 13)
-            checkBox.Name = prefix & Format$(rowIndex, "0000")
-            checkBox.Caption = ""
-            checkBox.Value = IIf(isIncluded, xlOn, xlOff)
-            checkBox.OnAction = "NMDC_CustomCheckboxClicked"
-            checkBox.Placement = xlMoveAndSize
-            checkBox.PrintObject = False
+            On Error Resume Next
+            targetCell.CellControl.SetCheckbox
+            On Error GoTo 0
         Else
             targetCell.ClearContents
         End If
