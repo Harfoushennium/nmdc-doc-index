@@ -21,8 +21,6 @@ class OwnerLiveFilterCustomFieldsTests(unittest.TestCase):
         self.assertIn("Public Sub NMDC_LF_A()", live)
         self.assertIn("Public Sub NMDC_LF_0()", live)
         self.assertIn('Criteria1:="=*" & NMDC_LiveFilterEscapeWildcards(cleanText) & "*"', live)
-
-        # The rejected helper-column/all-columns implementation must not return.
         self.assertNotIn("__NMDC_LiveFilter", live)
         self.assertNotIn('"ALL COLUMNS"', live)
         self.assertNotIn("NMDC_LiveFilterRowText", live)
@@ -33,7 +31,7 @@ class OwnerLiveFilterCustomFieldsTests(unittest.TestCase):
         self.assertIn('"Click the HEADER of the column you want to search."', live)
         self.assertIn("targetColumn.DataBodyRange", live)
         self.assertIn("NMDC_LiveFilterSetTarget ws, targetColumn", live)
-        self.assertIn('button.TextFrame.Characters.Text = "SELECT COLUMN"', live)
+        self.assertIn('selectButton.TextFrame.Characters.Text = "SELECT COLUMN"', live)
         self.assertIn('"COLUMN: " & targetName', live)
 
         for sheet_name in (
