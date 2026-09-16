@@ -53,6 +53,9 @@ jobs:
           if (-not (Test-Path (Join-Path $testRoot "exchange\dashboard.csv"))) {
             throw "Packaged engine did not create the Excel exchange."
           }
+          if (-not (Test-Path (Join-Path $testRoot "exchange\source_selection.csv"))) {
+            throw "Packaged engine did not create the Source Selection exchange."
+          }
       - name: Assemble production package
         shell: pwsh
         run: |
@@ -70,7 +73,7 @@ jobs:
             throw "Production workbook hash verification failed: $workbookHash"
           }
           Copy-Item .\dist\nmdc_index_engine.exe "$package\engine\nmdc_index_engine.exe"
-          Copy-Item .\config\classification_rules.csv, .\config\project_identity_overrides.csv "$package\config\"
+          Copy-Item .\config\classification_rules.csv, .\config\project_identity_overrides.csv, .\config\source_exclusions.csv "$package\config\"
           Copy-Item .\excel\vba\*.bas "$package\vba\"
           Copy-Item .\packaging\Create_NMDC_Document_Index.vbs, .\packaging\README.md "$package\"
           Compress-Archive -Path "$package\*" -DestinationPath NMDC_Document_Index_Production_Windows.zip -Force
