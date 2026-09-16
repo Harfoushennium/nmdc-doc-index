@@ -1,7 +1,6 @@
 Rule_ID,Enabled,Priority,Source_Family,Match_Scope,Match_Type,Match_Words,Exclude_Words,Path_Qualifier,Requires_Discipline,Requires_Category,Discipline,Category,Subcategory,Include,Min_Confidence,Stop_On_Match,Notes
 X001,YES,1,ANY,FILE,CONTAINS,pre requisite,,,,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Prerequisite/reference matrix
-X002,YES,2,METHODS,FILE,CONTAINS,deliverables format,,,,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Template/format workbook
-X002B,YES,2,METHODS,FILE,CONTAINS,delivarables format,,,,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Template/format workbook
+X002,YES,2,METHODS,FILE,CONTAINS,format,,,,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Template/format workbook
 X002C,YES,2,METHODS,FILE,CONTAINS,template,,,,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Template/format workbook
 X003,YES,3,TECH,FILE,CONTAINS,installation aids register,,,,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Installation-aid register excluded by v2 scope
 X004,YES,4,METHODS,FILE,CONTAINS,harfoush,,,,,EXCLUDED,EXCLUDED,EXCLUDED,NO,1.0,YES,Personal working tracker; not an authoritative project register
