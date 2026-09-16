@@ -15,6 +15,7 @@ from .reporting import write_outputs
 from .rules import Rule, load_rules
 from .selection import assign_selection
 from .source_cache import prepare_local_source_cache
+from .source_selection import apply_source_exclusions
 from .update_engine import (
     DEFAULT_PARSER_VERSION,
     approve_stage,
@@ -91,6 +92,7 @@ class RuntimeCatalog:
     selection_statuses: Mapping[str, str]
     work_items: Mapping[str, Sequence[FullWorkItem]]
     initial_flags: Sequence[Mapping[str, Any]]
+    owner_excluded_sources: Sequence[str]
     _processor_flags: List[Dict[str, str]] = field(default_factory=list)
 
     def process(self, source_path: Path, relative_path: str) -> Sequence[Mapping[str, Any]]:
@@ -118,6 +120,7 @@ def build_runtime_catalog(
     data_dir: Path,
     rules_path: Path,
     overrides_path: Path,
+    exclusions_path: Path,
     profile_output_dir: Path,
 ) -> RuntimeCatalog:
     data_dir = Path(data_dir).resolve()
@@ -134,6 +137,7 @@ def build_runtime_catalog(
     )
     workbooks = [profile_workbook(path, data_dir, data_dir) for path in files]
     exact_groups, version_groups = assign_selection(workbooks, rules)
+    owner_excluded_sources = sorted(apply_source_exclusions(workbooks, exclusions_path), key=str.casefold)
     discovery = classification_rows(workbooks, rules)
     enrich_profiles_with_classification(workbooks, discovery)
     write_outputs(workbooks, discovery, exact_groups, version_groups, profile_output_dir)
@@ -178,6 +182,7 @@ def build_runtime_catalog(
         },
         work_items=by_source,
         initial_flags=initial_flags,
+        owner_excluded_sources=owner_excluded_sources,
     )
 
 
@@ -196,6 +201,44 @@ def _restore_original_data_path(state_dir: Path, run_id: str, original_data_dir:
         handle.write("\n")
 
 
+def _suppress_expected_owner_selection_flag(state_dir: Path, run_id: str, owner_excluded_sources: Sequence[str]) -> None:
+    """Do not ask the owner to review the exact exclusion decision they just made."""
+    if not run_id or not owner_excluded_sources:
+        return
+    excluded = {str(value).replace("\\", "/").casefold() for value in owner_excluded_sources}
+    stage_dir = Path(state_dir) / "staging" / run_id
+    flags_path = stage_dir / "flags.json"
+    summary_path = stage_dir / "summary.json"
+    if not flags_path.exists() or not summary_path.exists():
+        return
+
+    with flags_path.open(encoding="utf-8") as handle:
+        flags = json.load(handle)
+    filtered = [
+        flag
+        for flag in flags
+        if not (
+            str(flag.get("code", "")) == "SOURCE_SELECTION_CHANGED"
+            and str(flag.get("source", "")).replace("\\", "/").casefold() in excluded
+        )
+    ]
+    if len(filtered) == len(flags):
+        return
+
+    with flags_path.open("w", encoding="utf-8", newline="\n") as handle:
+        json.dump(filtered, handle, ensure_ascii=False, indent=2, sort_keys=True)
+        handle.write("\n")
+
+    with summary_path.open(encoding="utf-8") as handle:
+        summary = json.load(handle)
+    summary["review_flags"] = sum(1 for flag in filtered if flag.get("level") == "REVIEW")
+    summary["blocking_flags"] = sum(1 for flag in filtered if flag.get("level") == "CONFLICT")
+    summary["status"] = "REVIEW_REQUIRED" if summary["blocking_flags"] else "STAGED"
+    with summary_path.open("w", encoding="utf-8", newline="\n") as handle:
+        json.dump(summary, handle, ensure_ascii=False, indent=2, sort_keys=True)
+        handle.write("\n")
+
+
 def stage_runtime_update(
     *,
     data_dir: Path,
@@ -208,6 +251,7 @@ def stage_runtime_update(
     state_dir = Path(state_dir).resolve()
     rules_path = resolve_config_file(config_dir, "classification_rules.csv")
     overrides_path = resolve_config_file(config_dir, "project_identity_overrides.csv")
+    exclusions_path = Path(config_dir) / "source_exclusions.csv"
 
     # Process from a persistent local mirror. The OneDrive/source tree is only
     # opened when a workbook is new or changed; profiling, hashing and extraction
@@ -220,12 +264,15 @@ def stage_runtime_update(
         working_data_dir,
         rules_path,
         overrides_path,
+        exclusions_path,
         state_dir / "profile" / "current",
     )
     result = stage_update(
         data_dir=working_data_dir,
         state_dir=state_dir,
         processor=catalog.process,
+        # Owner source inclusion/exclusion is selection metadata, not parser
+        # configuration. It intentionally does not invalidate extraction caches.
         config_paths=[rules_path, overrides_path],
         parser_version=parser_version,
         full_rescan=full_rescan,
@@ -233,9 +280,17 @@ def stage_runtime_update(
         initial_flags=catalog.initial_flags,
         post_process_flags=catalog.drain_processor_flags,
     )
-    _restore_original_data_path(state_dir, str(result.get("run_id", "")), original_data_dir)
+    run_id = str(result.get("run_id", ""))
+    _restore_original_data_path(state_dir, run_id, original_data_dir)
+    _suppress_expected_owner_selection_flag(state_dir, run_id, catalog.owner_excluded_sources)
+    # Reload the persisted summary after presentation-safe flag suppression.
+    summary_path = state_dir / "staging" / run_id / "summary.json"
+    if summary_path.exists():
+        with summary_path.open(encoding="utf-8") as handle:
+            result = json.load(handle)
     result["source_cache"] = cache_stats
     result["data_dir"] = str(original_data_dir)
+    result["owner_excluded_sources"] = list(catalog.owner_excluded_sources)
     return result
 
 
