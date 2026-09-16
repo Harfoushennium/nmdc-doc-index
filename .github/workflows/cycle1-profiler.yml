@@ -5,6 +5,7 @@ on:
     branches:
       - feature/nmdc-doc-index-001-cycle1-profiler
       - feature/classification-model-v2
+      - 08-excel-user-interface
   pull_request:
     branches:
       - master
