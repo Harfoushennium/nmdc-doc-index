@@ -1,19 +1,15 @@
 Attribute VB_Name = "modNMDC_Checkboxes"
 Option Explicit
 
-Private Const PENDING_SOURCE_CHECK_PREFIX As String = "NMDC_PendingSourceCheck_"
 Private Const SOURCE_PANEL_TABLE As String = "SourceSelection"
 Private mOwnerEnhancementsReady As Boolean
 
-' Source selection is intentionally integrated into Pending Update.
-' The old separate Source Selection worksheet is retained only as a hidden
-' compatibility shell; the owner no longer needs to navigate to it.
-'
-' The source checkboxes use LinkedCell and NO OnAction callback. This removes
-' the macro-not-available failure that was observed with NMDC_SourceCheckboxClicked.
+' Source selection is integrated into Pending Update.
+' Binary include/exclude choices use the modern Microsoft 365 in-cell Checkbox
+' control (Range.CellControl.SetCheckbox).  No Form Control / ActiveX checkbox
+' and no per-checkbox macro is required.
 
 Public Sub NMDC_RebuildSourceSelectionCheckboxes()
-    ' Backward-compatible entry point used by older owner-UX code.
     NMDC_RebuildPendingSourcePanel
 End Sub
 
@@ -31,13 +27,11 @@ Public Sub NMDC_RebuildPendingSourcePanel()
     If table Is Nothing Then Exit Sub
 
     If NMDC_FileExists(NMDC_ExchangePath() & "\source_selection.csv") Then
-        If Not NMDC_LoadSourceSelectionPanel(table, NMDC_ExchangePath() & "\source_selection.csv") Then
-            GoTo Handler
-        End If
+        If Not NMDC_LoadSourceSelectionPanel(table, NMDC_ExchangePath() & "\source_selection.csv") Then Exit Sub
     End If
 
     NMDC_FormatPendingSourcePanel ws, table
-    NMDC_BuildPendingSourceCheckboxes ws, table
+    NMDC_ApplyNativeSourceCheckboxes table
     Exit Sub
 
 Handler:
@@ -76,7 +70,9 @@ Private Function NMDC_EnsurePendingSourceTable(ByVal ws As Worksheet) As ListObj
 
         On Error Resume Next
         ws.Range("L4:S7").UnMerge
+        ws.Range("L4:S7").ClearContents
         On Error GoTo Handler
+
         For i = LBound(headers) To UBound(headers)
             ws.Cells(5, 12 + i - LBound(headers)).Value = headers(i)
         Next i
@@ -126,10 +122,11 @@ Private Function NMDC_LoadSourceSelectionPanel(ByVal table As ListObject, ByVal 
     table.HeaderRowRange.Value2 = headers
 
     If dataCount > 0 Then
+        If table.DataBodyRange Is Nothing Then table.ListRows.Add
         table.DataBodyRange.Value2 = data
     Else
         If table.ListRows.Count = 0 Then table.ListRows.Add
-        table.DataBodyRange.ClearContents
+        If Not table.DataBodyRange Is Nothing Then table.DataBodyRange.ClearContents
     End If
 
     NMDC_ApplyTableGuidance table
@@ -149,12 +146,14 @@ Private Sub NMDC_FormatPendingSourcePanel(ByVal ws As Worksheet, ByVal table As 
     Dim area As Range
     Dim button As Shape
 
+    ' Clear BEFORE merging so Excel never has multiple populated cells to discard.
     On Error Resume Next
     ws.Range("L4:S4").UnMerge
+    ws.Range("L4:S4").ClearContents
     ws.Range("L4:S4").Merge
     On Error GoTo Handler
     With ws.Range("L4:S4")
-        .Value = "SOURCE SELECTION - CHECKED = INCLUDE / UNCHECKED = EXCLUDE. Project No. is shown beside each source. Save once after making all choices."
+        .Cells(1, 1).Value = "SOURCE SELECTION - native Excel checkboxes: checked = INCLUDE, unchecked = EXCLUDE. Project No. identifies each source. Save once after all choices."
         .Interior.Color = RGB(232, 241, 247)
         .Font.Name = "Aptos"
         .Font.Size = 9
@@ -162,6 +161,7 @@ Private Sub NMDC_FormatPendingSourcePanel(ByVal ws As Worksheet, ByVal table As 
         .Font.Color = RGB(31, 70, 90)
         .WrapText = True
         .VerticalAlignment = xlCenter
+        .HorizontalAlignment = xlLeft
         .RowHeight = 42
     End With
 
@@ -194,16 +194,19 @@ Private Sub NMDC_FormatPendingSourcePanel(ByVal ws As Worksheet, ByVal table As 
     button.TextFrame.Characters.Text = "Uncheck All"
     NMDC_FormatSourceButton button, RGB(198, 40, 40)
 
-    table.ListColumns("Include in Index?").Range.ColumnWidth = 12
+    table.ListColumns("Include in Index?").Range.ColumnWidth = 13
     table.ListColumns("Project No.").Range.ColumnWidth = 16
     table.ListColumns("Source File").Range.ColumnWidth = 42
     table.ListColumns("Owner Note").Range.ColumnWidth = 28
 
     On Error Resume Next
-    ws.Range("A4:I4").Value = _
-        "REVIEW WORKFLOW. Review staged changes in the left table. Source selection is now on THIS sheet at the right: checked = include source, unchecked = exclude source. Click Save Source Choices & Restage after changes. Approve/Hold/Reject still applies to the whole staged proposal."
+    ws.Range("A4:I4").UnMerge
+    ws.Range("A4:I4").ClearContents
+    ws.Range("A4:I4").Merge
+    ws.Range("A4").Value = _
+        "REVIEW WORKFLOW. Review staged changes in the left table. Use the native source checkboxes on this sheet at the right, then Save Source Choices & Restage. Approve/Hold/Reject applies to the remaining whole proposal."
     ThisWorkbook.Worksheets("Home").Range("E34").Value = _
-        "In Pending Update, use the source checkbox panel on the right. Project No. and Source File identify each source. Save Source Choices & Restage once when finished."
+        "Pending Update contains the source checkbox panel. Checked = include; unchecked = exclude. Save Source Choices & Restage once when finished."
     On Error GoTo 0
     Exit Sub
 
@@ -227,22 +230,15 @@ Private Sub NMDC_FormatSourceButton(ByVal button As Shape, ByVal fillColor As Lo
     End With
 End Sub
 
-Private Sub NMDC_BuildPendingSourceCheckboxes(ByVal ws As Worksheet, ByVal table As ListObject)
-    On Error GoTo Handler
+Private Sub NMDC_ApplyNativeSourceCheckboxes(ByVal table As ListObject)
+    On Error GoTo Fallback
 
     Dim includeColumn As ListColumn
     Dim sourceColumn As ListColumn
     Dim rowIndex As Long
     Dim sourceFile As String
     Dim targetCell As Range
-    Dim checkBox As Object
-    Dim item As Object
-    Dim isIncluded As Boolean
-
-    For rowIndex = ws.CheckBoxes.Count To 1 Step -1
-        Set item = ws.CheckBoxes(rowIndex)
-        If Left$(CStr(item.Name), Len(PENDING_SOURCE_CHECK_PREFIX)) = PENDING_SOURCE_CHECK_PREFIX Then item.Delete
-    Next rowIndex
+    Dim anySource As Boolean
 
     Set includeColumn = table.ListColumns("Include in Index?")
     Set sourceColumn = table.ListColumns("Source File")
@@ -251,33 +247,26 @@ Private Sub NMDC_BuildPendingSourceCheckboxes(ByVal ws As Worksheet, ByVal table
     For rowIndex = 1 To table.ListRows.Count
         sourceFile = Trim$(CStr(sourceColumn.DataBodyRange.Cells(rowIndex, 1).Value))
         Set targetCell = includeColumn.DataBodyRange.Cells(rowIndex, 1)
-
         If Len(sourceFile) > 0 Then
-            isIncluded = NMDC_SourceCheckedValue(targetCell.Value)
-            targetCell.Value = isIncluded
-            targetCell.NumberFormat = ";;;"
-            targetCell.HorizontalAlignment = xlCenter
-
-            Set checkBox = ws.CheckBoxes.Add( _
-                targetCell.Left + (targetCell.Width - 13) / 2, _
-                targetCell.Top + (targetCell.Height - 13) / 2, _
-                13, 13)
-            checkBox.Name = PENDING_SOURCE_CHECK_PREFIX & Format$(rowIndex, "0000")
-            checkBox.Caption = ""
-            checkBox.LinkedCell = "'" & ws.Name & "'!" & targetCell.Address
-            checkBox.OnAction = ""
-            checkBox.Value = IIf(isIncluded, xlOn, xlOff)
-            checkBox.Placement = xlMoveAndSize
-            checkBox.PrintObject = False
+            targetCell.Value = NMDC_SourceCheckedValue(targetCell.Value)
+            anySource = True
         Else
             targetCell.ClearContents
         End If
     Next rowIndex
+
+    If anySource Then
+        includeColumn.DataBodyRange.CellControl.SetCheckbox
+        includeColumn.DataBodyRange.HorizontalAlignment = xlCenter
+    End If
     Exit Sub
 
-Handler:
-    NMDC_LogError "PENDING_SOURCE_CHECKBOX_BUILD_ERROR", _
-        "Excel could not build the Pending Update source checkboxes.", _
+Fallback:
+    ' Native checkbox is available in the owner's current Microsoft 365 build.
+    ' If an older Excel version opens the file, preserve the Boolean choices
+    ' rather than breaking scanning or workbook setup.
+    NMDC_LogError "NATIVE_CHECKBOX_UNAVAILABLE", _
+        "Excel could not display the modern in-cell source checkboxes. TRUE/FALSE source choices remain usable.", _
         Err.Number & " - " & Err.Description
 End Sub
 
@@ -303,7 +292,7 @@ Public Sub NMDC_SaveSourceSelections()
     answer = MsgBox("Save these source choices and restage the proposal?" & vbCrLf & vbCrLf & _
                     "Checked = include source" & vbCrLf & _
                     "Unchecked = exclude source" & vbCrLf & vbCrLf & _
-                    "No source workbook will be edited or deleted, and the approved index will not change until Approve Update is used.", _
+                    "Source workbooks are never edited or deleted. The approved index remains unchanged until Approve Update.", _
                     vbQuestion + vbYesNo + vbDefaultButton2, "NMDC Document Index")
     If answer <> vbYes Then Exit Sub
 
@@ -357,7 +346,7 @@ Handler:
 End Sub
 
 Public Sub NMDC_CheckAllSources()
-    NMDC_SetAllPendingSourceCheckboxes True
+    NMDC_SetAllPendingSourceChoices True
 End Sub
 
 Public Sub NMDC_UncheckAllSources()
@@ -365,34 +354,23 @@ Public Sub NMDC_UncheckAllSources()
     answer = MsgBox("Uncheck every source workbook?" & vbCrLf & vbCrLf & _
                     "Nothing changes until you click Save Source Choices & Restage.", _
                     vbExclamation + vbYesNo + vbDefaultButton2, "NMDC Document Index")
-    If answer = vbYes Then NMDC_SetAllPendingSourceCheckboxes False
+    If answer = vbYes Then NMDC_SetAllPendingSourceChoices False
 End Sub
 
-Private Sub NMDC_SetAllPendingSourceCheckboxes(ByVal checkedValue As Boolean)
+Private Sub NMDC_SetAllPendingSourceChoices(ByVal checkedValue As Boolean)
     On Error GoTo Handler
 
-    Dim ws As Worksheet
     Dim table As ListObject
     Dim rowIndex As Long
     Dim sourceFile As String
-    Dim targetCell As Range
-    Dim checkBox As Object
 
-    Set ws = ThisWorkbook.Worksheets("Pending Update")
-    Set table = ws.ListObjects(SOURCE_PANEL_TABLE)
+    Set table = ThisWorkbook.Worksheets("Pending Update").ListObjects(SOURCE_PANEL_TABLE)
     If table.DataBodyRange Is Nothing Then Exit Sub
 
     For rowIndex = 1 To table.ListRows.Count
         sourceFile = Trim$(CStr(table.ListColumns("Source File").DataBodyRange.Cells(rowIndex, 1).Value))
         If Len(sourceFile) > 0 Then
-            Set targetCell = table.ListColumns("Include in Index?").DataBodyRange.Cells(rowIndex, 1)
-            targetCell.Value = checkedValue
-            targetCell.NumberFormat = ";;;"
-            Set checkBox = Nothing
-            On Error Resume Next
-            Set checkBox = ws.CheckBoxes(PENDING_SOURCE_CHECK_PREFIX & Format$(rowIndex, "0000"))
-            On Error GoTo Handler
-            If Not checkBox Is Nothing Then checkBox.Value = IIf(checkedValue, xlOn, xlOff)
+            table.ListColumns("Include in Index?").DataBodyRange.Cells(rowIndex, 1).Value = checkedValue
         End If
     Next rowIndex
     Exit Sub
@@ -404,13 +382,11 @@ Handler:
 End Sub
 
 Public Sub NMDC_SourceCheckboxClicked()
-    ' Compatibility stub for any stale workbook control created by an older build.
-    ' Fresh workbooks no longer assign this macro to individual checkboxes.
+    ' Compatibility stub only. Fresh workbooks use native in-cell checkboxes,
+    ' which directly store TRUE/FALSE and do not call a macro when clicked.
     On Error Resume Next
     NMDC_GoToSheet "Pending Update"
     NMDC_RebuildPendingSourcePanel
-    MsgBox "Source selection is now handled directly on Pending Update. Use the checkbox panel on the right, then Save Source Choices & Restage.", _
-           vbInformation, "NMDC Document Index"
     On Error GoTo 0
 End Sub
 
@@ -464,7 +440,7 @@ Private Function NMDC_SourceCheckedValue(ByVal value As Variant) As Boolean
     End If
 
     Select Case UCase$(Trim$(CStr(value)))
-        Case "TRUE", "YES", "1", "ON", "CHECKED", "INCLUDE", "INCLUDED"
+        Case "TRUE", "YES", "1", "ON", "CHECKED", "INCLUDE", "INCLUDED", "SELECTED"
             NMDC_SourceCheckedValue = True
         Case Else
             NMDC_SourceCheckedValue = False
