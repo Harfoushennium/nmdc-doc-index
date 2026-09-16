@@ -189,7 +189,7 @@ class Owner0916UsabilityPerformanceTests(unittest.TestCase):
         self.assertEqual("Record Identity", PENDING_FIELDS[-1])
         self.assertEqual("Event Key", FLAG_FIELDS[-1])
 
-    def test_excel_package_uses_local_runtime_responsive_scan_guidance_and_checkboxes(self):
+    def test_excel_package_uses_local_runtime_responsive_scan_guidance_and_native_checkboxes(self):
         setup = (ROOT / "packaging" / "Create_NMDC_Document_Index.vbs").read_text(
             encoding="utf-8-sig"
         )
@@ -218,6 +218,7 @@ class Owner0916UsabilityPerformanceTests(unittest.TestCase):
         self.assertIn("Application.OnTime", performance)
         self.assertIn("scanning in background", performance)
         self.assertIn("NMDC_RefreshReviewDataFast", performance)
+        self.assertIn("NMDC_AsyncQualifiedMacro", performance)
         fast_refresh = performance.split("Public Function NMDC_RefreshReviewDataFast", 1)[1].split(
             "Public Function NMDC_RefreshDashboardOnlyFast", 1
         )[0]
@@ -226,12 +227,13 @@ class Owner0916UsabilityPerformanceTests(unittest.TestCase):
         self.assertNotIn("events.csv", fast_refresh)
 
         self.assertIn("QUICK WORKFLOW - WHAT TO DO", owner_ux)
-        self.assertIn("checkbox", owner_ux.lower())
-        self.assertIn("Save Selection & Restage", owner_ux)
+        self.assertIn("native Excel checkboxes", owner_ux)
+        self.assertIn("Save Source Choices & Restage", owner_ux)
         self.assertIn("CONTAINS,EXACT,STARTS_WITH,ENDS_WITH", owner_ux)
         self.assertNotIn("CONTAINS,EXACT,FUZZY,REGEX", owner_ux)
 
-        self.assertIn("CheckBoxes.Add", checkboxes)
+        self.assertIn("CellControl.SetCheckbox", checkboxes)
+        self.assertNotIn("CheckBoxes.Add", checkboxes)
         self.assertIn("NMDC_SourceCheckboxClicked", checkboxes)
         self.assertIn("NMDC_SaveSourceSelections", checkboxes)
         self.assertIn("NMDC_CheckAllSources", checkboxes)
