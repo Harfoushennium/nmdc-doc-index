@@ -73,7 +73,7 @@ class OwnerLiveFilterCustomFieldsTests(unittest.TestCase):
         self.assertIn('Case "WILDCARD"', custom)
         self.assertIn('Replace(Trim$(expressionText), "+", " ")', custom)
         self.assertIn('If Left$(cleanToken, 1) = "-"', custom)
-        self.assertIn('InStr(1, pattern, "*"', custom)
+        self.assertIn('starCount = Len(pattern) - Len(Replace(pattern, "*", ""))', custom)
         self.assertIn('Replace(pattern, "?", "")', custom)
 
     def test_custom_fields_protect_core_master_document_fields(self):
