@@ -6,7 +6,6 @@ Public Sub NMDC_ApplyOwnerUX()
     NMDC_ApplyHomeButtonGuides
     NMDC_ApplyHomeWorkflowGuide
     NMDC_ApplyPendingUpdateDecisionGuide
-    NMDC_ApplySourceSelectionGuide
     NMDC_ApplyPlainRulesExperience
     Exit Sub
 Handler:
@@ -16,20 +15,22 @@ Handler:
 End Sub
 
 Public Sub NMDC_OpenSourceSelection()
+    ' Backward-compatible action: source selection now lives on Pending Update.
     On Error GoTo Handler
     If NMDC_RunEngine("export-excel") <> 0 Then
         NMDC_GoToSheet "Error Log"
         Exit Sub
     End If
-    If Not NMDC_RefreshSourceSelectionTable() Then
+    If Not NMDC_RefreshReviewDataFast() Then
         NMDC_GoToSheet "Error Log"
         Exit Sub
     End If
-    NMDC_GoToSheet "Source Selection"
+    NMDC_GoToSheet "Pending Update"
+    NMDC_RebuildPendingSourcePanel
     Exit Sub
 Handler:
     NMDC_LogError "SOURCE_SELECTION_OPEN_ERROR", _
-        "Excel could not open Source Selection.", Err.Number & " - " & Err.Description
+        "Excel could not open source selection on Pending Update.", Err.Number & " - " & Err.Description
 End Sub
 
 Public Sub NMDC_OpenRulesMappingsOwner()
@@ -56,7 +57,7 @@ Private Sub NMDC_SetSelectedSourceChoice(ByVal includeSource As Boolean)
 
     sourceFile = NMDC_SelectedSourceFile()
     If Len(sourceFile) = 0 Then
-        MsgBox "Select a data row first in Pending Update or Source Selection." & vbCrLf & _
+        MsgBox "Select a data row first in Pending Update." & vbCrLf & _
                "The source file is taken from the selected row.", _
                vbExclamation, "NMDC Document Index"
         Exit Sub
@@ -94,7 +95,7 @@ Private Sub NMDC_SetSelectedSourceChoice(ByVal includeSource As Boolean)
 
     MsgBox "Source choice saved: " & actionText & vbCrLf & vbCrLf & _
            sourceFile & vbCrLf & vbCrLf & _
-           "The index will now restage the proposal using this source choice. Nothing is approved yet.", _
+           "The index will now restage the proposal. Nothing is approved yet.", _
            vbInformation, "NMDC Document Index"
     NMDC_UpdateChangedFilesFast
     Exit Sub
@@ -134,18 +135,14 @@ Failed:
 End Function
 
 Public Function NMDC_RefreshSourceSelectionTable() As Boolean
+    ' Compatibility entry point. There is no separate owner-facing source sheet now.
     On Error GoTo Handler
-    If Not NMDC_FileExists(NMDC_ExchangePath() & "\source_selection.csv") Then
-        NMDC_RefreshSourceSelectionTable = True
-        Exit Function
-    End If
-    NMDC_RefreshSourceSelectionTable = NMDC_LoadCsvToTable( _
-        NMDC_ExchangePath() & "\source_selection.csv", "Source Selection", "SourceSelection")
-    NMDC_ApplySourceSelectionGuide
+    NMDC_RebuildPendingSourcePanel
+    NMDC_RefreshSourceSelectionTable = True
     Exit Function
 Handler:
     NMDC_LogError "SOURCE_SELECTION_REFRESH_ERROR", _
-        "Excel could not refresh Source Selection.", Err.Number & " - " & Err.Description
+        "Excel could not refresh source selection on Pending Update.", Err.Number & " - " & Err.Description
     NMDC_RefreshSourceSelectionTable = False
 End Function
 
@@ -166,8 +163,8 @@ Private Sub NMDC_ApplyHomeButtonGuides()
     guides = Array( _
         "NORMAL USE - scan new/changed files only", _
         "HEAVY - rebuild every source from the local cache", _
-        "Preview exactly what would change", _
-        "Accept the whole staged proposal", _
+        "Preview changes + source include checkboxes", _
+        "Accept the whole remaining staged proposal", _
         "Pause the proposal without changing approved data", _
         "Discard the staged proposal", _
         "Choose the folder that contains source registers", _
@@ -198,7 +195,6 @@ Private Sub NMDC_ApplyHomeButtonGuides()
         End If
     Next index
 
-    ' Full Rescan is intentionally visually different because it is the heavy action.
     Set shape = Nothing
     On Error Resume Next
     Set shape = ThisWorkbook.Worksheets("Home").Shapes("NMDC_Action_2")
@@ -213,14 +209,8 @@ Private Sub NMDC_ApplyHomeWorkflowGuide()
     Dim ws As Worksheet
     Set ws = ThisWorkbook.Worksheets("Home")
 
-    On Error Resume Next
-    ws.Range("A30:L38").UnMerge
-    On Error GoTo 0
-    ws.Range("A30:L38").ClearContents
-
-    ws.Range("A30:L30").Merge
+    NMDC_SafeMergeAndSet ws, "A30:L30", "QUICK WORKFLOW - WHAT TO DO"
     With ws.Range("A30:L30")
-        .Value = "QUICK WORKFLOW - WHAT TO DO"
         .Interior.Color = RGB(20, 108, 148)
         .Font.Color = RGB(255, 255, 255)
         .Font.Bold = True
@@ -228,23 +218,21 @@ Private Sub NMDC_ApplyHomeWorkflowGuide()
         .RowHeight = 22
     End With
 
-    NMDC_SetGuideRow ws, 31, "1", "SELECT SOURCE", "Select Data Folder once. Keep the application/runtime outside OneDrive; the source folder may remain in OneDrive."
-    NMDC_SetGuideRow ws, 32, "2", "SCAN", "For normal work press Update Changed Files. Full Rescan is only for deliberate rebuilds, parser/rule changes or troubleshooting."
-    NMDC_SetGuideRow ws, 33, "3", "REVIEW", "Open Pending Update. It is a preview: no approved data changes until you press Approve Update."
-    NMDC_SetGuideRow ws, 34, "4", "SOURCE DECISION", "Open Source Selection. Tick files to include, untick files to exclude, optionally add an Owner Note, then click Save Selection & Restage."
-    NMDC_SetGuideRow ws, 35, "5", "DECIDE", "Approve Update = accept the whole remaining proposal; Hold = postpone it; Reject = discard the staged proposal."
-    NMDC_SetGuideRow ws, 36, "6", "EXCEPTIONS", "Review Flags is only for genuine extraction/data exceptions. For the current validated DATA, the expected count is zero."
-    NMDC_SetGuideRow ws, 37, "TIP", "PERFORMANCE", "The scan runs in the background. A persistent local source cache avoids rereading unchanged OneDrive files on later scans."
-    NMDC_SetGuideRow ws, 38, "TIP", "RULES", "Rules & Mappings uses normal text matching: CONTAINS, EXACT, STARTS WITH or ENDS WITH. No REGEX is needed for normal editing."
+    NMDC_SetGuideRow ws, 31, "1", "SELECT SOURCE", "Select Data Folder once. Application/runtime stays local; source files may remain in OneDrive."
+    NMDC_SetGuideRow ws, 32, "2", "SCAN", "Use Update Changed Files normally. Full Rescan is only for deliberate rebuilds or troubleshooting."
+    NMDC_SetGuideRow ws, 33, "3", "REVIEW", "Open Pending Update. The left table is the proposed change list. Nothing is approved yet."
+    NMDC_SetGuideRow ws, 34, "4", "CHOOSE SOURCES", "On Pending Update, use the native Excel checkboxes in the source panel at the right: checked = include, unchecked = exclude. Save Source Choices & Restage once."
+    NMDC_SetGuideRow ws, 35, "5", "DECIDE", "Approve = accept the whole remaining proposal; Hold = postpone; Reject = discard the staged proposal."
+    NMDC_SetGuideRow ws, 36, "6", "EXCEPTIONS", "Review Flags is only for genuine extraction/data exceptions. The validated current DATA should produce zero extraction flags."
+    NMDC_SetGuideRow ws, 37, "TIP", "LIVE FILTER", "Choose one table column, then type. Filtering updates on every key. Esc/Enter stops typing mode; Reset clears it."
+    NMDC_SetGuideRow ws, 38, "TIP", "RULES", "Rules & Mappings uses normal text matching: CONTAINS, EXACT, STARTS WITH or ENDS WITH."
 End Sub
 
 Private Sub NMDC_SetGuideRow(ByVal ws As Worksheet, ByVal rowNo As Long, ByVal stepText As String, ByVal titleText As String, ByVal detailText As String)
-    ws.Range("A" & rowNo & ":B" & rowNo).Merge
-    ws.Range("C" & rowNo & ":D" & rowNo).Merge
-    ws.Range("E" & rowNo & ":L" & rowNo).Merge
-    ws.Range("A" & rowNo).Value = stepText
-    ws.Range("C" & rowNo).Value = titleText
-    ws.Range("E" & rowNo).Value = detailText
+    NMDC_SafeMergeAndSet ws, "A" & rowNo & ":B" & rowNo, stepText
+    NMDC_SafeMergeAndSet ws, "C" & rowNo & ":D" & rowNo, titleText
+    NMDC_SafeMergeAndSet ws, "E" & rowNo & ":L" & rowNo, detailText
+
     With ws.Range("A" & rowNo & ":L" & rowNo)
         .Interior.Color = RGB(247, 249, 252)
         .Font.Name = "Aptos"
@@ -263,111 +251,26 @@ End Sub
 
 Private Sub NMDC_ApplyPendingUpdateDecisionGuide()
     Dim ws As Worksheet
-    Dim area As Range
-    Dim button As Shape
-
     Set ws = ThisWorkbook.Worksheets("Pending Update")
-    On Error Resume Next
-    ws.Range("A4:I4").UnMerge
-    ws.Range("A4:I4").Merge
-    On Error GoTo 0
+
+    NMDC_SafeMergeAndSet ws, "A4:I4", _
+        "REVIEW WORKFLOW. Left table = proposed record changes. Right panel = source workbook choices using native Excel checkboxes. Checked = include; unchecked = exclude. Save Source Choices & Restage after changes. Approve/Hold/Reject applies to the remaining whole proposal."
+
     With ws.Range("A4:I4")
-        .Value = "REVIEW WORKFLOW - READ ONLY TABLE. Review the proposed changes. For source-level decisions, open Source Selection and use the checkboxes: checked = include; unchecked = exclude. The Exclude Selected Source button remains as a one-row shortcut. Approve/Hold/Reject applies to the whole staged proposal."
         .Interior.Color = RGB(255, 247, 219)
         .Font.Name = "Aptos"
-        .Font.Size = 10
+        .Font.Size = 9
         .Font.Bold = True
         .Font.Color = RGB(96, 72, 0)
         .WrapText = True
-        .RowHeight = 54
+        .HorizontalAlignment = xlLeft
+        .RowHeight = 46
     End With
 
     On Error Resume Next
     ws.Shapes("NMDC_Pending_Exclude").Delete
     ws.Shapes("NMDC_Pending_SourceList").Delete
     On Error GoTo 0
-
-    Set area = ws.Range("K2:M3")
-    Set button = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width, area.Height)
-    button.Name = "NMDC_Pending_Exclude"
-    button.OnAction = "NMDC_ExcludeSelectedSource"
-    button.TextFrame.Characters.Text = "Exclude Selected Source" & vbLf & "Quick one-file shortcut"
-    NMDC_FormatOwnerButton button, RGB(198, 40, 40)
-
-    Set area = ws.Range("N2:P3")
-    Set button = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width, area.Height)
-    button.Name = "NMDC_Pending_SourceList"
-    button.OnAction = "NMDC_OpenSourceSelection"
-    button.TextFrame.Characters.Text = "Choose Sources" & vbLf & "Use include checkboxes"
-    NMDC_FormatOwnerButton button, RGB(20, 108, 148)
-End Sub
-
-Private Sub NMDC_ApplySourceSelectionGuide()
-    On Error GoTo Handler
-    Dim ws As Worksheet
-    Dim area As Range
-    Dim button As Shape
-
-    Set ws = ThisWorkbook.Worksheets("Source Selection")
-    On Error Resume Next
-    ws.Range("A4:G4").UnMerge
-    ws.Range("A4:G4").Merge
-    On Error GoTo 0
-    With ws.Range("A4:G4")
-        .Value = "SOURCE SELECTION. Use the checkbox in the first column: CHECKED = include this source in index scope; UNCHECKED = intentionally exclude it. Add an optional Owner Note for exclusions. Make all choices first, then click Save Selection & Restage once. No source file is edited or deleted."
-        .Interior.Color = RGB(232, 241, 247)
-        .Font.Name = "Aptos"
-        .Font.Size = 10
-        .Font.Bold = True
-        .Font.Color = RGB(31, 70, 90)
-        .WrapText = True
-        .RowHeight = 54
-    End With
-
-    On Error Resume Next
-    ws.Shapes("NMDC_Source_Include").Delete
-    ws.Shapes("NMDC_Source_Exclude").Delete
-    ws.Shapes("NMDC_Source_Save").Delete
-    ws.Shapes("NMDC_Source_All").Delete
-    ws.Shapes("NMDC_Source_None").Delete
-    On Error GoTo 0
-
-    Set area = ws.Range("I2:K3")
-    Set button = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width, area.Height)
-    button.Name = "NMDC_Source_Save"
-    button.OnAction = "NMDC_SaveSourceSelections"
-    button.TextFrame.Characters.Text = "Save Selection & Restage" & vbLf & "Apply all checkbox choices"
-    NMDC_FormatOwnerButton button, RGB(20, 108, 148)
-
-    Set area = ws.Range("L2:M3")
-    Set button = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width, area.Height)
-    button.Name = "NMDC_Source_All"
-    button.OnAction = "NMDC_CheckAllSources"
-    button.TextFrame.Characters.Text = "Check All" & vbLf & "Include all"
-    NMDC_FormatOwnerButton button, RGB(46, 125, 50)
-
-    Set area = ws.Range("N2:O3")
-    Set button = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width, area.Height)
-    button.Name = "NMDC_Source_None"
-    button.OnAction = "NMDC_UncheckAllSources"
-    button.TextFrame.Characters.Text = "Uncheck All" & vbLf & "Exclude all"
-    NMDC_FormatOwnerButton button, RGB(198, 40, 40)
-
-    NMDC_RebuildSourceSelectionCheckboxes
-    Exit Sub
-Handler:
-    ' Source Selection is created by setup; silently skip only in legacy workbooks.
-End Sub
-
-Private Sub NMDC_FormatOwnerButton(ByVal button As Shape, ByVal fillColor As Long)
-    button.TextFrame.HorizontalAlignment = xlCenter
-    button.TextFrame.VerticalAlignment = 3
-    button.Fill.ForeColor.RGB = fillColor
-    button.Line.ForeColor.RGB = fillColor
-    button.TextFrame.Characters.Font.Name = "Aptos"
-    button.TextFrame.Characters.Font.Size = 9
-    button.TextFrame.Characters.Font.Bold = True
-    button.TextFrame.Characters.Font.Color = RGB(255, 255, 255)
 End Sub
 
 Private Sub NMDC_ApplyPlainRulesExperience()
@@ -394,22 +297,19 @@ Private Sub NMDC_ApplyPlainRulesExperience()
         target.Validation.InCellDropdown = True
         target.Validation.ShowInput = True
         target.Validation.InputTitle = "Simple text match"
-        target.Validation.InputMessage = "CONTAINS = phrase appears anywhere; EXACT = whole field matches; STARTS_WITH / ENDS_WITH = position-based text match. No REGEX is required."
+        target.Validation.InputMessage = "CONTAINS = phrase appears anywhere; EXACT = whole field matches; STARTS_WITH / ENDS_WITH = position-based text match."
     End If
 
     On Error Resume Next
     Set guide = ws.Shapes("NMDC_Rules_Guide")
     On Error GoTo Handler
     If Not guide Is Nothing Then
-        guide.TextFrame.Characters.Text = "Normal edit: choose dropdowns and type ordinary words in Match_Words. Use CONTAINS for most rules; EXACT, STARTS_WITH and ENDS_WITH cover the other normal cases. Shipped rules no longer require REGEX."
+        guide.TextFrame.Characters.Text = "Normal edit: choose dropdowns and type ordinary words in Match_Words. CONTAINS is the normal choice; EXACT, STARTS_WITH and ENDS_WITH cover the other simple cases."
     End If
 
-    On Error Resume Next
-    ws.Range("A4:R4").UnMerge
-    ws.Range("A4:R4").Merge
-    On Error GoTo Handler
+    NMDC_SafeMergeAndSet ws, "A4:R4", _
+        "SIMPLE RULE EDITOR. Choose where to look, choose CONTAINS / EXACT / STARTS WITH / ENDS WITH, type ordinary keywords, and choose the classification result. Technical columns stay hidden unless explicitly shown."
     With ws.Range("A4:R4")
-        .Value = "SIMPLE RULE EDITOR. Normal users work with plain text only: choose where to look, choose CONTAINS / EXACT / STARTS WITH / ENDS WITH, type the words, and choose the classification result. Technical columns stay hidden unless explicitly shown."
         .Interior.Color = RGB(255, 247, 219)
         .Font.Name = "Aptos"
         .Font.Size = 10
@@ -423,4 +323,19 @@ Handler:
     NMDC_LogError "PLAIN_RULES_UX_ERROR", _
         "Excel could not apply the plain-text Rules & Mappings experience.", _
         Err.Number & " - " & Err.Description
+End Sub
+
+Private Sub NMDC_SafeMergeAndSet(ByVal ws As Worksheet, ByVal addressText As String, ByVal valueText As String)
+    Dim target As Range
+    Set target = ws.Range(addressText)
+
+    Application.DisplayAlerts = False
+    On Error Resume Next
+    target.UnMerge
+    target.ClearContents
+    On Error GoTo 0
+    target.Merge
+    Application.DisplayAlerts = True
+
+    target.Cells(1, 1).Value = valueText
 End Sub
