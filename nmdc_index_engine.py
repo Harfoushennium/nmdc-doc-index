@@ -12,7 +12,7 @@ from nmdc_profiler.review_decisions import apply_review_decisions
 from nmdc_profiler.runtime_admin import reset_runtime_state, undo_last_approval
 from nmdc_profiler.runtime_engine import record_user_flag, stage_runtime_update
 from nmdc_profiler.source_access import install_resilient_source_access
-from nmdc_profiler.source_selection import set_source_selection
+from nmdc_profiler.source_selection import set_source_selection, set_source_selections_from_file
 from nmdc_profiler.source_selection_view import export_source_selection
 from nmdc_profiler.ui_layout import install_review_first_column_order
 from nmdc_profiler.update_engine import approve_stage, hold_stage, reject_stage
@@ -66,6 +66,13 @@ def build_parser() -> argparse.ArgumentParser:
     source_selection.add_argument("--source-file", required=True)
     source_selection.add_argument("--action", choices=("INCLUDE", "EXCLUDE"), required=True)
     source_selection.add_argument("--reason", default="")
+
+    source_selections = subparsers.add_parser(
+        "save-source-selections",
+        help="Persist all Excel source-selection checkboxes in one operation",
+    )
+    _common(source_selections)
+    source_selections.add_argument("--selections-file", type=Path, required=True)
 
     context_fields = (
         "message",
@@ -150,6 +157,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 include=args.action == "INCLUDE",
                 reason=args.reason,
             )
+        elif args.command == "save-source-selections":
+            result = set_source_selections_from_file(args.config_dir, args.selections_file)
         elif args.command == "user-flag":
             result = record_user_flag(args.state_dir, **_request_context(args))
         elif args.command == "support-request":
