@@ -103,7 +103,43 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 11. Multi-choice fields such as Review Flag decisions, Resolution Status and rule match choices remain dropdowns rather than being represented by ambiguous groups of checkboxes.
 12. Automated regression tests must cover checked/unchecked export, batch persistence, restore, Check All/Uncheck All contract and packaging of the checkbox module.
 
-## Gate H — Source access resilience
+## Gate H — Dynamic Live Filter
+
+1. Live Filter must be available only on table-heavy sheets that benefit from rapid search: Master Documents, Revisions, Transactions, Pending Update, Review Flags, User Decisions, Update History and Error Log.
+2. The implementation must use normal worksheet cells and ListObject filtering; it must not depend on an ActiveX textbox/MSForms control.
+3. Default mode searches **ALL COLUMNS** in the row.
+4. `Ctrl+Shift+F` lets the user click a table header and change the target column without editing VBA or table names.
+5. Normal search is case-insensitive and supports partial matching.
+6. Spaces and `+` mean **AND**; for example `SAFEEN + 3000` requires both terms.
+7. `-term` excludes a row containing that term; for example `SAFEEN -2000` includes SAFEEN rows but rejects rows containing 2000.
+8. A whole search expression enclosed in double quotes performs an exact case-sensitive cell match.
+9. Clearing the search cell removes only the live-filter criterion and does not delete data or corrupt other table content.
+10. The internal helper field must remain hidden and be prefixed `__NMDC_` so it cannot be confused with business data or used as a custom field name.
+11. Live Filter must survive ordinary table refreshes by rebuilding its helper field when required.
+12. Source Selection is intentionally excluded because its short list already has checkbox-specific interaction/status in row 3.
+
+## Gate I — User Custom Fields & Keyword Mappings
+
+1. A dedicated `Custom Fields` workspace must exist with two valid Excel tables: `CustomFields` and `KeywordMappings`, even when no rules have been entered.
+2. `CustomFields` defines user-derived Master Documents columns with: Enabled?, Field Name, Search In, Match Behavior, Separator and Notes.
+3. `KeywordMappings` defines the owner-managed dictionary with: Enabled?, Field Name, Keyword / Pattern, Result, Match Type, Priority and Notes.
+4. Enabled? is a true binary choice and therefore uses Excel checkboxes. Match Behavior / Match Type remain dropdowns because they have several meanings.
+5. A user can create a field such as **Vessel Names** without changing Python or VBA.
+6. Search In can name one or several Master Documents fields (for example `Document Title;Source File`) or `ALL TEXT`.
+7. `CONTAINS` is the simplest/default mapping method.
+8. `ALL TERMS` supports the same `+AND / -EXCLUDE` idea as Live Filter.
+9. `EXACT` supports whole-text matching.
+10. `WILDCARD` provides an advanced adaptation of the owner’s keyword tool: `?` fixed-width extraction and `*` variable-width extraction where applicable.
+11. `FIRST` returns the first enabled mapping by priority; `ALL UNIQUE` collects every unique match in priority order with the configured separator.
+12. Core NMDC fields (Project No., Document No., Document Title, classifications, links, source identities, keys, etc.) are reserved and cannot be overwritten by Custom Fields.
+13. Any internal field beginning `__NMDC_` is also reserved.
+14. Custom fields are a presentation/enrichment layer only; they must not mutate canonical approved/staged engine records or source workbooks.
+15. The custom definitions/mappings must be backed up to the local runtime as `user_custom_fields.csv` and `user_keyword_mappings.csv` so a fresh generated workbook can restore the owner’s definitions.
+16. After a core CSV refresh trims Master Documents back to canonical columns, enabled custom columns must be restored automatically when Master Documents is next activated/used.
+17. A user may either use **Add Custom Field** or add a non-reserved column in the Master Documents table manually; a matching enabled CustomFields definition must be able to populate it.
+18. Automated regression tests must cover the workspace contract, checkbox policy, match modes, core-field protection, runtime backup names, bootstrap packaging and post-refresh restoration guard.
+
+## Gate J — Source access resilience
 
 1. Valid Excel/OneDrive source workbooks that return a transient Windows sharing/permission error must be retried automatically before the scan fails.
 2. Retry handling must cover both profiling and content hashing.
@@ -113,7 +149,7 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 6. The recommended action must tell the user to close the source workbook if open and wait for OneDrive synchronization before retrying.
 7. Regression tests must verify transient PermissionError recovery and the real Project 2369 source remains readable in the repository baseline.
 
-## Gate I — Safety and negative tests
+## Gate K — Safety and negative tests
 
 1. A locked/unreadable source must produce a clear genuine error and must not silently disappear from the approved index.
 2. A failed stage must not change the approved pointer/data.
@@ -122,12 +158,12 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 5. Non-overridable conflicts must remain blocking.
 6. Source `DATA/` must remain byte-for-byte untouched by profiling/extraction tests.
 
-## Gate J — Determinism and packaging
+## Gate L — Determinism and packaging
 
 1. Linux and Windows real-data extraction must be deterministic.
 2. Cycle 1 profiler/classification, Cycle 2 sentinel, Cycle 3 full extraction, and Production Excel Package workflows must all pass on the final production-code HEAD.
 3. Windows engine build and packaged-engine smoke test must pass.
-4. Production ZIP must contain the complete VBA set, including `modNMDC_Checkboxes.bas`, plus source-selection configuration and exchange support.
+4. Production ZIP must contain the complete VBA set, including `modNMDC_Checkboxes.bas`, `modNMDC_LiveFilter.bas`, `modNMDC_CustomFields.bas` and `modNMDC_CustomFieldsSetup.bas`, plus source-selection configuration and exchange support.
 5. Production ZIP content must be complete and its SHA-256 recorded.
 6. Final owner acceptance must use a fresh package and a freshly generated `.xlsm`; old generated workbooks are not valid release evidence.
 
@@ -146,10 +182,16 @@ After all automated gates are green, the owner should:
 9. open **Source Selection** and confirm every source row has an include checkbox; uncheck one harmless test source, add an Owner Note, click **Save Selection & Restage**, and verify that source is omitted from the staged proposal without modifying the original workbook;
 10. re-check the same source, save/restage, and verify it returns to index scope;
 11. test **Check All** and cancel/confirm **Uncheck All** appropriately without approving the staged update;
-12. apply a table filter/sort, refresh, and confirm the refreshed table resets cleanly without mixed rows;
-13. confirm Rules & Mappings simple view uses plain matching and is usable without REGEX or technical pattern editing;
-14. test Reset All Records and rerun Full Rescan;
-15. do **not** approve the staged update until these checks are accepted.
+12. on Master Documents, test Live Filter in ALL COLUMNS mode with one term, two AND terms, one exclusion term and a quoted exact value; use Ctrl+Shift+F to target Document Title and clear the search afterward;
+13. open **Custom Fields & Keywords**, add a temporary `Vessel Names` field searching `Document Title;Source File`, add at least two vessel keyword mappings, and apply them; confirm the new column is populated only where the configured keywords match;
+14. test both `FIRST` and `ALL UNIQUE`; test one `ALL TERMS` expression with `+`/space AND and `-EXCLUDE`; test wildcard mode only with a harmless sample rule where the expected result is obvious;
+15. run an update/refresh and return to Master Documents; confirm `Vessel Names` is restored/repopulated and the Live Filter remains usable without manual VBA repair;
+16. disable one keyword mapping using its checkbox and re-apply; confirm that disabled mapping no longer contributes to output;
+17. confirm a Custom Field named like a core field (for example `Document Title`) is rejected and the core data remains unchanged;
+18. apply a normal table filter/sort, refresh, and confirm the refreshed table resets cleanly without mixed rows;
+19. confirm Rules & Mappings simple view uses plain matching and is usable without REGEX or technical pattern editing;
+20. test Reset All Records and rerun Full Rescan;
+21. **do not approve the staged update** until these checks are accepted.
 
 ## Release rule
 
