@@ -26,6 +26,22 @@ Public Function NMDC_AsyncLastDetail() As String
     NMDC_AsyncLastDetail = mAsyncLastDetail
 End Function
 
+Public Sub NMDC_FastStartup()
+    On Error GoTo Handler
+    Application.StatusBar = "NMDC Document Index: loading dashboard status..."
+    If NMDC_RunEngine("export-excel") = 0 Then
+        NMDC_RefreshDashboardOnlyFast
+    End If
+    NMDC_ApplyOwnerUX
+    Application.StatusBar = False
+    Exit Sub
+Handler:
+    Application.StatusBar = False
+    NMDC_LogError "FAST_STARTUP_ERROR", _
+        "The workbook opened, but the lightweight dashboard startup could not finish.", _
+        Err.Number & " - " & Err.Description
+End Sub
+
 Public Sub NMDC_UpdateChangedFilesFast()
     NMDC_StartStagingFast False
 End Sub
