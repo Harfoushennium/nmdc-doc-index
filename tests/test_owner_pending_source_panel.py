@@ -70,24 +70,36 @@ class OwnerPendingSourcePanelTests(unittest.TestCase):
         self.assertIn('Set sourceRange = ws.Range("L5:S6")', checkboxes)
         self.assertIn('"Include in Index?", "Project No.", "Source File"', checkboxes)
         self.assertIn('legacyWs.Visible = xlSheetVeryHidden', checkboxes)
-        self.assertIn('homeWs.Shapes("NMDC_Action_19").Delete', checkboxes)
         self.assertIn('button.OnAction = "NMDC_SaveSourceSelections"', checkboxes)
 
-    def test_source_checkboxes_do_not_depend_on_per_checkbox_macro(self):
+    def test_source_selection_uses_modern_native_excel_checkbox(self):
         checkboxes = self._read("excel/vba/modNMDC_Checkboxes.bas")
-        self.assertIn("checkBox.LinkedCell", checkboxes)
-        self.assertIn('checkBox.OnAction = ""', checkboxes)
+        self.assertIn("includeColumn.DataBodyRange.CellControl.SetCheckbox", checkboxes)
+        self.assertNotIn("CheckBoxes.Add", checkboxes)
+        self.assertNotIn("checkBox.LinkedCell", checkboxes)
         self.assertIn("Public Sub NMDC_SourceCheckboxClicked()", checkboxes)
-        build_section = checkboxes.split("Private Sub NMDC_BuildPendingSourceCheckboxes", 1)[1].split(
-            "Public Sub NMDC_SaveSourceSelections", 1
-        )[0]
-        self.assertNotIn('checkBox.OnAction = "NMDC_SourceCheckboxClicked"', build_section)
+        self.assertIn("native in-cell checkboxes", checkboxes.lower())
 
     def test_pending_panel_can_reinclude_previously_excluded_sources(self):
         source_view = self._read("nmdc_profiler/source_selection_view.py")
         self.assertIn("list(staged.get(\"records\", []) or [])", source_view)
         self.assertIn("list(approved.get(\"records\", []) or [])", source_view)
         self.assertIn('"FALSE" if excluded else "TRUE"', source_view)
+
+    def test_pending_guidance_is_merge_safe(self):
+        checkboxes = self._read("excel/vba/modNMDC_Checkboxes.bas")
+        owner = self._read("excel/vba/modNMDC_OwnerUX.bas")
+        self.assertIn('ws.Range("A4:I4").ClearContents', checkboxes)
+        self.assertIn("NMDC_SafeMergeAndSet", owner)
+        self.assertNotIn('ws.Range("A4:I4").Value = _', checkboxes)
+
+    def test_async_polling_is_workbook_qualified_not_sharepoint_url(self):
+        performance = self._read("excel/vba/modNMDC_Performance.bas")
+        self.assertIn('NMDC_AsyncQualifiedMacro("NMDC_PollEngineAsync")', performance)
+        self.assertIn("Procedure:=mAsyncPollProcedure", performance)
+        self.assertIn("Application.Run NMDC_AsyncQualifiedMacro(callbackName)", performance)
+        self.assertIn("ThisWorkbook.Name", performance)
+        self.assertNotIn("ThisWorkbook.FullName", performance)
 
 
 if __name__ == "__main__":
