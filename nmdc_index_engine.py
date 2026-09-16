@@ -13,6 +13,7 @@ from nmdc_profiler.runtime_admin import reset_runtime_state, undo_last_approval
 from nmdc_profiler.runtime_engine import record_user_flag, stage_runtime_update
 from nmdc_profiler.source_access import install_resilient_source_access
 from nmdc_profiler.source_selection import set_source_selection
+from nmdc_profiler.source_selection_view import export_source_selection
 from nmdc_profiler.ui_layout import install_review_first_column_order
 from nmdc_profiler.update_engine import approve_stage, hold_stage, reject_stage
 
@@ -129,6 +130,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
         elif args.command == "export-excel":
             result = export_excel_exchange(args.state_dir, args.exchange_dir)
+            export_source_selection(args.state_dir, args.exchange_dir, args.config_dir)
         elif args.command == "approve":
             result = approve_stage(args.state_dir, args.run_id, allow_conflicts=args.allow_conflicts)
         elif args.command == "hold":
