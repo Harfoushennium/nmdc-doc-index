@@ -115,6 +115,49 @@ Handler:
         Err.Number & " - " & Err.Description
 End Sub
 
+Public Sub NMDC_UpgradeCustomFieldCheckboxes()
+    ' Replace the legacy Form Control checkboxes created by older builds with the
+    ' modern Microsoft 365 in-cell Checkbox used by the owner (TRUE/FALSE cell value).
+    On Error GoTo SoftFail
+
+    Dim ws As Worksheet
+    Dim table As ListObject
+    Dim column As ListColumn
+    Dim rowIndex As Long
+    Dim value As Variant
+    Dim item As Object
+
+    Set ws = ThisWorkbook.Worksheets("Custom Fields")
+
+    On Error Resume Next
+    For rowIndex = ws.CheckBoxes.Count To 1 Step -1
+        Set item = ws.CheckBoxes(rowIndex)
+        If Left$(CStr(item.Name), Len("NMDC_CustomFieldCheck_")) = "NMDC_CustomFieldCheck_" Or _
+           Left$(CStr(item.Name), Len("NMDC_KeywordMapCheck_")) = "NMDC_KeywordMapCheck_" Then
+            item.Delete
+        End If
+    Next rowIndex
+    On Error GoTo SoftFail
+
+    For Each table In Array(ws.ListObjects("CustomFields"), ws.ListObjects("KeywordMappings"))
+        Set column = table.ListColumns("Enabled?")
+        If Not column.DataBodyRange Is Nothing Then
+            For rowIndex = 1 To column.DataBodyRange.Rows.Count
+                value = column.DataBodyRange.Cells(rowIndex, 1).Value
+                column.DataBodyRange.Cells(rowIndex, 1).Value = NMDC_CustomSetupChecked(value)
+            Next rowIndex
+            column.DataBodyRange.CellControl.SetCheckbox
+            column.DataBodyRange.HorizontalAlignment = xlCenter
+            column.Range.ColumnWidth = 11
+        End If
+    Next table
+    Exit Sub
+
+SoftFail:
+    ' Native checkboxes are a usability enhancement. Never block indexing if a
+    ' workbook is opened in an older Excel version that lacks CellControl.
+End Sub
+
 ' Core CSV refresh intentionally owns only canonical Master Documents columns.
 ' If it trims the table back to those core columns, this lightweight check
 ' notices the missing enabled custom field and rebuilds the enrichment layer
@@ -133,6 +176,12 @@ Public Sub NMDC_EnsureCustomFieldsCurrent(ByVal Sh As Object)
     If Sh Is Nothing Then Exit Sub
     If TypeName(Sh) <> "Worksheet" Then Exit Sub
     Set ws = Sh
+
+    If StrComp(ws.Name, "Custom Fields", vbTextCompare) = 0 Then
+        NMDC_UpgradeCustomFieldCheckboxes
+        Exit Sub
+    End If
+
     If StrComp(ws.Name, "Master Documents", vbTextCompare) <> 0 Then Exit Sub
 
     Set definitions = ThisWorkbook.Worksheets("Custom Fields").ListObjects("CustomFields")
@@ -159,11 +208,6 @@ SoftFail:
     ' This guard must never interrupt normal worksheet navigation.
 End Sub
 
-' Install a separate workbook selection-change event. This complements the live
-' filter SheetChange/SheetActivate handlers without needing to edit those event
-' procedures. It makes a post-refresh custom field restore effectively automatic:
-' the first click in Master Documents performs only a lightweight definition check,
-' and rebuilds the derived columns only when one is actually missing.
 Private Sub NMDC_InstallCustomFieldSelectionEvent()
     On Error GoTo SoftFail
 
