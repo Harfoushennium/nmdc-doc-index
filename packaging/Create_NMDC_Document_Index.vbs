@@ -54,6 +54,9 @@ RequireFile fso.BuildPath(modulesFolder, "modNMDC_Startup.bas"), "A required Exc
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Performance.bas"), "The responsive scan module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_OwnerUX.bas"), "The owner guidance module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Checkboxes.bas"), "The source-selection checkbox module is missing."
+RequireFile fso.BuildPath(modulesFolder, "modNMDC_LiveFilter.bas"), "The Live Filter module is missing."
+RequireFile fso.BuildPath(modulesFolder, "modNMDC_CustomFields.bas"), "The Custom Fields module is missing."
+RequireFile fso.BuildPath(modulesFolder, "modNMDC_CustomFieldsSetup.bas"), "The Custom Fields setup module is missing."
 
 If fso.FileExists(outputWorkbook) Then
     response = MsgBox("NMDC_Document_Index.xlsm already exists." & vbCrLf & vbCrLf & _
@@ -115,6 +118,9 @@ ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Startup.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Performance.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_OwnerUX.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Checkboxes.bas")
+ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_LiveFilter.bas")
+ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_CustomFields.bas")
+ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_CustomFieldsSetup.bas")
 If Err.Number <> 0 Then
     ShowFailure "Excel could not attach the production actions."
     WScript.Quit 8
@@ -123,6 +129,13 @@ End If
 ConfigureFastStartup workbook
 If Err.Number <> 0 Then
     ShowFailure "Excel could not configure the fast workbook startup."
+    WScript.Quit 9
+End If
+
+Err.Clear
+ConfigureOwnerEvents workbook
+If Err.Number <> 0 Then
+    ShowFailure "Excel could not configure the workbook interaction events."
     WScript.Quit 9
 End If
 
@@ -139,6 +152,29 @@ ConfigureReviewFlags workbook
 ApplyUserDropdowns workbook
 workbook.Worksheets("System Data").Visible = 2
 NormalizeMergedUiRanges workbook
+
+Err.Clear
+excel.Run "'" & workbook.Name & "'!NMDC_EnsureCustomFieldsStructure"
+If Err.Number <> 0 Then
+    ShowFailure "Excel could not create the Custom Fields & Keywords workspace."
+    WScript.Quit 10
+End If
+
+Err.Clear
+excel.Run "'" & workbook.Name & "'!NMDC_CustomFieldsInitialize"
+If Err.Number <> 0 Then
+    ShowFailure "Excel could not initialize Custom Fields & Keywords."
+    WScript.Quit 10
+End If
+
+Err.Clear
+excel.Run "'" & workbook.Name & "'!NMDC_LiveFilterInitialize"
+If Err.Number <> 0 Then
+    ShowFailure "Excel could not initialize the Live Filter."
+    WScript.Quit 10
+End If
+
+Err.Clear
 excel.Run "'" & workbook.Name & "'!NMDC_ApplyOwnerUX"
 If Err.Number <> 0 Then
     ShowFailure "Excel could not apply the final owner guidance."
@@ -256,8 +292,11 @@ Sub EnsureTable(ByVal wb, ByVal sheetName, ByVal tableName, ByVal headerRow, ByV
 End Sub
 
 Sub ConfigureFastStartup(ByVal wb)
-    Dim component, codeModule, lineNo, lineText, thisComponent, thisModule, eventCode
+    Dim component, codeModule, lineNo, lineText, thisComponent, thisModule, eventCode, sourceText
 
+    ' Keep the fast startup introduced after the last working owner build, but do
+    ' not assume that ThisWorkbook already contains code. A fresh base workbook
+    ' can have CountOfLines = 0; calling Lines(1, 0) raises -2147024809.
     Set component = wb.VBProject.VBComponents("modNMDC_Startup")
     Set codeModule = component.CodeModule
     For lineNo = 1 To codeModule.CountOfLines
@@ -270,12 +309,62 @@ Sub ConfigureFastStartup(ByVal wb)
 
     Set thisComponent = wb.VBProject.VBComponents(wb.CodeName)
     Set thisModule = thisComponent.CodeModule
-    If InStr(1, thisModule.Lines(1, thisModule.CountOfLines), "Workbook_Open", 1) = 0 Then
+    sourceText = ""
+    If thisModule.CountOfLines > 0 Then
+        sourceText = thisModule.Lines(1, thisModule.CountOfLines)
+    End If
+
+    If InStr(1, sourceText, "Private Sub Workbook_Open", 1) = 0 Then
         eventCode = vbCrLf & "Private Sub Workbook_Open()" & vbCrLf & _
+                    "    On Error Resume Next" & vbCrLf & _
                     "    NMDC_FastStartup" & vbCrLf & _
+                    "    On Error GoTo 0" & vbCrLf & _
                     "End Sub" & vbCrLf
         thisModule.AddFromString eventCode
     End If
+End Sub
+
+Sub ConfigureOwnerEvents(ByVal wb)
+    Dim thisComponent, thisModule, sourceText, eventCode
+
+    Set thisComponent = wb.VBProject.VBComponents(wb.CodeName)
+    Set thisModule = thisComponent.CodeModule
+    sourceText = ""
+    If thisModule.CountOfLines > 0 Then
+        sourceText = thisModule.Lines(1, thisModule.CountOfLines)
+    End If
+
+    eventCode = ""
+
+    If InStr(1, sourceText, "Private Sub Workbook_SheetChange", 1) = 0 Then
+        eventCode = eventCode & vbCrLf & _
+            "Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)" & vbCrLf & _
+            "    On Error Resume Next" & vbCrLf & _
+            "    NMDC_LiveFilterSheetChange Sh, Target" & vbCrLf & _
+            "    On Error GoTo 0" & vbCrLf & _
+            "End Sub" & vbCrLf
+    End If
+
+    If InStr(1, sourceText, "Private Sub Workbook_SheetActivate", 1) = 0 Then
+        eventCode = eventCode & vbCrLf & _
+            "Private Sub Workbook_SheetActivate(ByVal Sh As Object)" & vbCrLf & _
+            "    On Error Resume Next" & vbCrLf & _
+            "    NMDC_LiveFilterSheetActivate Sh" & vbCrLf & _
+            "    NMDC_EnsureCustomFieldsCurrent Sh" & vbCrLf & _
+            "    On Error GoTo 0" & vbCrLf & _
+            "End Sub" & vbCrLf
+    End If
+
+    If InStr(1, sourceText, "Private Sub Workbook_SheetSelectionChange", 1) = 0 Then
+        eventCode = eventCode & vbCrLf & _
+            "Private Sub Workbook_SheetSelectionChange(ByVal Sh As Object, ByVal Target As Range)" & vbCrLf & _
+            "    On Error Resume Next" & vbCrLf & _
+            "    NMDC_EnsureCustomFieldsCurrent Sh" & vbCrLf & _
+            "    On Error GoTo 0" & vbCrLf & _
+            "End Sub" & vbCrLf
+    End If
+
+    If Len(eventCode) > 0 Then thisModule.AddFromString eventCode
 End Sub
 
 Sub SetWorkbookConfig(ByVal wb, ByVal keyName, ByVal configValue)
