@@ -24,7 +24,7 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 ## Gate A — Real-data extraction completeness
 
 1. Profile every current workbook under `DATA/` using the same code path as the packaged engine.
-2. Verify every selected source is either extracted or intentionally excluded by an explicit rule.
+2. Verify every selected source is either extracted or intentionally excluded by an explicit rule/owner source-scope decision.
 3. Verify the four previously unresolved populated layouts extract automatically:
    - `2035 - UMM Shaif Delivarables.xlsx` / `Setup Plans & Anchor Patterns`;
    - `2745-PP-GE-001-MDR Rev_2.xlsx` / `Anchor Pattern`;
@@ -53,25 +53,29 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 
 ## Gate D — Workbook structure and performance
 
-1. All required sheets and uniquely named tables must exist even when empty.
+1. All required sheets and uniquely named tables must exist even when empty, including `Source Selection` / `SourceSelection`.
 2. No refresh may create/delete temporary worksheets.
 3. Home styling must be limited to the visible dashboard range; code must never format `ws.Cells` or otherwise style all 16,384 columns.
 4. The source base workbook must not contain a formatted M:XFD tail on Home.
 5. Generated workbook must not show Excel’s “99% unused formatting and metadata” warning in owner acceptance testing.
 6. Refresh must use manual calculation/events/screen-update suppression and batch typed conversions.
 7. Active filters and sort fields must be cleared before table resize/repopulation so stale hidden/sorted row state cannot mix refreshed data.
+8. Normal **Update Changed Files** must use the persistent local source cache and must not reread/reprocess unchanged OneDrive workbooks.
+9. Runtime/state/cache should live under `%LOCALAPPDATA%` when available rather than inside a synchronized package directory.
+10. Long scans must use the responsive/background VBA workflow and provide status feedback without a visible command window.
 
 ## Gate E — Excel UX and data presentation
 
 1. No merged-cell warning on open.
 2. No visible CMD/console window during engine execution.
 3. Status/progress feedback remains visible while extraction and table refresh run.
-4. Table column guidance and input dropdowns remain present.
-5. `Pending Update` is explicitly review-only; decisions belong in `Review Flags` only when a genuine actionable anomaly exists.
-6. Empty Error Log/Review Flags tables remain valid Excel tables with headers and filters.
+4. Every action on Home has plain-English guidance describing when to use it and what it changes.
+5. `Pending Update` is explicitly review-only; source-scope choices are performed in `Source Selection`, while `Review Flags` is reserved for genuine actionable anomalies.
+6. Empty Error Log/Review Flags/Source Selection tables remain valid Excel tables with headers and filters.
 7. Quoted commas/newlines in CSV exchange data must not split one logical row into multiple Excel rows.
 8. Body rows use professional default presentation: Aptos 10, automatic font color, no body fill, consistent alignment, sensible widths/heights, light borders and wrapping only where useful.
 9. Small tables AutoFit row height within safe limits; large extraction tables use compact stable row height to preserve performance.
+10. Business/review columns appear before technical keys according to the owner’s review logic.
 
 ## Gate F — Rules & Mappings non-coder UX
 
@@ -79,12 +83,27 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 2. Normal user controls must include Add Simple Rule and Show/Hide Advanced.
 3. Advanced technical columns are hidden by default.
 4. Normal choices use dropdowns: Enabled, Source Family, Match Scope, Match Type, Include and Stop on Match.
-5. `CONTAINS` is the normal-user matching method; `REGEX` is visibly advanced.
+5. Shipped/default rules use plain matching only: `CONTAINS`, `EXACT`, `STARTS_WITH`, `ENDS_WITH`; no shipped rule requires REGEX.
 6. Add Simple Rule generates a safe Rule ID / Priority and sensible defaults.
 7. Discipline, Category and Subcategory are clearly described as the classification outputs the rule assigns.
 8. Invalid/duplicate rules must fail validation before staging; they must never be silently accepted.
 
-## Gate G — Source access resilience
+## Gate G — Source Selection checkbox workflow
+
+1. `Source Selection` must show one Excel checkbox for each real source workbook row.
+2. Checked means **include in index scope**; unchecked means **owner-excluded**.
+3. The underlying include value remains auditable/exportable even though the TRUE/FALSE text is hidden from normal view.
+4. Checkbox clicks update only the local selection state; they must **not** launch an engine scan individually.
+5. `Save Selection & Restage` batches all checkbox choices in one engine operation and then stages one new proposal.
+6. `Check All` and `Uncheck All` operate on the source list; `Uncheck All` requires confirmation.
+7. Owner Note is optional free text and is persisted as the reason for an exclusion.
+8. Excluding a source does not edit, delete, rename, move or lock the original workbook.
+9. Excluding/restoring sources does not modify the approved index until a subsequent explicit **Approve Update**.
+10. Checkbox controls must remain associated with the correct source after refresh/sort because their row is resolved at click time rather than through fragile fixed linked-cell addresses.
+11. Multi-choice fields such as Review Flag decisions, Resolution Status and rule match choices remain dropdowns rather than being represented by ambiguous groups of checkboxes.
+12. Automated regression tests must cover checked/unchecked export, batch persistence, restore, Check All/Uncheck All contract and packaging of the checkbox module.
+
+## Gate H — Source access resilience
 
 1. Valid Excel/OneDrive source workbooks that return a transient Windows sharing/permission error must be retried automatically before the scan fails.
 2. Retry handling must cover both profiling and content hashing.
@@ -94,7 +113,7 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 6. The recommended action must tell the user to close the source workbook if open and wait for OneDrive synchronization before retrying.
 7. Regression tests must verify transient PermissionError recovery and the real Project 2369 source remains readable in the repository baseline.
 
-## Gate H — Safety and negative tests
+## Gate I — Safety and negative tests
 
 1. A locked/unreadable source must produce a clear genuine error and must not silently disappear from the approved index.
 2. A failed stage must not change the approved pointer/data.
@@ -103,13 +122,14 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 5. Non-overridable conflicts must remain blocking.
 6. Source `DATA/` must remain byte-for-byte untouched by profiling/extraction tests.
 
-## Gate I — Determinism and packaging
+## Gate J — Determinism and packaging
 
 1. Linux and Windows real-data extraction must be deterministic.
 2. Cycle 1 profiler/classification, Cycle 2 sentinel, Cycle 3 full extraction, and Production Excel Package workflows must all pass on the final production-code HEAD.
 3. Windows engine build and packaged-engine smoke test must pass.
-4. Production ZIP content must be complete and its SHA-256 recorded.
-5. Final owner acceptance must use a fresh package and a freshly generated `.xlsm`; old generated workbooks are not valid release evidence.
+4. Production ZIP must contain the complete VBA set, including `modNMDC_Checkboxes.bas`, plus source-selection configuration and exchange support.
+5. Production ZIP content must be complete and its SHA-256 recorded.
+6. Final owner acceptance must use a fresh package and a freshly generated `.xlsm`; old generated workbooks are not valid release evidence.
 
 ## Owner acceptance sequence
 
@@ -123,10 +143,13 @@ After all automated gates are green, the owner should:
 6. confirm Review Flags is empty and Error Log contains no extraction/refresh error;
 7. sample Source File and Document Link hyperlinks across multiple projects and confirm every link opens the correct file;
 8. verify Pending Update remains a review-only change preview;
-9. apply a table filter/sort, refresh, and confirm the refreshed table resets cleanly without mixed rows;
-10. confirm Rules & Mappings simple view is usable without editing technical fields;
-11. test Reset All Records and rerun Full Rescan;
-12. do **not** approve the staged update until these checks are accepted.
+9. open **Source Selection** and confirm every source row has an include checkbox; uncheck one harmless test source, add an Owner Note, click **Save Selection & Restage**, and verify that source is omitted from the staged proposal without modifying the original workbook;
+10. re-check the same source, save/restage, and verify it returns to index scope;
+11. test **Check All** and cancel/confirm **Uncheck All** appropriately without approving the staged update;
+12. apply a table filter/sort, refresh, and confirm the refreshed table resets cleanly without mixed rows;
+13. confirm Rules & Mappings simple view uses plain matching and is usable without REGEX or technical pattern editing;
+14. test Reset All Records and rerun Full Rescan;
+15. do **not** approve the staged update until these checks are accepted.
 
 ## Release rule
 
