@@ -16,32 +16,41 @@ The generated workbook keeps the last-working owner controls — including **Res
 
 ### Dynamic Live Filter
 
-Live Filter is available on the main data/review sheets and follows the owner-provided Dynamic Live Filter behavior:
+Live Filter is available on the main data/review sheets without ActiveX controls.
 
 1. Click **SELECT COLUMN** or press `Ctrl+Shift+F`.
 2. Click the table header of the one column you want to search.
-3. Type into the Live Filter text box. The visible rows update immediately with every keystroke; Enter/Tab is not required.
-4. Normal text is a partial, case-insensitive search. Text wrapped in double quotes is an exact, case-sensitive search.
-5. Click **RESET** to clear the search/filter.
+3. Live Filter enters typing mode. Type normally and the visible rows update immediately after every character; Enter/Tab is not required to apply the filter.
+4. **Backspace** edits the search text. **Delete** clears the current query. **Esc**, **Enter** or **Tab** exits typing mode.
+5. Click the search display to resume typing for the currently selected column.
+6. Normal text is a partial, case-insensitive native Excel Table filter. Text wrapped in double quotes performs an exact whole-cell match.
+7. Click **RESET** to clear the filter.
 
-There is no `ALL COLUMNS` mode and no hidden helper-column scan. The filter operates directly on the selected Excel Table column using the native AutoFilter path for normal searches.
+The implementation intentionally does **not** use an ActiveX `Forms.TextBox.1`, because current Microsoft 365 security settings can block ActiveX controls. It also has no `ALL COLUMNS` helper scan. The filter operates directly on the one selected Excel Table column using native AutoFilter.
 
 ### Source selection in Pending Update
 
-Source selection is now part of **Pending Update** instead of a separate user-facing worksheet. The source panel on the right shows one row per source workbook, including **Project No.** and **Source File**.
+Source selection is part of **Pending Update** instead of a separate user-facing worksheet. The source panel on the right shows one row per source workbook, including **Project No.** and **Source File**.
 
+- The **Include in Index?** column uses the modern Microsoft 365 in-cell **Checkbox** control (`CellControl.SetCheckbox`).
 - Checked = include the source in index scope.
 - Unchecked = intentionally exclude the source.
 - Add an optional Owner Note when useful.
 - Click **Save Source Choices & Restage** once after making the choices.
 
-Checkboxes are linked directly to their cells and do not call an individual checkbox macro. This avoids the previous `NMDC_SourceCheckboxClicked` macro-availability error. Source workbooks are never edited or deleted by this choice.
+The checkbox is the Excel cell control itself: the cell stores `TRUE`/`FALSE`; no Form Control or ActiveX checkbox and no per-checkbox macro are required. Source workbooks are never edited or deleted by this choice.
 
 ### Custom Fields & Keywords
 
 Use **Custom Fields & Keywords** from Home to add user-defined derived columns to Master Documents, for example `Vessel Names`. Define which Master Documents columns to search, then maintain the editable keyword/result dictionary. Core extracted NMDC fields are protected from overwrite.
 
+Binary **Enabled?** choices use the same modern Excel in-cell Checkbox control. Multi-choice settings continue to use normal Excel dropdowns.
+
 The package keeps runtime/cache under `%LOCALAPPDATA%` when available so normal operation does not create unnecessary sync activity inside a OneDrive-hosted package folder. If you move or rename the extracted package later, rerun setup from its new location so package paths are refreshed.
+
+### Background scanning
+
+The responsive scan launcher keeps the engine in a hidden Windows process and polls it from Excel. Scheduled callbacks are explicitly qualified with the local open workbook **name**, not a SharePoint/OneDrive URL. This avoids the earlier macro-resolution failure where Excel attempted to execute `NMDC_PollEngineAsync` through a SharePoint address.
 
 ## Safety
 
