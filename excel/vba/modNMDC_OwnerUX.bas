@@ -231,7 +231,7 @@ Private Sub NMDC_ApplyHomeWorkflowGuide()
     NMDC_SetGuideRow ws, 31, "1", "SELECT SOURCE", "Select Data Folder once. Keep the application/runtime outside OneDrive; the source folder may remain in OneDrive."
     NMDC_SetGuideRow ws, 32, "2", "SCAN", "For normal work press Update Changed Files. Full Rescan is only for deliberate rebuilds, parser/rule changes or troubleshooting."
     NMDC_SetGuideRow ws, 33, "3", "REVIEW", "Open Pending Update. It is a preview: no approved data changes until you press Approve Update."
-    NMDC_SetGuideRow ws, 34, "4", "SOURCE DECISION", "If an entire workbook should not be indexed, open Source Selection or select its Pending Update row and choose Exclude Selected Source. Restage and review again."
+    NMDC_SetGuideRow ws, 34, "4", "SOURCE DECISION", "Open Source Selection. Tick files to include, untick files to exclude, optionally add an Owner Note, then click Save Selection & Restage."
     NMDC_SetGuideRow ws, 35, "5", "DECIDE", "Approve Update = accept the whole remaining proposal; Hold = postpone it; Reject = discard the staged proposal."
     NMDC_SetGuideRow ws, 36, "6", "EXCEPTIONS", "Review Flags is only for genuine extraction/data exceptions. For the current validated DATA, the expected count is zero."
     NMDC_SetGuideRow ws, 37, "TIP", "PERFORMANCE", "The scan runs in the background. A persistent local source cache avoids rereading unchanged OneDrive files on later scans."
@@ -272,7 +272,7 @@ Private Sub NMDC_ApplyPendingUpdateDecisionGuide()
     ws.Range("A4:I4").Merge
     On Error GoTo 0
     With ws.Range("A4:I4")
-        .Value = "REVIEW WORKFLOW - READ ONLY TABLE. Review the proposed changes. To omit an entire source workbook, select any row from that source and click Exclude Selected Source. The proposal will restage. Approve/Hold/Reject always applies to the whole staged proposal, not one row."
+        .Value = "REVIEW WORKFLOW - READ ONLY TABLE. Review the proposed changes. For source-level decisions, open Source Selection and use the checkboxes: checked = include; unchecked = exclude. The Exclude Selected Source button remains as a one-row shortcut. Approve/Hold/Reject applies to the whole staged proposal."
         .Interior.Color = RGB(255, 247, 219)
         .Font.Name = "Aptos"
         .Font.Size = 10
@@ -291,14 +291,14 @@ Private Sub NMDC_ApplyPendingUpdateDecisionGuide()
     Set button = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width, area.Height)
     button.Name = "NMDC_Pending_Exclude"
     button.OnAction = "NMDC_ExcludeSelectedSource"
-    button.TextFrame.Characters.Text = "Exclude Selected Source" & vbLf & "Omit this whole workbook"
+    button.TextFrame.Characters.Text = "Exclude Selected Source" & vbLf & "Quick one-file shortcut"
     NMDC_FormatOwnerButton button, RGB(198, 40, 40)
 
     Set area = ws.Range("N2:P3")
     Set button = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width, area.Height)
     button.Name = "NMDC_Pending_SourceList"
     button.OnAction = "NMDC_OpenSourceSelection"
-    button.TextFrame.Characters.Text = "Source Selection" & vbLf & "Include / restore sources"
+    button.TextFrame.Characters.Text = "Choose Sources" & vbLf & "Use include checkboxes"
     NMDC_FormatOwnerButton button, RGB(20, 108, 148)
 End Sub
 
@@ -310,11 +310,11 @@ Private Sub NMDC_ApplySourceSelectionGuide()
 
     Set ws = ThisWorkbook.Worksheets("Source Selection")
     On Error Resume Next
-    ws.Range("A4:F4").UnMerge
-    ws.Range("A4:F4").Merge
+    ws.Range("A4:G4").UnMerge
+    ws.Range("A4:G4").Merge
     On Error GoTo 0
-    With ws.Range("A4:F4")
-        .Value = "OWNER SOURCE SELECTION. INCLUDE = source participates in the index. EXCLUDE = source is intentionally omitted without deleting or editing the source workbook. Select a row, then use the Include/Exclude buttons. The proposal is restaged before approval."
+    With ws.Range("A4:G4")
+        .Value = "SOURCE SELECTION. Use the checkbox in the first column: CHECKED = include this source in index scope; UNCHECKED = intentionally exclude it. Add an optional Owner Note for exclusions. Make all choices first, then click Save Selection & Restage once. No source file is edited or deleted."
         .Interior.Color = RGB(232, 241, 247)
         .Font.Name = "Aptos"
         .Font.Size = 10
@@ -327,21 +327,33 @@ Private Sub NMDC_ApplySourceSelectionGuide()
     On Error Resume Next
     ws.Shapes("NMDC_Source_Include").Delete
     ws.Shapes("NMDC_Source_Exclude").Delete
+    ws.Shapes("NMDC_Source_Save").Delete
+    ws.Shapes("NMDC_Source_All").Delete
+    ws.Shapes("NMDC_Source_None").Delete
     On Error GoTo 0
 
-    Set area = ws.Range("H2:J3")
+    Set area = ws.Range("I2:K3")
     Set button = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width, area.Height)
-    button.Name = "NMDC_Source_Include"
-    button.OnAction = "NMDC_IncludeSelectedSource"
-    button.TextFrame.Characters.Text = "Include Selected Source" & vbLf & "Restore to index scope"
+    button.Name = "NMDC_Source_Save"
+    button.OnAction = "NMDC_SaveSourceSelections"
+    button.TextFrame.Characters.Text = "Save Selection & Restage" & vbLf & "Apply all checkbox choices"
+    NMDC_FormatOwnerButton button, RGB(20, 108, 148)
+
+    Set area = ws.Range("L2:M3")
+    Set button = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width, area.Height)
+    button.Name = "NMDC_Source_All"
+    button.OnAction = "NMDC_CheckAllSources"
+    button.TextFrame.Characters.Text = "Check All" & vbLf & "Include all"
     NMDC_FormatOwnerButton button, RGB(46, 125, 50)
 
-    Set area = ws.Range("K2:M3")
+    Set area = ws.Range("N2:O3")
     Set button = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width, area.Height)
-    button.Name = "NMDC_Source_Exclude"
-    button.OnAction = "NMDC_ExcludeSelectedSource"
-    button.TextFrame.Characters.Text = "Exclude Selected Source" & vbLf & "Omit from index scope"
+    button.Name = "NMDC_Source_None"
+    button.OnAction = "NMDC_UncheckAllSources"
+    button.TextFrame.Characters.Text = "Uncheck All" & vbLf & "Exclude all"
     NMDC_FormatOwnerButton button, RGB(198, 40, 40)
+
+    NMDC_RebuildSourceSelectionCheckboxes
     Exit Sub
 Handler:
     ' Source Selection is created by setup; silently skip only in legacy workbooks.
