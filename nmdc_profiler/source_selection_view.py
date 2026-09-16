@@ -2,17 +2,18 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from .excel_bridge import load_approved_state, load_latest_stage
 from .source_selection import read_source_exclusions
 
 
 FIELDS: Sequence[str] = (
-    "Owner Choice",
+    "Include in Index?",
     "Source File",
     "Source Family",
     "Current Status",
+    "Owner Note",
     "Selection Reason",
     "Last Processed Run",
 )
@@ -28,7 +29,7 @@ def _write_csv(path: Path, rows: Iterable[Mapping[str, Any]]) -> None:
 
 
 def export_source_selection(state_dir: Path, exchange_dir: Path, config_dir: Path) -> Path:
-    """Write a simple owner-facing source list from the latest staged/approved manifest."""
+    """Write the owner-facing source scope list for Excel checkbox controls."""
     staged = load_latest_stage(state_dir)
     approved = load_approved_state(state_dir)
     manifest = staged.get("manifest", {}) if staged.get("run_id") else approved.get("manifest", {})
@@ -43,18 +44,16 @@ def export_source_selection(state_dir: Path, exchange_dir: Path, config_dir: Pat
         status = str(item.get("selection_status", "") or "")
         excluded = normalized in exclusions
         family = rel.split("/", 1)[0] if "/" in rel else ""
-        reason = (
-            exclusions[normalized].get("Reason", "Owner excluded source")
-            if excluded
-            else str(item.get("selection_exclusion_reason", "") or "")
-        )
+        owner_note = exclusions[normalized].get("Reason", "") if excluded else ""
+        automatic_reason = str(item.get("selection_exclusion_reason", "") or "")
         rows.append(
             {
-                "Owner Choice": "EXCLUDE" if excluded else "INCLUDE",
+                "Include in Index?": "FALSE" if excluded else "TRUE",
                 "Source File": rel,
                 "Source Family": family,
                 "Current Status": status,
-                "Selection Reason": reason,
+                "Owner Note": owner_note,
+                "Selection Reason": automatic_reason,
                 "Last Processed Run": str(item.get("last_processed_run", "") or ""),
             }
         )
