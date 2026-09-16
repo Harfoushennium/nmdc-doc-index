@@ -12,11 +12,30 @@
 
 The one-time setup uses Microsoft Excel to attach all production VBA modules and workbook events. If Excel blocks that attachment, the setup displays the exact Trust Center setting needed and stops without changing the source workbook.
 
-The generated workbook keeps the last-working owner controls — including **Reset All Records**, **Undo Last Approval**, Review/Approve/Hold/Reject, Source Selection and Help — and adds the newer Live Filter and Custom Fields & Keywords features. The setup explicitly embeds these newer modules rather than relying on a later opportunistic import.
+The generated workbook keeps the last-working owner controls — including **Reset All Records**, **Undo Last Approval**, Review/Approve/Hold/Reject and Help — and adds the Live Filter, integrated Pending Update source-selection panel, and Custom Fields & Keywords features. The setup explicitly embeds these modules rather than relying on a later opportunistic import.
 
-### Live Filter
+### Dynamic Live Filter
 
-Live Filter is available on the main data/review sheets. Type in the row-3 search cell and press Enter/Tab. Spaces or `+` mean AND, `-word` excludes a term, and a quoted whole search performs an exact case-sensitive match. `Ctrl+Shift+F` selects one target column; otherwise use `ALL COLUMNS`.
+Live Filter is available on the main data/review sheets and follows the owner-provided Dynamic Live Filter behavior:
+
+1. Click **SELECT COLUMN** or press `Ctrl+Shift+F`.
+2. Click the table header of the one column you want to search.
+3. Type into the Live Filter text box. The visible rows update immediately with every keystroke; Enter/Tab is not required.
+4. Normal text is a partial, case-insensitive search. Text wrapped in double quotes is an exact, case-sensitive search.
+5. Click **RESET** to clear the search/filter.
+
+There is no `ALL COLUMNS` mode and no hidden helper-column scan. The filter operates directly on the selected Excel Table column using the native AutoFilter path for normal searches.
+
+### Source selection in Pending Update
+
+Source selection is now part of **Pending Update** instead of a separate user-facing worksheet. The source panel on the right shows one row per source workbook, including **Project No.** and **Source File**.
+
+- Checked = include the source in index scope.
+- Unchecked = intentionally exclude the source.
+- Add an optional Owner Note when useful.
+- Click **Save Source Choices & Restage** once after making the choices.
+
+Checkboxes are linked directly to their cells and do not call an individual checkbox macro. This avoids the previous `NMDC_SourceCheckboxClicked` macro-availability error. Source workbooks are never edited or deleted by this choice.
 
 ### Custom Fields & Keywords
 
