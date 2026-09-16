@@ -275,13 +275,14 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn('"NMDC_ReportRequirementFromTable"', text)
         self.assertIn('"Include in Index?"', text)
 
-    def test_source_selection_uses_form_checkboxes_but_multi_choice_inputs_stay_dropdowns(self):
+    def test_source_selection_uses_native_in_cell_checkboxes_but_multi_choice_inputs_stay_dropdowns(self):
         checkboxes = (ROOT / "excel" / "vba" / "modNMDC_Checkboxes.bas").read_text(encoding="utf-8")
         setup = (ROOT / "packaging" / "Create_NMDC_Document_Index.vbs").read_text(encoding="utf-8")
-        self.assertIn("CheckBoxes.Add", checkboxes)
+        self.assertIn("CellControl.SetCheckbox", checkboxes)
+        self.assertNotIn("CheckBoxes.Add", checkboxes)
         self.assertIn("NMDC_SaveSourceSelections", checkboxes)
         self.assertIn("save-source-selections", checkboxes)
-        self.assertIn("Check All", (ROOT / "excel" / "vba" / "modNMDC_OwnerUX.bas").read_text(encoding="utf-8"))
+        self.assertIn("NMDC_CheckAllSources", checkboxes)
         self.assertIn("ACKNOWLEDGED,NO ACTION REQUIRED", setup)
         self.assertIn("OPEN,ACKNOWLEDGED,RESOLVED,DEFERRED", setup)
 
