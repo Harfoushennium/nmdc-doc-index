@@ -17,6 +17,8 @@ Public Sub NMDC_RebuildSourceSelectionCheckboxes()
     Dim item As Object
     Dim isIncluded As Boolean
 
+    NMDC_GuideSourceSelectionHomeButton
+
     Set ws = ThisWorkbook.Worksheets("Source Selection")
     Set table = ws.ListObjects("SourceSelection")
     Set includeColumn = table.ListColumns("Include in Index?")
@@ -64,6 +66,20 @@ Handler:
     NMDC_LogError "SOURCE_CHECKBOX_BUILD_ERROR", _
         "Excel could not build the Source Selection checkboxes.", _
         Err.Number & " - " & Err.Description
+End Sub
+
+Private Sub NMDC_GuideSourceSelectionHomeButton()
+    On Error Resume Next
+    Dim homeButton As Shape
+    Set homeButton = ThisWorkbook.Worksheets("Home").Shapes("NMDC_Action_19")
+    If homeButton Is Nothing Then Exit Sub
+    homeButton.TextFrame.Characters.Text = "Source Selection" & vbLf & "Choose files with include checkboxes"
+    homeButton.TextFrame.Characters.Font.Name = "Aptos"
+    homeButton.TextFrame.Characters.Font.Size = 8.5
+    homeButton.TextFrame.Characters.Font.Bold = True
+    homeButton.TextFrame.Characters.Font.Color = RGB(255, 255, 255)
+    homeButton.AlternativeText = "Source Selection: check files to include, uncheck files to exclude, then save once and restage."
+    On Error GoTo 0
 End Sub
 
 Public Sub NMDC_SourceCheckboxClicked()
