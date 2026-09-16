@@ -10,6 +10,7 @@ Private mAsyncStdoutPath As String
 Private mAsyncStderrPath As String
 Private mAsyncStartedAt As Date
 Private mAsyncNextPoll As Date
+Private mAsyncPollProcedure As String
 Private mAsyncLastExit As Long
 Private mAsyncLastDetail As String
 Private mAsyncTick As Long
@@ -29,9 +30,7 @@ End Function
 Public Sub NMDC_FastStartup()
     On Error GoTo Handler
     Application.StatusBar = "NMDC Document Index: loading dashboard status..."
-    If NMDC_RunEngine("export-excel") = 0 Then
-        NMDC_RefreshDashboardOnlyFast
-    End If
+    If NMDC_RunEngine("export-excel") = 0 Then NMDC_RefreshDashboardOnlyFast
     NMDC_ApplyOwnerUX
     Application.StatusBar = False
     Exit Sub
@@ -59,7 +58,7 @@ Private Sub NMDC_StartStagingFast(ByVal fullRescan As Boolean)
 
     If NMDC_AsyncIsBusy() Then
         MsgBox "A scan is already running." & vbCrLf & vbCrLf & _
-               "You can continue using Excel while it runs. Progress is shown in the Excel status bar.", _
+               "Excel remains available while it runs. Progress is shown in the Excel status bar.", _
                vbInformation, "NMDC Document Index"
         Exit Sub
     End If
@@ -84,8 +83,8 @@ Private Sub NMDC_StartStagingFast(ByVal fullRescan As Boolean)
     If Not NMDC_StartEngineAsync("stage", extraArgs, "NMDC_StageFastCompleted") Then Exit Sub
 
     MsgBox "The scan has started in the background." & vbCrLf & vbCrLf & _
-           "Excel will remain available while the engine works. Progress and elapsed time are shown in the status bar." & vbCrLf & _
-           "For normal work use Update Changed Files; use Full Rescan only when you intentionally need to rebuild everything.", _
+           "Excel should remain usable while the engine works. Progress and elapsed time are shown in the status bar." & vbCrLf & _
+           "For normal work use Update Changed Files; Full Rescan is for deliberate rebuilds.", _
            vbInformation, "NMDC Document Index"
     Exit Sub
 
@@ -104,17 +103,17 @@ Public Sub NMDC_StageFastCompleted()
     If exitCode <> 0 Then
         Application.StatusBar = False
         MsgBox "The update could not be completed. Your approved index was not changed." & vbCrLf & vbCrLf & _
-               "Please review the Error Log for the exact source or technical reason.", _
+               "Please review Error Log for the exact source or technical reason.", _
                vbExclamation, "NMDC Document Index"
         Exit Sub
     End If
 
-    Application.StatusBar = "NMDC Document Index: preparing the review tables..."
+    Application.StatusBar = "NMDC Document Index: preparing review tables..."
     exitCode = NMDC_RunEngine("export-excel")
     If exitCode <> 0 Then
         Application.StatusBar = False
         MsgBox "The proposed update was staged, but Excel could not prepare it for review." & vbCrLf & _
-               "Your approved index was not changed. Please review the Error Log.", _
+               "Your approved index was not changed. Please review Error Log.", _
                vbExclamation, "NMDC Document Index"
         Exit Sub
     End If
@@ -122,7 +121,7 @@ Public Sub NMDC_StageFastCompleted()
     If Not NMDC_RefreshReviewDataFast() Then
         Application.StatusBar = False
         MsgBox "The proposed update was staged, but one or more review tables could not be refreshed." & vbCrLf & _
-               "Your approved index was not changed. Please review the Error Log.", _
+               "Your approved index was not changed. Please review Error Log.", _
                vbExclamation, "NMDC Document Index"
         NMDC_GoToSheet "Error Log"
         Exit Sub
@@ -130,8 +129,8 @@ Public Sub NMDC_StageFastCompleted()
 
     Application.StatusBar = False
     MsgBox "The proposed update is ready for review." & vbCrLf & vbCrLf & _
-           "Review Pending Update. If one source file should not be included, select one of its rows and use Exclude Selected Source." & vbCrLf & _
-           "When the proposal is acceptable, return Home and choose Approve Update, Hold Update, or Reject Update.", _
+           "Review Pending Update. Use the native Excel checkboxes in the source panel on the right to include or exclude source workbooks, then Save Source Choices & Restage." & vbCrLf & _
+           "When acceptable, return Home and choose Approve Update, Hold Update, or Reject Update.", _
            vbInformation, "NMDC Document Index"
     NMDC_GoToSheet "Pending Update"
     Exit Sub
@@ -210,9 +209,10 @@ Public Function NMDC_RefreshReviewDataFast() As Boolean
     If Not NMDC_LoadErrorCsvPreserveLocal(NMDC_ExchangePath() & "\errors.csv") Then ok = False
     DoEvents
 
-    Application.StatusBar = "NMDC Document Index: review refresh 5/5 - Dashboard"
+    Application.StatusBar = "NMDC Document Index: review refresh 5/5 - Dashboard / source choices"
     If Not NMDC_LoadDashboard(NMDC_ExchangePath() & "\dashboard.csv") Then ok = False
     NMDC_ApplyOwnerUX
+    NMDC_RebuildPendingSourcePanel
 
 CleanExit:
     Application.Calculation = oldCalc
@@ -296,6 +296,7 @@ Public Function NMDC_StartEngineAsync(ByVal commandName As String, ByVal extraAr
     mAsyncLastDetail = ""
     mAsyncTick = 0
     mAsyncBusy = True
+    mAsyncPollProcedure = NMDC_AsyncQualifiedMacro("NMDC_PollEngineAsync")
 
     Set shell = CreateObject("WScript.Shell")
     shell.Run NMDC_Quote(mAsyncLauncherPath), 0, False
@@ -348,7 +349,7 @@ Public Sub NMDC_PollEngineAsync()
     mAsyncBusy = False
     Application.StatusBar = False
     NMDC_AsyncCleanup
-    If Len(callbackName) > 0 Then Application.Run callbackName
+    If Len(callbackName) > 0 Then Application.Run NMDC_AsyncQualifiedMacro(callbackName)
     Exit Sub
 
 Handler:
@@ -362,8 +363,21 @@ End Sub
 
 Private Sub NMDC_AsyncSchedulePoll()
     mAsyncNextPoll = Now + TimeSerial(0, 0, 1)
-    Application.OnTime EarliestTime:=mAsyncNextPoll, Procedure:="NMDC_PollEngineAsync", Schedule:=True
+    Application.OnTime EarliestTime:=mAsyncNextPoll, Procedure:=mAsyncPollProcedure, Schedule:=True
 End Sub
+
+Public Sub NMDC_CancelAsyncPoll()
+    On Error Resume Next
+    If Len(mAsyncPollProcedure) > 0 And mAsyncNextPoll > 0 Then
+        Application.OnTime EarliestTime:=mAsyncNextPoll, Procedure:=mAsyncPollProcedure, Schedule:=False
+    End If
+    On Error GoTo 0
+End Sub
+
+Private Function NMDC_AsyncQualifiedMacro(ByVal macroName As String) As String
+    ' Use workbook NAME only. Never schedule a SharePoint/OneDrive URL as the macro identity.
+    NMDC_AsyncQualifiedMacro = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!" & macroName
+End Function
 
 Private Sub NMDC_AsyncShowProgress()
     Dim elapsed As Long
@@ -415,5 +429,7 @@ Private Sub NMDC_AsyncCleanup()
     If fso.FileExists(mAsyncCompletionPath) Then fso.DeleteFile mAsyncCompletionPath, True
     If fso.FileExists(mAsyncStdoutPath) Then fso.DeleteFile mAsyncStdoutPath, True
     If fso.FileExists(mAsyncStderrPath) Then fso.DeleteFile mAsyncStderrPath, True
+    mAsyncPollProcedure = ""
+    mAsyncNextPoll = 0
     On Error GoTo 0
 End Sub
