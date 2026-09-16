@@ -45,11 +45,15 @@ NMDC_Document_Index.xlsm
         -> owner-reviewed approved master index
 ```
 
-The workbook includes a Home dashboard plus Master Documents, Revisions, Transactions, Pending Update, Review Flags, **Source Selection**, User Decisions, Configuration, Rules & Mappings, Update History, Error Log, Help, and a hidden System Data area. Updates are staged and never replace approved data without an explicit owner approval action.
+The workbook includes a Home dashboard plus Master Documents, Revisions, Transactions, Pending Update, Review Flags, **Source Selection**, User Decisions, Configuration, Rules & Mappings, **Custom Fields**, Update History, Error Log, Help, and a hidden System Data area. Updates are staged and never replace approved data without an explicit owner approval action.
 
 Source scope is controlled through an owner-friendly checkbox workflow: every source workbook appears once in **Source Selection**; checked means included in index scope and unchecked means intentionally excluded. Checkbox changes are collected locally and only applied when the owner presses **Save Selection & Restage**, so selecting several files does not launch a scan for every click. Check All / Uncheck All are available for bulk selection. Excluding a source never edits or deletes the source workbook and does not change the approved index until a later explicit approval.
 
-Checkboxes are used for genuine binary choices. Multi-option decisions such as Review Flag outcomes, resolution status and rule matching choices remain dropdowns because they have several mutually exclusive meanings and are clearer that way.
+Table-heavy review sheets include a **Dynamic Live Filter**. The normal search is partial and case-insensitive; spaces or `+` combine required terms, `-term` excludes a term, quoted text requests an exact case-sensitive match, and `Ctrl+Shift+F` lets the user pick a specific table column. The implementation is worksheet/ListObject based rather than ActiveX based so the production workbook remains friendlier to locked-down corporate Excel environments.
+
+The **Custom Fields & Keywords** layer lets the owner add derived columns to Master Documents without changing source files or canonical approved engine records. For example, an owner can create `Vessel Names`, choose `Document Title;Source File` as the search input, and maintain an editable keyword dictionary such as `SAFEEN 3000 -> SAFEEN-3000`. Supported mapping modes include normal `CONTAINS`, `ALL TERMS` with `+AND / -EXCLUDE`, `EXACT`, and an advanced wildcard mode adapting `?` fixed-width and `*` variable-width extraction. `FIRST` and `ALL UNIQUE` control whether one or several matched values are written. Core NMDC fields are protected from overwrite, while user definitions are backed up in the local runtime so they can be restored in a freshly generated workbook.
+
+Checkboxes are used for genuine binary choices, including source inclusion and Enabled? rows in Custom Fields/Keyword Mappings. Multi-option decisions such as Review Flag outcomes, resolution status, match behavior and match type remain dropdowns because they have several mutually exclusive meanings and are clearer that way.
 
 ## Normalized hierarchy
 
@@ -105,7 +109,7 @@ Validation gate
 
 **Status: Cycles 1–3 and the incremental staged-approval engine are merged. PR #8 contains the production-package candidate for owner Windows/Excel acceptance testing.**
 
-The candidate includes the real-data workbook, audited VBA actions, one-click Excel setup, a persistent local cache to reduce repeated OneDrive reads, responsive/background staging, checkbox-based source selection, and a packaged Windows executable built and smoke-tested in CI. Microsoft Excel desktop performs the one-time `.xlsm` creation and button attachment because CI does not provide desktop Excel. The future document-folder/hyperlink scanner remains deferred until this core Excel/runtime path is accepted.
+The candidate includes the real-data workbook, audited VBA actions, one-click Excel setup, a persistent local cache to reduce repeated OneDrive reads, responsive/background staging, checkbox-based source selection, Dynamic Live Filter, user-defined Custom Fields/Keyword Mappings, and a packaged Windows executable built and smoke-tested in CI. Microsoft Excel desktop performs the one-time `.xlsm` creation and button/event attachment because CI does not provide desktop Excel. The future document-folder/hyperlink scanner remains deferred until this core Excel/runtime path is accepted.
 
 See [PROJECT_SPEC.md](PROJECT_SPEC.md) for the full implementation specification and [AGENTS.md](AGENTS.md) for LLM/Hermes handoff rules.
 
