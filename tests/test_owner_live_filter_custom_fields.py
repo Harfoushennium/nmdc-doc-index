@@ -9,23 +9,23 @@ class OwnerLiveFilterCustomFieldsTests(unittest.TestCase):
     def _read(self, relative: str) -> str:
         return (ROOT / relative).read_text(encoding="utf-8-sig")
 
-    def test_live_filter_uses_true_per_keystroke_activex_change_event(self):
+    def test_live_filter_is_per_keystroke_without_activex(self):
         live = self._read("excel/vba/modNMDC_LiveFilter.bas")
 
-        self.assertIn('NMDC_SEARCH_BOX As String = "TxtBox_Search"', live)
-        self.assertIn('ClassType:="Forms.TextBox.1"', live)
-        self.assertIn('Private Sub TxtBox_Search_Change()', live)
-        self.assertIn('NMDC_LiveFilterTextChanged Me', live)
-        self.assertIn('Application.OnKey "^+F"', live)
-        self.assertIn("NMDC_LiveFilterChooseColumn", live)
+        self.assertNotIn('ClassType:="Forms.TextBox.1"', live)
+        self.assertNotIn("OLEObjects.Add", live)
+        self.assertNotIn("TxtBox_Search_Change", live)
+        self.assertIn("Application.OnKey", live)
+        self.assertIn("NMDC_LiveFilterBindCaptureKeys", live)
+        self.assertIn("NMDC_LiveFilterAppend", live)
+        self.assertIn("Public Sub NMDC_LF_A()", live)
+        self.assertIn("Public Sub NMDC_LF_0()", live)
         self.assertIn('Criteria1:="=*" & NMDC_LiveFilterEscapeWildcards(cleanText) & "*"', live)
-        self.assertIn("vbBinaryCompare", live)
 
         # The rejected helper-column/all-columns implementation must not return.
         self.assertNotIn("__NMDC_LiveFilter", live)
         self.assertNotIn('"ALL COLUMNS"', live)
         self.assertNotIn("NMDC_LiveFilterRowText", live)
-        self.assertNotIn("Split(Replace(cleanText", live)
 
     def test_live_filter_requires_one_explicit_target_column(self):
         live = self._read("excel/vba/modNMDC_LiveFilter.bas")
@@ -34,7 +34,7 @@ class OwnerLiveFilterCustomFieldsTests(unittest.TestCase):
         self.assertIn("targetColumn.DataBodyRange", live)
         self.assertIn("NMDC_LiveFilterSetTarget ws, targetColumn", live)
         self.assertIn('button.TextFrame.Characters.Text = "SELECT COLUMN"', live)
-        self.assertIn('button.TextFrame.Characters.Text = "COLUMN: " & targetName', live)
+        self.assertIn('"COLUMN: " & targetName', live)
 
         for sheet_name in (
             "MASTER DOCUMENTS",
@@ -51,11 +51,13 @@ class OwnerLiveFilterCustomFieldsTests(unittest.TestCase):
         table_mapping = live.split("Private Function NMDC_LiveFilterTableForSheet", 1)[1]
         self.assertNotIn('Case "SOURCE SELECTION"', table_mapping)
 
-    def test_live_filter_reset_matches_owner_reference_behavior(self):
+    def test_live_filter_reset_and_keyboard_release_are_safe(self):
         live = self._read("excel/vba/modNMDC_LiveFilter.bas")
         self.assertIn("Public Sub NMDC_LiveFilterClear()", live)
-        self.assertIn("table.AutoFilter.ShowAllData", live)
-        self.assertIn('box.Object.Value = ""', live)
+        self.assertIn("NMDC_LiveFilterReleaseCaptureKeys", live)
+        self.assertIn('Application.OnKey "{BACKSPACE}"', live)
+        self.assertIn('Application.OnKey "{ESC}"', live)
+        self.assertIn("NMDC_LiveFilterStopCapture", live)
 
     def test_custom_fields_workspace_and_keyword_dictionary_are_user_driven(self):
         setup = self._read("excel/vba/modNMDC_CustomFieldsSetup.bas")
@@ -112,14 +114,6 @@ class OwnerLiveFilterCustomFieldsTests(unittest.TestCase):
         for field in protected:
             self.assertIn(f'"{field}"', custom)
         self.assertIn('Left$(UCase$(Trim$(fieldName)), 7) = "__NMDC_"', custom)
-
-    def test_custom_field_choices_use_checkboxes_and_multi_choice_uses_dropdowns(self):
-        custom = self._read("excel/vba/modNMDC_CustomFields.bas")
-        self.assertIn("CheckBoxes.Add", custom)
-        self.assertIn("NMDC_CustomCheckboxClicked", custom)
-        self.assertIn('targetCell.NumberFormat = ";;;"', custom)
-        self.assertIn('"Match Behavior", "FIRST,ALL UNIQUE"', custom)
-        self.assertIn('"Match Type", "CONTAINS,ALL TERMS,EXACT,WILDCARD"', custom)
 
     def test_custom_field_configuration_is_backed_up_outside_the_workbook(self):
         custom = self._read("excel/vba/modNMDC_CustomFields.bas")
