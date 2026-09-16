@@ -1,5 +1,5 @@
 {
-  "schema_version": "1",
+  "schema_version": "2",
   "workbook_sheets": [
     "Home",
     "Master Documents",
@@ -7,6 +7,7 @@
     "Transactions",
     "Pending Update",
     "Review Flags",
+    "Source Selection",
     "User Decisions",
     "Configuration",
     "Rules & Mappings",
@@ -30,10 +31,14 @@
     "Rules & Mappings": {"command": "local-vba", "target_sheet": "Rules & Mappings"},
     "Report Requirement / Problem": {"command": "support-request"},
     "View Log": {"command": "export-excel", "target_sheet": "Error Log"},
-    "Help": {"command": "local-vba", "target_sheet": "Help"}
+    "Help": {"command": "local-vba", "target_sheet": "Help"},
+    "Source Selection": {"command": "export-excel", "target_sheet": "Source Selection"}
   },
   "secondary_controls": {
     "Save Review Decisions": {"command": "save-review-decisions", "source_table": "ReviewFlags"},
+    "Save Selection & Restage": {"command": "save-source-selections", "source_table": "SourceSelection", "restage_after_save": true},
+    "Check All Sources": {"command": "local-vba", "binary_choice": true},
+    "Uncheck All Sources": {"command": "local-vba", "binary_choice": true},
     "Undo Last Approval": {"command": "undo", "restores_previous_approved_version": true},
     "Reset All Records": {"command": "reset", "preserves_source_data": true, "preserves_configuration": true, "preserves_audit_history": true}
   },
@@ -45,7 +50,8 @@
     "pending_update.csv",
     "flags.csv",
     "history.csv",
-    "errors.csv"
+    "errors.csv",
+    "source_selection.csv"
   ],
   "exchange_columns": {
     "flags.csv": [
@@ -76,6 +82,15 @@
       "Source File",
       "Worksheet",
       "Source Row/Cell"
+    ],
+    "source_selection.csv": [
+      "Include in Index?",
+      "Source File",
+      "Source Family",
+      "Current Status",
+      "Owner Note",
+      "Selection Reason",
+      "Last Processed Run"
     ]
   },
   "flag_levels": ["OK", "REVIEW", "CONFLICT"],
@@ -84,7 +99,8 @@
   "stale_review_rule": "If exchange export or refresh fails, do not open or announce an older review table as current.",
   "identifier_preservation_rule": "Import exchange CSV fields as text unless the engine contract explicitly declares a non-identifier typed field.",
   "source_file_hyperlink_rule": "Every table column that identifies a source workbook must be converted to a clickable Excel hyperlink resolved against the selected Data Folder.",
-  "user_input_rule": "Categorical user inputs must use Excel dropdown lists; only explanatory comment/note fields remain free text.",
+  "user_input_rule": "Use Excel checkboxes for genuine binary owner choices when practical, especially include/exclude source scope. Use dropdown lists for mutually exclusive choices with three or more meanings. Keep explanatory comments/notes as free text. Avoid dense checkbox controls on large extraction tables where they would reduce performance or readability.",
+  "source_selection_rule": "Source Selection uses one Excel checkbox per source workbook. Checked means included in index scope; unchecked means owner-excluded. Checkbox changes are batched and applied only when Save Selection & Restage is pressed. Source files are never edited or deleted by this choice.",
   "review_flag_workflow_rule": "Review Flags decisions are selected from dropdowns, optionally explained in User Comment, assigned a Resolution Status, and explicitly saved to the staged-run audit trail.",
   "wrong_data_context": [
     "run_id",
