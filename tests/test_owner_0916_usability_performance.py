@@ -7,7 +7,11 @@ from pathlib import Path
 
 from nmdc_profiler.rules import apply_classification, load_rules
 from nmdc_profiler.source_cache import prepare_local_source_cache
-from nmdc_profiler.source_selection import read_source_exclusions, set_source_selection
+from nmdc_profiler.source_selection import (
+    read_source_exclusions,
+    set_source_selection,
+    set_source_selections_from_file,
+)
 from nmdc_profiler.source_selection_view import export_source_selection
 from nmdc_profiler.ui_layout import (
     DOCUMENT_FIELDS,
@@ -91,7 +95,43 @@ class Owner0916UsabilityPerformanceTests(unittest.TestCase):
             self.assertEqual("INCLUDE", restored["decision"])
             self.assertEqual({}, read_source_exclusions(config / "source_exclusions.csv"))
 
-    def test_source_selection_view_is_owner_friendly(self):
+    def test_batch_checkbox_source_selection_is_atomic_and_owner_friendly(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = root / "config"
+            config.mkdir()
+            decisions = root / "source_selection_decisions.csv"
+            with decisions.open("w", newline="", encoding="utf-8-sig") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=["Source File", "Include in Index?", "Owner Note"],
+                )
+                writer.writeheader()
+                writer.writerow(
+                    {
+                        "Source File": "TECH/4000 DOCUMENT REGISTER.xlsx",
+                        "Include in Index?": "FALSE",
+                        "Owner Note": "Duplicate register",
+                    }
+                )
+                writer.writerow(
+                    {
+                        "Source File": "METHODS/5000 Deliverables.xlsx",
+                        "Include in Index?": "TRUE",
+                        "Owner Note": "",
+                    }
+                )
+
+            result = set_source_selections_from_file(config, decisions)
+            self.assertEqual("BATCH_SOURCE_SELECTION_SAVED", result["decision"])
+            self.assertEqual(2, result["processed_sources"])
+            self.assertEqual(1, result["unchecked_excluded"])
+            exclusions = read_source_exclusions(config / "source_exclusions.csv")
+            self.assertIn("tech/4000 document register.xlsx", exclusions)
+            self.assertNotIn("methods/5000 deliverables.xlsx", exclusions)
+            self.assertEqual("Duplicate register", exclusions["tech/4000 document register.xlsx"]["Reason"])
+
+    def test_source_selection_view_is_checkbox_friendly(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             state = root / "runtime"
@@ -132,9 +172,10 @@ class Owner0916UsabilityPerformanceTests(unittest.TestCase):
             with target.open(newline="", encoding="utf-8-sig") as handle:
                 rows = list(csv.DictReader(handle))
             self.assertEqual(1, len(rows))
-            self.assertEqual("EXCLUDE", rows[0]["Owner Choice"])
+            self.assertEqual("FALSE", rows[0]["Include in Index?"])
             self.assertEqual("TECH/4000 DOCUMENT REGISTER.xlsx", rows[0]["Source File"])
-            self.assertEqual("Owner scope decision", rows[0]["Selection Reason"])
+            self.assertEqual("Owner scope decision", rows[0]["Owner Note"])
+            self.assertEqual("Only confirmed source", rows[0]["Selection Reason"])
 
     def test_review_first_column_orders_put_business_fields_before_technical_keys(self):
         self.assertEqual(["Project No.", "Document No.", "Document Title"], DOCUMENT_FIELDS[:3])
@@ -148,7 +189,7 @@ class Owner0916UsabilityPerformanceTests(unittest.TestCase):
         self.assertEqual("Record Identity", PENDING_FIELDS[-1])
         self.assertEqual("Event Key", FLAG_FIELDS[-1])
 
-    def test_excel_package_uses_local_runtime_responsive_scan_and_guided_actions(self):
+    def test_excel_package_uses_local_runtime_responsive_scan_guidance_and_checkboxes(self):
         setup = (ROOT / "packaging" / "Create_NMDC_Document_Index.vbs").read_text(
             encoding="utf-8-sig"
         )
@@ -158,10 +199,16 @@ class Owner0916UsabilityPerformanceTests(unittest.TestCase):
         owner_ux = (ROOT / "excel" / "vba" / "modNMDC_OwnerUX.bas").read_text(
             encoding="utf-8-sig"
         )
+        checkboxes = (ROOT / "excel" / "vba" / "modNMDC_Checkboxes.bas").read_text(
+            encoding="utf-8-sig"
+        )
+        engine = (ROOT / "nmdc_index_engine.py").read_text(encoding="utf-8")
 
         self.assertIn("%LOCALAPPDATA%", setup)
         self.assertIn("modNMDC_Performance.bas", setup)
         self.assertIn("modNMDC_OwnerUX.bas", setup)
+        self.assertIn("modNMDC_Checkboxes.bas", setup)
+        self.assertIn('"Include in Index?"', setup)
         self.assertIn("NMDC_UpdateChangedFilesFast", setup)
         self.assertIn("NMDC_FullRescanFast", setup)
         self.assertIn("NMDC_ReviewPendingUpdateFast", setup)
@@ -179,10 +226,26 @@ class Owner0916UsabilityPerformanceTests(unittest.TestCase):
         self.assertNotIn("events.csv", fast_refresh)
 
         self.assertIn("QUICK WORKFLOW - WHAT TO DO", owner_ux)
-        self.assertIn("Exclude Selected Source", owner_ux)
-        self.assertIn("Source Selection", owner_ux)
+        self.assertIn("checkbox", owner_ux.lower())
+        self.assertIn("Save Selection & Restage", owner_ux)
         self.assertIn("CONTAINS,EXACT,STARTS_WITH,ENDS_WITH", owner_ux)
         self.assertNotIn("CONTAINS,EXACT,FUZZY,REGEX", owner_ux)
+
+        self.assertIn("CheckBoxes.Add", checkboxes)
+        self.assertIn("NMDC_SourceCheckboxClicked", checkboxes)
+        self.assertIn("NMDC_SaveSourceSelections", checkboxes)
+        self.assertIn("NMDC_CheckAllSources", checkboxes)
+        self.assertIn("NMDC_UncheckAllSources", checkboxes)
+        self.assertIn("save-source-selections", checkboxes)
+        self.assertIn("save-source-selections", engine)
+
+    def test_checkbox_policy_keeps_multi_choice_inputs_as_dropdowns(self):
+        """Checkboxes are for true binary owner choices, not multi-option decisions."""
+        setup = (ROOT / "packaging" / "Create_NMDC_Document_Index.vbs").read_text(
+            encoding="utf-8-sig"
+        )
+        self.assertIn("ACKNOWLEDGED,NO ACTION REQUIRED,NEEDS SOURCE CORRECTION", setup)
+        self.assertIn("OPEN,ACKNOWLEDGED,RESOLVED,DEFERRED", setup)
 
     def test_production_package_includes_source_selection_config(self):
         workflow = (ROOT / ".github" / "workflows" / "production-package.yml").read_text(
