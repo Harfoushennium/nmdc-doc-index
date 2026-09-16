@@ -342,7 +342,10 @@ Private Sub NMDC_InstallLiveFilterWorkbookEvents(ByVal project As Object)
 
     Set component = project.VBComponents(ThisWorkbook.CodeName)
     Set codeModule = component.CodeModule
-    sourceText = codeModule.Lines(1, codeModule.CountOfLines)
+    sourceText = ""
+    If codeModule.CountOfLines > 0 Then
+        sourceText = codeModule.Lines(1, codeModule.CountOfLines)
+    End If
 
     eventCode = ""
 
