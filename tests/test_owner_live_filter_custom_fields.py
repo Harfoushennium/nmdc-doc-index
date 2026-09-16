@@ -87,6 +87,17 @@ class OwnerLiveFilterCustomFieldsTests(unittest.TestCase):
         self.assertIn('starCount = Len(pattern) - Len(Replace(pattern, "*", ""))', custom)
         self.assertIn('Replace(pattern, "?", "")', custom)
 
+    def test_custom_fields_use_modern_in_cell_checkboxes_only(self):
+        setup = self._read("excel/vba/modNMDC_CustomFieldsSetup.bas")
+        custom = self._read("excel/vba/modNMDC_CustomFields.bas")
+
+        self.assertIn("CellControl.SetCheckbox", setup)
+        self.assertIn("CellControl.SetCheckbox", custom)
+        self.assertNotIn("CheckBoxes.Add", custom)
+        self.assertNotIn("NMDC_LiveFilterEnsureHelper", custom)
+        self.assertIn("Public Sub NMDC_CustomCheckboxClicked()", custom)
+        self.assertIn("Compatibility stub", custom)
+
     def test_custom_fields_protect_core_master_document_fields(self):
         custom = self._read("excel/vba/modNMDC_CustomFields.bas")
         protected = (
