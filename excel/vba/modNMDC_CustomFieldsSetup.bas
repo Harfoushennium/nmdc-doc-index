@@ -181,7 +181,10 @@ Private Sub NMDC_InstallCustomFieldSelectionEvent()
 
     Set component = project.VBComponents(ThisWorkbook.CodeName)
     Set codeModule = component.CodeModule
-    sourceText = codeModule.Lines(1, codeModule.CountOfLines)
+    sourceText = ""
+    If codeModule.CountOfLines > 0 Then
+        sourceText = codeModule.Lines(1, codeModule.CountOfLines)
+    End If
 
     If InStr(1, sourceText, "Private Sub Workbook_SheetSelectionChange", vbTextCompare) > 0 Then Exit Sub
 
