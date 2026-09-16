@@ -18,6 +18,7 @@ class ExcelUIContractTests(unittest.TestCase):
             "Transactions",
             "Pending Update",
             "Review Flags",
+            "Source Selection",
             "User Decisions",
             "Configuration",
             "Rules & Mappings",
@@ -43,10 +44,13 @@ class ExcelUIContractTests(unittest.TestCase):
             "Report Requirement / Problem",
             "View Log",
             "Help",
+            "Source Selection",
         }
         self.assertEqual(set(contract["buttons"]), required_buttons)
         self.assertEqual(contract["normal_user_interface"], "Excel only")
         self.assertIn("user-editable in Excel", contract["dynamic_rules_rule"])
+        self.assertIn("checkbox", contract["source_selection_rule"].lower())
+        self.assertIn("dropdown", contract["user_input_rule"].lower())
 
     def test_exchange_file_contract_is_stable(self):
         contract = json.loads((ROOT / "excel" / "contracts" / "ui_contract.json").read_text(encoding="utf-8"))
@@ -61,6 +65,7 @@ class ExcelUIContractTests(unittest.TestCase):
                 "flags.csv",
                 "history.csv",
                 "errors.csv",
+                "source_selection.csv",
             ],
         )
         self.assertEqual(
@@ -81,6 +86,18 @@ class ExcelUIContractTests(unittest.TestCase):
                 "User Comment",
                 "Resolution Status",
                 "Event Key",
+            ],
+        )
+        self.assertEqual(
+            contract["exchange_columns"]["source_selection.csv"],
+            [
+                "Include in Index?",
+                "Source File",
+                "Source Family",
+                "Current Status",
+                "Owner Note",
+                "Selection Reason",
+                "Last Processed Run",
             ],
         )
         self.assertIn("exact pending run ID", contract["approval_binding_rule"])
@@ -215,6 +232,7 @@ class ExcelUIContractTests(unittest.TestCase):
             "engine\\nmdc_index_engine.exe",
             "classification_rules.csv",
             "project_identity_overrides.csv",
+            "source_exclusions.csv",
             "modNMDC_Engine.bas",
             "modNMDC_Csv.bas",
             "modNMDC_Refresh.bas",
@@ -223,12 +241,16 @@ class ExcelUIContractTests(unittest.TestCase):
             "modNMDC_Admin.bas",
             "modNMDC_Rules.bas",
             "modNMDC_Startup.bas",
+            "modNMDC_Performance.bas",
+            "modNMDC_OwnerUX.bas",
+            "modNMDC_Checkboxes.bas",
         ]:
             self.assertIn(required, text)
         self.assertIn('SetWorkbookConfig workbook, "Engine Executable Path", enginePath', text)
         self.assertIn('SetWorkbookConfig workbook, "Runtime Folder", runtimeFolder', text)
         self.assertIn('SetWorkbookConfig workbook, "Configuration Folder", configFolder', text)
-        self.assertIn("If Not fso.FolderExists(runtimeFolder) Then fso.CreateFolder runtimeFolder", text)
+        self.assertIn("%LOCALAPPDATA%", text)
+        self.assertIn("EnsureFolderTree runtimeFolder", text)
         self.assertIn("EnsureNamedTables workbook", text)
         expected_tables = [
             "MasterDocuments",
@@ -236,6 +258,7 @@ class ExcelUIContractTests(unittest.TestCase):
             "EventRegister",
             "PendingUpdate",
             "ReviewFlags",
+            "SourceSelection",
             "UserDecisionLog",
             "Configuration",
             "ClassificationRules",
@@ -250,6 +273,17 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn('ws.ListObjects("Configuration")', text)
         self.assertIn('"NMDC_FlagWrongDataFromTable"', text)
         self.assertIn('"NMDC_ReportRequirementFromTable"', text)
+        self.assertIn('"Include in Index?"', text)
+
+    def test_source_selection_uses_form_checkboxes_but_multi_choice_inputs_stay_dropdowns(self):
+        checkboxes = (ROOT / "excel" / "vba" / "modNMDC_Checkboxes.bas").read_text(encoding="utf-8")
+        setup = (ROOT / "packaging" / "Create_NMDC_Document_Index.vbs").read_text(encoding="utf-8")
+        self.assertIn("CheckBoxes.Add", checkboxes)
+        self.assertIn("NMDC_SaveSourceSelections", checkboxes)
+        self.assertIn("save-source-selections", checkboxes)
+        self.assertIn("Check All", (ROOT / "excel" / "vba" / "modNMDC_OwnerUX.bas").read_text(encoding="utf-8"))
+        self.assertIn("ACKNOWLEDGED,NO ACTION REQUIRED", setup)
+        self.assertIn("OPEN,ACKNOWLEDGED,RESOLVED,DEFERRED", setup)
 
     def test_error_refresh_preserves_excel_local_entries(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
