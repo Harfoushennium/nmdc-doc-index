@@ -41,6 +41,7 @@ class ReleaseZeroFindingsTests(unittest.TestCase):
                 ROOT / "DATA",
                 ROOT / "config" / "classification_rules.csv",
                 ROOT / "config" / "project_identity_overrides.csv",
+                ROOT / "config" / "source_exclusions.csv",
                 Path(tmp) / "profile",
             )
             processor_flags = []
