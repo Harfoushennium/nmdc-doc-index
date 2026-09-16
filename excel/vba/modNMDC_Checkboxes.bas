@@ -2,9 +2,15 @@ Attribute VB_Name = "modNMDC_Checkboxes"
 Option Explicit
 
 Private Const SOURCE_CHECK_PREFIX As String = "NMDC_SourceCheck_"
+Private mOwnerEnhancementsReady As Boolean
 
 Public Sub NMDC_RebuildSourceSelectionCheckboxes()
     On Error GoTo Handler
+
+    ' This already-imported module is used as the safe one-time bootstrap for
+    ' optional owner UX modules. During production setup VBProject access is
+    ' available; on later opens the embedded modules/events simply initialize.
+    NMDC_EnsureOwnerEnhancements
 
     Dim ws As Worksheet
     Dim table As ListObject
@@ -253,4 +259,114 @@ Private Sub NMDC_WriteCheckboxUtf8(ByVal filePath As String, ByVal value As Stri
     stream.WriteText value
     stream.SaveToFile filePath, 2
     stream.Close
+End Sub
+
+' -----------------------------------------------------------------------------
+' OWNER ENHANCEMENT BOOTSTRAP
+' -----------------------------------------------------------------------------
+Public Sub NMDC_EnsureOwnerEnhancements()
+    On Error GoTo SoftFail
+
+    Dim project As Object
+    Dim moduleFolder As String
+    Dim hasProjectAccess As Boolean
+
+    If mOwnerEnhancementsReady Then Exit Sub
+
+    ' During the one-time VBS setup this access is already required/enabled.
+    ' On ordinary later opens Trust Center access may be off; that is fine because
+    ' the modules and ThisWorkbook event handlers are already embedded.
+    Set project = Nothing
+    On Error Resume Next
+    Set project = ThisWorkbook.VBProject
+    hasProjectAccess = Not (project Is Nothing)
+    Err.Clear
+    On Error GoTo SoftFail
+
+    If hasProjectAccess Then
+        moduleFolder = ThisWorkbook.Path & "\vba"
+        NMDC_ImportOptionalModule project, moduleFolder & "\modNMDC_LiveFilter.bas", "modNMDC_LiveFilter"
+        NMDC_ImportOptionalModule project, moduleFolder & "\modNMDC_CustomFields.bas", "modNMDC_CustomFields"
+        NMDC_ImportOptionalModule project, moduleFolder & "\modNMDC_CustomFieldsSetup.bas", "modNMDC_CustomFieldsSetup"
+        NMDC_InstallLiveFilterWorkbookEvents project
+    End If
+
+    ' Use Application.Run so this bootstrap compiles even before the optional
+    ' modules are imported during initial production setup.
+    On Error Resume Next
+    Application.Run "NMDC_EnsureCustomFieldsStructure"
+    Application.Run "NMDC_CustomFieldsInitialize"
+    Application.Run "NMDC_LiveFilterInitialize"
+    On Error GoTo SoftFail
+
+    mOwnerEnhancementsReady = True
+    Exit Sub
+
+SoftFail:
+    ' Never make Source Selection unusable because an optional UX enhancement
+    ' could not initialize. The normal setup error log remains available.
+    mOwnerEnhancementsReady = False
+End Sub
+
+Private Sub NMDC_ImportOptionalModule( _
+    ByVal project As Object, ByVal modulePath As String, ByVal componentName As String)
+
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
+    If NMDC_ProjectHasComponent(project, componentName) Then Exit Sub
+    If Not fso.FileExists(modulePath) Then Exit Sub
+
+    On Error Resume Next
+    project.VBComponents.Import modulePath
+    On Error GoTo 0
+End Sub
+
+Private Function NMDC_ProjectHasComponent(ByVal project As Object, ByVal componentName As String) As Boolean
+    Dim component As Object
+
+    Set component = Nothing
+    On Error Resume Next
+    Set component = project.VBComponents(componentName)
+    On Error GoTo 0
+    NMDC_ProjectHasComponent = Not (component Is Nothing)
+End Function
+
+Private Sub NMDC_InstallLiveFilterWorkbookEvents(ByVal project As Object)
+    On Error GoTo SoftFail
+
+    Dim component As Object
+    Dim codeModule As Object
+    Dim sourceText As String
+    Dim eventCode As String
+
+    Set component = project.VBComponents(ThisWorkbook.CodeName)
+    Set codeModule = component.CodeModule
+    sourceText = codeModule.Lines(1, codeModule.CountOfLines)
+
+    eventCode = ""
+
+    If InStr(1, sourceText, "Private Sub Workbook_SheetChange", vbTextCompare) = 0 Then
+        eventCode = eventCode & vbCrLf & _
+            "Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)" & vbCrLf & _
+            "    On Error Resume Next" & vbCrLf & _
+            "    NMDC_LiveFilterSheetChange Sh, Target" & vbCrLf & _
+            "    On Error GoTo 0" & vbCrLf & _
+            "End Sub" & vbCrLf
+    End If
+
+    If InStr(1, sourceText, "Private Sub Workbook_SheetActivate", vbTextCompare) = 0 Then
+        eventCode = eventCode & vbCrLf & _
+            "Private Sub Workbook_SheetActivate(ByVal Sh As Object)" & vbCrLf & _
+            "    On Error Resume Next" & vbCrLf & _
+            "    NMDC_LiveFilterSheetActivate Sh" & vbCrLf & _
+            "    On Error GoTo 0" & vbCrLf & _
+            "End Sub" & vbCrLf
+    End If
+
+    If Len(eventCode) > 0 Then codeModule.AddFromString eventCode
+    Exit Sub
+
+SoftFail:
+    ' Event installation is best-effort here; production setup still continues.
 End Sub
