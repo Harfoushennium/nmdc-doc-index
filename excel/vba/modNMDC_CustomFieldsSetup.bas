@@ -29,6 +29,7 @@ Public Sub NMDC_EnsureCustomFieldsStructure()
         Array("Enabled?", "Field Name", "Keyword / Pattern", "Result", "Match Type", "Priority", "Notes")
 
     NMDC_EnsureCustomFieldsHomeButton
+    NMDC_InstallCustomFieldSelectionEvent
     Exit Sub
 
 Handler:
@@ -156,6 +157,45 @@ Public Sub NMDC_EnsureCustomFieldsCurrent(ByVal Sh As Object)
 
 SoftFail:
     ' This guard must never interrupt normal worksheet navigation.
+End Sub
+
+' Install a separate workbook selection-change event. This complements the live
+' filter SheetChange/SheetActivate handlers without needing to edit those event
+' procedures. It makes a post-refresh custom field restore effectively automatic:
+' the first click in Master Documents performs only a lightweight definition check,
+' and rebuilds the derived columns only when one is actually missing.
+Private Sub NMDC_InstallCustomFieldSelectionEvent()
+    On Error GoTo SoftFail
+
+    Dim project As Object
+    Dim component As Object
+    Dim codeModule As Object
+    Dim sourceText As String
+    Dim eventCode As String
+
+    Set project = Nothing
+    On Error Resume Next
+    Set project = ThisWorkbook.VBProject
+    On Error GoTo SoftFail
+    If project Is Nothing Then Exit Sub
+
+    Set component = project.VBComponents(ThisWorkbook.CodeName)
+    Set codeModule = component.CodeModule
+    sourceText = codeModule.Lines(1, codeModule.CountOfLines)
+
+    If InStr(1, sourceText, "Private Sub Workbook_SheetSelectionChange", vbTextCompare) > 0 Then Exit Sub
+
+    eventCode = vbCrLf & _
+        "Private Sub Workbook_SheetSelectionChange(ByVal Sh As Object, ByVal Target As Range)" & vbCrLf & _
+        "    On Error Resume Next" & vbCrLf & _
+        "    NMDC_EnsureCustomFieldsCurrent Sh" & vbCrLf & _
+        "    On Error GoTo 0" & vbCrLf & _
+        "End Sub" & vbCrLf
+    codeModule.AddFromString eventCode
+    Exit Sub
+
+SoftFail:
+    ' Best-effort only. The one-time production setup normally grants access.
 End Sub
 
 Private Function NMDC_CustomSetupChecked(ByVal value As Variant) As Boolean
