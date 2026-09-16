@@ -31,7 +31,7 @@ class ReleaseExcelContractTests(unittest.TestCase):
 
     def test_home_setup_never_formats_all_excel_columns(self):
         setup = (ROOT / "packaging" / "Create_NMDC_Document_Index.vbs").read_text(encoding="utf-8")
-        self.assertIn('ws.Range("A1:L33").Font.Name = "Aptos"', setup)
+        self.assertIn('ws.Range("A1:L42").Font.Name = "Aptos"', setup)
         self.assertNotIn('ws.Cells.Font.Name = "Aptos"', setup)
         self.assertNotIn('Columns("A:XFD")', setup)
         self.assertNotIn('Range("A:XFD")', setup)
