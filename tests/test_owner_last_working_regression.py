@@ -57,12 +57,14 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertIn('homeWs.Shapes("NMDC_Action_19").Delete', checkboxes)
         self.assertIn("Public Sub NMDC_SourceCheckboxClicked()", checkboxes)
 
-    def test_event_installers_are_zero_line_safe(self):
+    def test_remaining_event_installer_is_zero_line_safe_and_live_filter_needs_no_code_injection(self):
         live = self._read("excel/vba/modNMDC_LiveFilter.bas")
         custom = self._read("excel/vba/modNMDC_CustomFieldsSetup.bas")
-        for text in (live, custom):
-            self.assertIn("If codeModule.CountOfLines > 0 Then", text)
-            self.assertIn("sourceText = codeModule.Lines(1, codeModule.CountOfLines)", text)
+        self.assertNotIn("TxtBox_Search_Change", live)
+        self.assertNotIn("codeModule.AddFromString", live)
+        self.assertIn("Application.OnKey", live)
+        self.assertIn("If codeModule.CountOfLines > 0 Then", custom)
+        self.assertIn("sourceText = codeModule.Lines(1, codeModule.CountOfLines)", custom)
 
     def test_setup_keeps_fast_scan_and_last_working_recovery_controls_together(self):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
