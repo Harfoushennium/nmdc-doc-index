@@ -41,21 +41,35 @@ This file captures the owner-visible product requirements that must remain true 
 - Long text wraps only where helpful.
 - Alignment is field-appropriate and consistent.
 - Row heights and column widths must be suitable for the actual data while preserving performance on large tables.
-- User-editable fields are clearly identifiable through notes, dropdowns and guidance rather than relying on arbitrary body fill colors.
+- User-editable fields are clearly identifiable through notes, appropriate controls and guidance rather than relying on arbitrary body fill colors.
+- Table columns are ordered according to the review workflow: business identifiers and decisions first, technical/audit keys later.
+
+## User-input control requirements
+
+- Use Excel checkboxes for direct binary owner choices when practical.
+- Source workbook inclusion/exclusion is checkbox-first: checked means include in index scope; unchecked means intentionally exclude.
+- Checkbox changes are collected first and applied in one **Save Selection & Restage** action; checking/unchecking must not trigger a scan per click.
+- Provide **Check All** and **Uncheck All** controls for source selection.
+- Excluding a source never edits or deletes the source workbook and never changes the approved index until a later explicit approval.
+- Use dropdown menus when one field has three or more mutually exclusive choices, for example Review Flags decisions, resolution status, rule scope and match type.
+- Keep explanatory comments/notes as free text.
+- Do not add large numbers of unnecessary checkbox objects to large extraction tables because workbook responsiveness is a product requirement.
 
 ## Rules & Mappings requirements
 
 - Rules & Mappings must be usable by a non-coder.
 - The normal view must emphasize plain-language concepts: where to look, what to match, and what classification to assign.
-- Advanced technical fields (regex/path qualifiers/prerequisites/confidence internals) are hidden by default but remain available when intentionally requested.
+- Normal matching uses plain text: `CONTAINS`, `EXACT`, `STARTS_WITH`, or `ENDS_WITH`.
+- Shipped/default rules must not require REGEX.
 - Normal categorical inputs use dropdown menus.
 - Add Simple Rule should generate a safe Rule ID / Priority and sensible defaults.
-- `CONTAINS` is the preferred normal-user match method; `REGEX` is treated as advanced.
+- `CONTAINS` is the preferred normal-user match method.
 - Invalid or duplicate rules must be blocked before staging rather than silently accepted.
 
 ## Review workflow requirements
 
-- Pending Update is review-only and contains no normal user input.
+- Pending Update is review-only and contains no normal row-level user input.
+- Source-level scope decisions are made in **Source Selection**, using include checkboxes and optional Owner Note.
 - Review Flags is only for genuine actionable anomalies.
 - Every table column has guidance explaining what the field means and whether it is system output, user input, or audit data.
 - Review decision choices must explain their effect; saving a decision records the review and does not silently rewrite the source workbook.
@@ -68,6 +82,9 @@ This file captures the owner-visible product requirements that must remain true 
 - No Excel slow-workbook warning caused by formatting the unused worksheet tail.
 - Full Rescan and refresh show meaningful progress/activity feedback.
 - The workbook should remain responsive during long engine operations.
+- Normal **Update Changed Files** should avoid rereading/reprocessing unchanged sources.
+- Profiling/extraction should use a persistent local cache where possible so OneDrive source workbooks are not repeatedly opened during normal scans.
+- Runtime/state/cache files should be stored outside the synchronized package folder when `%LOCALAPPDATA%` is available.
 
 ## Release rule
 
