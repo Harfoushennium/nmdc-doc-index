@@ -35,14 +35,13 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertIn("NMDC_LiveFilterInitialize", setup)
         self.assertIn("NMDC_ApplyOwnerUX", setup)
 
-    def test_last_working_home_controls_are_never_dropped(self):
+    def test_last_working_recovery_controls_are_never_dropped(self):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
         admin = self._read("excel/vba/modNMDC_Admin.bas")
         expected = {
             "Undo Last Approval": "NMDC_UndoLastApproval",
             "Reset All Records": "NMDC_ResetAllRecords",
             "Help": "NMDC_OpenHelp",
-            "Source Selection": "NMDC_OpenSourceSelection",
         }
         for label, macro in expected.items():
             self.assertIn(f'"{label}"', setup)
@@ -50,12 +49,18 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertIn("Public Sub NMDC_ResetAllRecords()", admin)
         self.assertIn("Public Sub NMDC_UndoLastApproval()", admin)
 
-    def test_owner_event_installers_are_zero_line_safe(self):
-        for relative in (
-            "excel/vba/modNMDC_Checkboxes.bas",
-            "excel/vba/modNMDC_CustomFieldsSetup.bas",
-        ):
-            text = self._read(relative)
+    def test_source_selection_is_integrated_without_dropping_backend_compatibility(self):
+        checkboxes = self._read("excel/vba/modNMDC_Checkboxes.bas")
+        self.assertIn('ThisWorkbook.Worksheets("Pending Update")', checkboxes)
+        self.assertIn('SOURCE_PANEL_TABLE As String = "SourceSelection"', checkboxes)
+        self.assertIn('legacyWs.Visible = xlSheetVeryHidden', checkboxes)
+        self.assertIn('homeWs.Shapes("NMDC_Action_19").Delete', checkboxes)
+        self.assertIn("Public Sub NMDC_SourceCheckboxClicked()", checkboxes)
+
+    def test_event_installers_are_zero_line_safe(self):
+        live = self._read("excel/vba/modNMDC_LiveFilter.bas")
+        custom = self._read("excel/vba/modNMDC_CustomFieldsSetup.bas")
+        for text in (live, custom):
             self.assertIn("If codeModule.CountOfLines > 0 Then", text)
             self.assertIn("sourceText = codeModule.Lines(1, codeModule.CountOfLines)", text)
 
