@@ -12,6 +12,7 @@ from nmdc_profiler.review_decisions import apply_review_decisions
 from nmdc_profiler.runtime_admin import reset_runtime_state, undo_last_approval
 from nmdc_profiler.runtime_engine import record_user_flag, stage_runtime_update
 from nmdc_profiler.source_access import install_resilient_source_access
+from nmdc_profiler.source_selection import set_source_selection
 from nmdc_profiler.ui_layout import install_review_first_column_order
 from nmdc_profiler.update_engine import approve_stage, hold_stage, reject_stage
 
@@ -55,6 +56,15 @@ def build_parser() -> argparse.ArgumentParser:
     review = subparsers.add_parser("save-review-decisions", help="Persist Review Flags user decisions for the latest staged run")
     _common(review)
     review.add_argument("--decisions-file", type=Path, required=True)
+
+    source_selection = subparsers.add_parser(
+        "set-source-selection",
+        help="Include or exclude one source workbook from owner-approved source selection",
+    )
+    _common(source_selection)
+    source_selection.add_argument("--source-file", required=True)
+    source_selection.add_argument("--action", choices=("INCLUDE", "EXCLUDE"), required=True)
+    source_selection.add_argument("--reason", default="")
 
     context_fields = (
         "message",
@@ -131,6 +141,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             result = undo_last_approval(args.state_dir)
         elif args.command == "save-review-decisions":
             result = apply_review_decisions(args.state_dir, args.decisions_file)
+        elif args.command == "set-source-selection":
+            result = set_source_selection(
+                args.config_dir,
+                args.source_file,
+                include=args.action == "INCLUDE",
+                reason=args.reason,
+            )
         elif args.command == "user-flag":
             result = record_user_flag(args.state_dir, **_request_context(args))
         elif args.command == "support-request":
