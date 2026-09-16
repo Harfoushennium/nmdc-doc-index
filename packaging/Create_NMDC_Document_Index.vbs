@@ -53,6 +53,7 @@ RequireFile fso.BuildPath(modulesFolder, "modNMDC_Rules.bas"), "A required Excel
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Startup.bas"), "A required Excel action module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Performance.bas"), "The responsive scan module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_OwnerUX.bas"), "The owner guidance module is missing."
+RequireFile fso.BuildPath(modulesFolder, "modNMDC_Checkboxes.bas"), "The source-selection checkbox module is missing."
 
 If fso.FileExists(outputWorkbook) Then
     response = MsgBox("NMDC_Document_Index.xlsm already exists." & vbCrLf & vbCrLf & _
@@ -113,6 +114,7 @@ ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Rules.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Startup.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Performance.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_OwnerUX.bas")
+ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Checkboxes.bas")
 If Err.Number <> 0 Then
     ShowFailure "Excel could not attach the production actions."
     WScript.Quit 8
@@ -184,7 +186,7 @@ Sub EnsureNamedTables(ByVal wb)
     EnsureTable wb, "Transactions", "EventRegister", 5, Empty
     EnsureTable wb, "Pending Update", "PendingUpdate", 5, Array("Change Type", "Project No.", "Document No.", "Revision", "Event Type", "Plain-English Summary", "Source File", "Review Required", "Record Identity")
     EnsureTable wb, "Review Flags", "ReviewFlags", 5, Empty
-    EnsureTable wb, "Source Selection", "SourceSelection", 5, Array("Owner Choice", "Source File", "Source Family", "Current Status", "Selection Reason", "Last Processed Run")
+    EnsureTable wb, "Source Selection", "SourceSelection", 5, Array("Include in Index?", "Source File", "Source Family", "Current Status", "Owner Note", "Selection Reason", "Last Processed Run")
     EnsureTable wb, "User Decisions", "UserDecisionLog", 11, Empty
     EnsureTable wb, "Configuration", "Configuration", 5, Empty
     EnsureTable wb, "Rules & Mappings", "ClassificationRules", 5, Empty
@@ -204,7 +206,7 @@ Sub EnsureSourceSelectionSheet(ByVal wb)
         Set ws = wb.Worksheets.Add(, wb.Worksheets(wb.Worksheets.Count))
         ws.Name = "Source Selection"
         ws.Range("A1").Value = "Source Selection"
-        ws.Range("A2").Value = "Choose which source workbooks participate in the index. This does not modify or delete the source files."
+        ws.Range("A2").Value = "Use the checkboxes to choose which source workbooks participate in the index. This does not modify or delete the source files."
     End If
 End Sub
 
