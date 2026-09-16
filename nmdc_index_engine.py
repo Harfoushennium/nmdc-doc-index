@@ -12,6 +12,7 @@ from nmdc_profiler.review_decisions import apply_review_decisions
 from nmdc_profiler.runtime_admin import reset_runtime_state, undo_last_approval
 from nmdc_profiler.runtime_engine import record_user_flag, stage_runtime_update
 from nmdc_profiler.source_access import install_resilient_source_access
+from nmdc_profiler.ui_layout import install_review_first_column_order
 from nmdc_profiler.update_engine import approve_stage, hold_stage, reject_stage
 
 
@@ -102,6 +103,10 @@ def _request_context(args: argparse.Namespace) -> dict[str, str]:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        # Column order is presentation-only. Canonical extraction records remain
+        # untouched; every Excel export is written in review-first order.
+        install_review_first_column_order()
+
         if args.command == "stage":
             install_resilient_source_access()
             install_layout_compatibility()
