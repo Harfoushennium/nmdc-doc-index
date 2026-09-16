@@ -69819,7 +69819,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010",
+            "rule_ids": "T010B",
             "section": "",
             "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
@@ -85481,7 +85481,7 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "GENERAL / MULTIDISCIPLINE",
-            "rule_ids": "T030",
+            "rule_ids": "T030B",
             "section": "",
             "subcategory": "CUT LIST",
             "warning_code": ""
@@ -89234,7 +89234,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010",
+            "rule_ids": "T010B",
             "section": "",
             "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
@@ -101843,7 +101843,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010",
+            "rule_ids": "T010B",
             "section": "",
             "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
@@ -106601,7 +106601,7 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "GENERAL / MULTIDISCIPLINE",
-            "rule_ids": "T030",
+            "rule_ids": "T030B",
             "section": "",
             "subcategory": "CUT LIST",
             "warning_code": ""
@@ -114414,7 +114414,7 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "GENERAL / MULTIDISCIPLINE",
-            "rule_ids": "T030",
+            "rule_ids": "T030B",
             "section": "",
             "subcategory": "CUT LIST",
             "warning_code": ""
@@ -121384,7 +121384,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010",
+            "rule_ids": "T010B",
             "section": "",
             "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
@@ -132095,7 +132095,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010",
+            "rule_ids": "T010B",
             "section": "",
             "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
@@ -135813,7 +135813,7 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "GENERAL / MULTIDISCIPLINE",
-            "rule_ids": "T030",
+            "rule_ids": "T030B",
             "section": "",
             "subcategory": "CUT LIST",
             "warning_code": ""
@@ -151296,7 +151296,7 @@
             "action": "INCLUDE",
             "category": "DRAWING",
             "discipline": "GENERAL / MULTIDISCIPLINE",
-            "rule_ids": "T030",
+            "rule_ids": "T030B",
             "section": "",
             "subcategory": "CUT LIST",
             "warning_code": ""
@@ -195602,7 +195602,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010",
+            "rule_ids": "T010B",
             "section": "",
             "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
@@ -199117,7 +199117,7 @@
             "action": "INCLUDE",
             "category": "DOCUMENT",
             "discipline": "NAVAL & MARINE",
-            "rule_ids": "T010",
+            "rule_ids": "T010B",
             "section": "",
             "subcategory": "GENERAL TECHNICAL DOCUMENT",
             "warning_code": ""
