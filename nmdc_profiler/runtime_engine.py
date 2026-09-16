@@ -181,6 +181,21 @@ def build_runtime_catalog(
     )
 
 
+def _restore_original_data_path(state_dir: Path, run_id: str, original_data_dir: Path) -> None:
+    """Keep the user-facing manifest bound to the real DATA folder, not the local cache."""
+    if not run_id:
+        return
+    manifest_path = Path(state_dir) / "staging" / run_id / "manifest.json"
+    if not manifest_path.exists():
+        return
+    with manifest_path.open(encoding="utf-8") as handle:
+        payload = json.load(handle)
+    payload["data_dir"] = str(Path(original_data_dir).resolve())
+    with manifest_path.open("w", encoding="utf-8", newline="\n") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
+        handle.write("\n")
+
+
 def stage_runtime_update(
     *,
     data_dir: Path,
@@ -194,9 +209,9 @@ def stage_runtime_update(
     rules_path = resolve_config_file(config_dir, "classification_rules.csv")
     overrides_path = resolve_config_file(config_dir, "project_identity_overrides.csv")
 
-    # Scan/extract from a persistent local mirror. The source tree is only opened
-    # when a workbook is new or changed, avoiding repeated OneDrive hydration and
-    # repeated cloud-file reads during profiling, hashing and extraction.
+    # Process from a persistent local mirror. The OneDrive/source tree is only
+    # opened when a workbook is new or changed; profiling, hashing and extraction
+    # then run against the local cache.
     working_data_dir, cache_stats = prepare_local_source_cache(
         original_data_dir,
         state_dir / "source_cache",
@@ -209,7 +224,6 @@ def stage_runtime_update(
     )
     result = stage_update(
         data_dir=working_data_dir,
-        manifest_data_dir=original_data_dir,
         state_dir=state_dir,
         processor=catalog.process,
         config_paths=[rules_path, overrides_path],
@@ -219,7 +233,9 @@ def stage_runtime_update(
         initial_flags=catalog.initial_flags,
         post_process_flags=catalog.drain_processor_flags,
     )
+    _restore_original_data_path(state_dir, str(result.get("run_id", "")), original_data_dir)
     result["source_cache"] = cache_stats
+    result["data_dir"] = str(original_data_dir)
     return result
 
 
