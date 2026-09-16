@@ -11,7 +11,7 @@ Const xlBetween = 1
 Const msoShapeRoundedRectangle = 5
 
 Dim fso, shell, packageRoot, sourceWorkbook, outputWorkbook, excel, workbook
-Dim modulesFolder, enginePath, runtimeFolder, configFolder, response
+Dim modulesFolder, enginePath, runtimeFolder, configFolder, response, localAppData, appDataRoot
 
 Set fso = CreateObject("Scripting.FileSystemObject")
 Set shell = CreateObject("WScript.Shell")
@@ -20,8 +20,16 @@ sourceWorkbook = fso.BuildPath(packageRoot, "source\NMDC_Document_Index_Base.xls
 outputWorkbook = fso.BuildPath(packageRoot, "NMDC_Document_Index.xlsm")
 modulesFolder = fso.BuildPath(packageRoot, "vba")
 enginePath = fso.BuildPath(packageRoot, "engine\nmdc_index_engine.exe")
-runtimeFolder = fso.BuildPath(packageRoot, "runtime")
 configFolder = fso.BuildPath(packageRoot, "config")
+
+' Keep runtime/state/cache out of the extracted package so normal scans do not
+' create thousands of sync events when the package itself sits under OneDrive.
+localAppData = shell.ExpandEnvironmentStrings("%LOCALAPPDATA%")
+If Len(localAppData) = 0 Or InStr(localAppData, "%LOCALAPPDATA%") > 0 Then localAppData = packageRoot
+appDataRoot = fso.BuildPath(localAppData, "NMDC Document Index")
+runtimeFolder = fso.BuildPath(appDataRoot, "runtime")
+EnsureFolderTree appDataRoot
+EnsureFolderTree runtimeFolder
 
 If Not fso.FileExists(sourceWorkbook) Then
     MsgBox "The production workbook source is missing:" & vbCrLf & sourceWorkbook, vbCritical, "NMDC Document Index Setup"
@@ -34,6 +42,7 @@ End If
 RequireFile enginePath, "The packaged NMDC Index engine is missing."
 RequireFile fso.BuildPath(configFolder, "classification_rules.csv"), "The classification rules file is missing."
 RequireFile fso.BuildPath(configFolder, "project_identity_overrides.csv"), "The project identity overrides file is missing."
+RequireFile fso.BuildPath(configFolder, "source_exclusions.csv"), "The source-selection file is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Engine.bas"), "A required Excel action module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Csv.bas"), "A required safe CSV module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Refresh.bas"), "A required Excel action module is missing."
@@ -42,7 +51,8 @@ RequireFile fso.BuildPath(modulesFolder, "modNMDC_TableActions.bas"), "A require
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Admin.bas"), "A required Excel administration module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Rules.bas"), "A required Excel action module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Startup.bas"), "A required Excel action module is missing."
-If Not fso.FolderExists(runtimeFolder) Then fso.CreateFolder runtimeFolder
+RequireFile fso.BuildPath(modulesFolder, "modNMDC_Performance.bas"), "The responsive scan module is missing."
+RequireFile fso.BuildPath(modulesFolder, "modNMDC_OwnerUX.bas"), "The owner guidance module is missing."
 
 If fso.FileExists(outputWorkbook) Then
     response = MsgBox("NMDC_Document_Index.xlsm already exists." & vbCrLf & vbCrLf & _
@@ -101,9 +111,17 @@ ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_TableActions.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Admin.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Rules.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Startup.bas")
+ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Performance.bas")
+ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_OwnerUX.bas")
 If Err.Number <> 0 Then
     ShowFailure "Excel could not attach the production actions."
     WScript.Quit 8
+End If
+
+ConfigureFastStartup workbook
+If Err.Number <> 0 Then
+    ShowFailure "Excel could not configure the fast workbook startup."
+    WScript.Quit 9
 End If
 
 SetWorkbookConfig workbook, "Engine Executable Path", enginePath
@@ -111,6 +129,7 @@ SetWorkbookConfig workbook, "Runtime Folder", runtimeFolder
 SetWorkbookConfig workbook, "Configuration Folder", configFolder
 SetWorkbookConfig workbook, "Classification Rules File", fso.BuildPath(configFolder, "classification_rules.csv")
 SetWorkbookConfig workbook, "Project Identity Overrides File", fso.BuildPath(configFolder, "project_identity_overrides.csv")
+SetWorkbookConfig workbook, "Source Exclusions File", fso.BuildPath(configFolder, "source_exclusions.csv")
 
 StyleHomeDashboard workbook
 AttachHomeButtons workbook
@@ -118,13 +137,19 @@ ConfigureReviewFlags workbook
 ApplyUserDropdowns workbook
 workbook.Worksheets("System Data").Visible = 2
 NormalizeMergedUiRanges workbook
+excel.Run "'" & workbook.Name & "'!NMDC_ApplyOwnerUX"
+If Err.Number <> 0 Then
+    ShowFailure "Excel could not apply the final owner guidance."
+    WScript.Quit 10
+End If
 workbook.Save
 workbook.Close True
 excel.Quit
 On Error GoTo 0
 
 MsgBox "NMDC_Document_Index.xlsm was created successfully." & vbCrLf & vbCrLf & _
-       "Open it in Microsoft Excel, enable macros, select the DATA folder, and press Full Rescan / Rebuild All for the owner retest.", _
+       "Runtime/cache: " & runtimeFolder & vbCrLf & vbCrLf & _
+       "Open the workbook, enable macros, select the DATA folder, and use Update Changed Files for normal work. Full Rescan is intended only for deliberate rebuilds.", _
        vbInformation, "NMDC Document Index Setup"
 
 Sub ImportModule(ByVal wb, ByVal modulePath)
@@ -143,12 +168,23 @@ Sub RequireFile(ByVal filePath, ByVal friendlyMessage)
     End If
 End Sub
 
+Sub EnsureFolderTree(ByVal folderPath)
+    Dim parentPath
+    If Len(folderPath) = 0 Then Exit Sub
+    If fso.FolderExists(folderPath) Then Exit Sub
+    parentPath = fso.GetParentFolderName(folderPath)
+    If Len(parentPath) > 0 And Not fso.FolderExists(parentPath) Then EnsureFolderTree parentPath
+    If Not fso.FolderExists(folderPath) Then fso.CreateFolder folderPath
+End Sub
+
 Sub EnsureNamedTables(ByVal wb)
+    EnsureSourceSelectionSheet wb
     EnsureTable wb, "Master Documents", "MasterDocuments", 5, Empty
     EnsureTable wb, "Revisions", "RevisionRegister", 5, Empty
     EnsureTable wb, "Transactions", "EventRegister", 5, Empty
-    EnsureTable wb, "Pending Update", "PendingUpdate", 5, Array("Change Type", "Record Identity", "Project No.", "Document No.", "Revision", "Event Type", "Source File", "Plain-English Summary", "Review Required")
+    EnsureTable wb, "Pending Update", "PendingUpdate", 5, Array("Change Type", "Project No.", "Document No.", "Revision", "Event Type", "Plain-English Summary", "Source File", "Review Required", "Record Identity")
     EnsureTable wb, "Review Flags", "ReviewFlags", 5, Empty
+    EnsureTable wb, "Source Selection", "SourceSelection", 5, Array("Owner Choice", "Source File", "Source Family", "Current Status", "Selection Reason", "Last Processed Run")
     EnsureTable wb, "User Decisions", "UserDecisionLog", 11, Empty
     EnsureTable wb, "Configuration", "Configuration", 5, Empty
     EnsureTable wb, "Rules & Mappings", "ClassificationRules", 5, Empty
@@ -156,6 +192,20 @@ Sub EnsureNamedTables(ByVal wb)
     EnsureTable wb, "Error Log", "ErrorLog", 5, Array("Date/Time", "Severity", "Action", "Plain-English Error", "Recommended Action", "Technical Detail", "Run ID", "Source File", "Worksheet", "Source Row/Cell")
     EnsureTable wb, "System Data", "BaselineCounts", 5, Empty
     EnsureTable wb, "System Data", "SourceInventory", 21, Empty
+End Sub
+
+Sub EnsureSourceSelectionSheet(ByVal wb)
+    Dim ws
+    Set ws = Nothing
+    On Error Resume Next
+    Set ws = wb.Worksheets("Source Selection")
+    On Error GoTo 0
+    If ws Is Nothing Then
+        Set ws = wb.Worksheets.Add(, wb.Worksheets(wb.Worksheets.Count))
+        ws.Name = "Source Selection"
+        ws.Range("A1").Value = "Source Selection"
+        ws.Range("A2").Value = "Choose which source workbooks participate in the index. This does not modify or delete the source files."
+    End If
 End Sub
 
 Sub EnsureTable(ByVal wb, ByVal sheetName, ByVal tableName, ByVal headerRow, ByVal expectedHeaders)
@@ -203,6 +253,29 @@ Sub EnsureTable(ByVal wb, ByVal sheetName, ByVal tableName, ByVal headerRow, ByV
     If table.ListRows.Count = 0 Then table.ListRows.Add
 End Sub
 
+Sub ConfigureFastStartup(ByVal wb)
+    Dim component, codeModule, lineNo, lineText, thisComponent, thisModule, eventCode
+
+    Set component = wb.VBProject.VBComponents("modNMDC_Startup")
+    Set codeModule = component.CodeModule
+    For lineNo = 1 To codeModule.CountOfLines
+        lineText = Trim(codeModule.Lines(lineNo, 1))
+        If StrComp(lineText, "Public Sub Auto_Open()", 1) = 0 Then
+            codeModule.ReplaceLine lineNo, "Public Sub NMDC_LegacyAutoOpen()"
+            Exit For
+        End If
+    Next
+
+    Set thisComponent = wb.VBProject.VBComponents(wb.CodeName)
+    Set thisModule = thisComponent.CodeModule
+    If InStr(1, thisModule.Lines(1, thisModule.CountOfLines), "Workbook_Open", 1) = 0 Then
+        eventCode = vbCrLf & "Private Sub Workbook_Open()" & vbCrLf & _
+                    "    NMDC_FastStartup" & vbCrLf & _
+                    "End Sub" & vbCrLf
+        thisModule.AddFromString eventCode
+    End If
+End Sub
+
 Sub SetWorkbookConfig(ByVal wb, ByVal keyName, ByVal configValue)
     Dim ws, table, row, settingColumn, valueColumn, found
     Set ws = wb.Worksheets("Configuration")
@@ -230,9 +303,8 @@ Sub StyleHomeDashboard(ByVal wb)
     Dim ws
     Set ws = wb.Worksheets("Home")
 
-    ' Format only the visible dashboard area. Formatting ws.Cells styles all 16,384 columns and triggers Excel's slow-workbook warning.
-    ws.Range("A1:L33").Font.Name = "Aptos"
-    ws.Range("A1:L33").Interior.Color = RGB(247, 249, 252)
+    ws.Range("A1:L42").Font.Name = "Aptos"
+    ws.Range("A1:L42").Interior.Color = RGB(247, 249, 252)
 
     With ws.Range("A1:L1")
         .Interior.Color = RGB(11, 31, 51)
@@ -285,14 +357,9 @@ Sub StyleHomeDashboard(ByVal wb)
         .RowHeight = 22
     End With
 
-    With ws.Range("A29:L33")
-        .Interior.Color = RGB(234, 244, 251)
-        .Font.Color = RGB(31, 41, 55)
-        .WrapText = True
-    End With
-
     ws.Columns("A:L").ColumnWidth = 14
     ws.Rows("12:28").RowHeight = 24
+    ws.Rows("40:41").RowHeight = 24
     ws.Activate
     excel.ActiveWindow.DisplayGridlines = False
 End Sub
@@ -318,25 +385,29 @@ Sub AttachHomeButtons(ByVal wb)
                    "A18:D19", "E18:H19", "I18:L19", _
                    "A21:D22", "E21:H22", "I21:L22", _
                    "A24:D25", "E24:H25", "I24:L25", _
-                   "A27:D28", "E27:H28", "I27:L28")
+                   "A27:D28", "E27:H28", "I27:L28", _
+                   "A40:D41")
     labels = Array("Update Changed Files", "Full Rescan / Rebuild All", "Review Pending Update", _
                    "Approve Update", "Hold Update", "Reject Update", _
                    "Select Data Folder", "Review Flags", "Save Review Decisions", _
                    "Configuration", "Rules & Mappings", "View Log", _
                    "Flag Wrong Data", "Report Requirement / Problem", "Refresh Dashboard", _
-                   "Undo Last Approval", "Reset All Records", "Help")
-    macros = Array("NMDC_UpdateChangedFiles", "NMDC_FullRescan", "NMDC_ReviewPendingUpdate", _
+                   "Undo Last Approval", "Reset All Records", "Help", _
+                   "Source Selection")
+    macros = Array("NMDC_UpdateChangedFilesFast", "NMDC_FullRescanFast", "NMDC_ReviewPendingUpdateFast", _
                    "NMDC_ApproveUpdate", "NMDC_HoldUpdate", "NMDC_RejectUpdate", _
-                   "NMDC_SelectDataFolder", "NMDC_ReviewFlags", "NMDC_SaveReviewDecisions", _
-                   "NMDC_OpenConfiguration", "NMDC_OpenRulesMappings", "NMDC_ViewLog", _
-                   "NMDC_FlagWrongDataFromTable", "NMDC_ReportRequirementFromTable", "NMDC_RefreshDashboard", _
-                   "NMDC_UndoLastApproval", "NMDC_ResetAllRecords", "NMDC_OpenHelp")
-    fills = Array(RGB(20,108,148), RGB(20,108,148), RGB(194,139,0), _
+                   "NMDC_SelectDataFolder", "NMDC_ReviewFlagsFast", "NMDC_SaveReviewDecisions", _
+                   "NMDC_OpenConfiguration", "NMDC_OpenRulesMappingsOwner", "NMDC_ViewLog", _
+                   "NMDC_FlagWrongDataFromTable", "NMDC_ReportRequirementFromTable", "NMDC_RefreshDashboardFast", _
+                   "NMDC_UndoLastApproval", "NMDC_ResetAllRecords", "NMDC_OpenHelp", _
+                   "NMDC_OpenSourceSelection")
+    fills = Array(RGB(20,108,148), RGB(194,139,0), RGB(194,139,0), _
                   RGB(46,125,50), RGB(194,139,0), RGB(198,40,40), _
                   RGB(20,108,148), RGB(194,139,0), RGB(46,125,50), _
                   RGB(20,108,148), RGB(20,108,148), RGB(91,100,112), _
                   RGB(20,108,148), RGB(91,100,112), RGB(46,125,50), _
-                  RGB(194,139,0), RGB(198,40,40), RGB(91,100,112))
+                  RGB(194,139,0), RGB(198,40,40), RGB(91,100,112), _
+                  RGB(20,108,148))
 
     For index = 0 To UBound(ranges)
         Set area = ws.Range(ranges(index))
@@ -429,13 +500,9 @@ End Sub
 Sub NormalizeMergedUiRanges(ByVal wb)
     Dim ws, scanRange, cell, mergeArea, seen, address, topValue
 
-    ' The source workbook contains many merged UI blocks. Some builder-generated
-    ' files retain duplicate values in the hidden cells underneath a merge. Excel
-    ' then warns on the next open that merging will discard those values. Normalize
-    ' only the UI area (rows 1-40), never the extracted data tables below it.
     For Each ws In wb.Worksheets
         Set seen = CreateObject("Scripting.Dictionary")
-        Set scanRange = ws.Range("A1:Z40")
+        Set scanRange = ws.Range("A1:Z45")
         For Each cell In scanRange.Cells
             If cell.MergeCells Then
                 Set mergeArea = cell.MergeArea
