@@ -49,6 +49,13 @@ Private Function NMDC_EnsurePendingSourceTable(ByVal ws As Worksheet) As ListObj
     Dim headers As Variant
     Dim i As Long
     Dim sourceRange As Range
+    Dim pendingTable As ListObject
+    Dim headerRow As Long
+    Dim firstColumn As Long
+    Dim oldRange As Range
+    Dim oldHeaders As Variant
+    Dim oldData As Variant
+    Dim oldRowCount As Long
 
     Set table = Nothing
     On Error Resume Next
@@ -68,20 +75,52 @@ Private Function NMDC_EnsurePendingSourceTable(ByVal ws As Worksheet) As ListObj
             "Include in Index?", "Project No.", "Source File", "Source Family", _
             "Current Status", "Owner Note", "Selection Reason", "Last Processed Run")
 
+        Set pendingTable = Nothing
         On Error Resume Next
-        ws.Range("L4:S7").UnMerge
-        ws.Range("L4:S7").ClearContents
+        Set pendingTable = ws.ListObjects("PendingUpdate")
         On Error GoTo Handler
+        headerRow = 8
+        If Not pendingTable Is Nothing Then headerRow = pendingTable.Range.Row + pendingTable.Range.Rows.Count + 3
+        firstColumn = 1
 
         For i = LBound(headers) To UBound(headers)
-            ws.Cells(5, 12 + i - LBound(headers)).Value = headers(i)
+            ws.Cells(headerRow, firstColumn + i - LBound(headers)).Value = headers(i)
         Next i
 
-        Set sourceRange = ws.Range("L5:S6")
+        Set sourceRange = ws.Range(ws.Cells(headerRow, firstColumn), ws.Cells(headerRow + 1, firstColumn + 7))
         Set table = ws.ListObjects.Add(xlSrcRange, sourceRange, , xlYes)
         table.Name = SOURCE_PANEL_TABLE
         table.TableStyle = "TableStyleMedium2"
         If table.ListRows.Count = 0 Then table.ListRows.Add
+    Else
+        Set pendingTable = Nothing
+        On Error Resume Next
+        Set pendingTable = ws.ListObjects("PendingUpdate")
+        On Error GoTo Handler
+        If Not pendingTable Is Nothing Then
+            headerRow = pendingTable.Range.Row + pendingTable.Range.Rows.Count + 3
+            If table.Range.Row <> headerRow Or table.Range.Column <> 1 Then
+                ' Resize cannot reliably move a legacy far-right ListObject.
+                ' Capture its values, unlist it, and recreate it below the
+                ' PendingUpdate table without losing owner choices or notes.
+                Set oldRange = table.Range
+                oldHeaders = table.HeaderRowRange.Value2
+                oldRowCount = table.ListRows.Count
+                If Not table.DataBodyRange Is Nothing Then oldData = table.DataBodyRange.Value2
+                table.Unlist
+                oldRange.ClearContents
+                Set sourceRange = ws.Range(ws.Cells(headerRow, 1), ws.Cells(headerRow + IIf(oldRowCount > 0, oldRowCount, 1), 8))
+                sourceRange.Rows(1).Value2 = oldHeaders
+                Set table = ws.ListObjects.Add(xlSrcRange, sourceRange, , xlYes)
+                table.Name = SOURCE_PANEL_TABLE
+                table.TableStyle = "TableStyleMedium2"
+                If oldRowCount > 0 Then
+                    table.DataBodyRange.Value2 = oldData
+                ElseIf table.ListRows.Count = 0 Then
+                    table.ListRows.Add
+                End If
+            End If
+        End If
     End If
 
     Set NMDC_EnsurePendingSourceTable = table
@@ -145,14 +184,22 @@ Private Sub NMDC_FormatPendingSourcePanel(ByVal ws As Worksheet, ByVal table As 
 
     Dim area As Range
     Dim button As Shape
+    Dim headerRow As Long
+    Dim titleRow As Long
+    Dim buttonRow As Long
 
-    ' Clear BEFORE merging so Excel never has multiple populated cells to discard.
+    headerRow = table.HeaderRowRange.Row
+    titleRow = headerRow - 2
+    buttonRow = headerRow - 1
+
+    ' The source panel is compact and directly below PendingUpdate, not a
+    ' far-right block that makes the sheet excessively wide.
     On Error Resume Next
-    ws.Range("L4:S4").UnMerge
-    ws.Range("L4:S4").ClearContents
-    ws.Range("L4:S4").Merge
+    ws.Range(ws.Cells(titleRow, 1), ws.Cells(titleRow, 8)).UnMerge
+    ws.Range(ws.Cells(titleRow, 1), ws.Cells(titleRow, 8)).ClearContents
+    ws.Range(ws.Cells(titleRow, 1), ws.Cells(titleRow, 8)).Merge
     On Error GoTo Handler
-    With ws.Range("L4:S4")
+    With ws.Range(ws.Cells(titleRow, 1), ws.Cells(titleRow, 8))
         .Cells(1, 1).Value = "SOURCE SELECTION - native Excel checkboxes: checked = INCLUDE, unchecked = EXCLUDE. Project No. identifies each source. Save once after all choices."
         .Interior.Color = RGB(232, 241, 247)
         .Font.Name = "Aptos"
@@ -173,21 +220,21 @@ Private Sub NMDC_FormatPendingSourcePanel(ByVal ws As Worksheet, ByVal table As 
     ws.Shapes("NMDC_Pending_SourceNone").Delete
     On Error GoTo Handler
 
-    Set area = ws.Range("L2:N3")
+    Set area = ws.Range(ws.Cells(buttonRow, 1), ws.Cells(buttonRow, 3))
     Set button = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width, area.Height)
     button.Name = "NMDC_Pending_SourceSave"
     button.OnAction = "NMDC_SaveSourceSelections"
     button.TextFrame.Characters.Text = "Save Source Choices" & vbLf & "& Restage"
     NMDC_FormatSourceButton button, RGB(20, 108, 148)
 
-    Set area = ws.Range("O2:P3")
+    Set area = ws.Range(ws.Cells(buttonRow, 4), ws.Cells(buttonRow, 5))
     Set button = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width, area.Height)
     button.Name = "NMDC_Pending_SourceAll"
     button.OnAction = "NMDC_CheckAllSources"
     button.TextFrame.Characters.Text = "Check All"
     NMDC_FormatSourceButton button, RGB(46, 125, 50)
 
-    Set area = ws.Range("Q2:R3")
+    Set area = ws.Range(ws.Cells(buttonRow, 6), ws.Cells(buttonRow, 8))
     Set button = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width, area.Height)
     button.Name = "NMDC_Pending_SourceNone"
     button.OnAction = "NMDC_UncheckAllSources"
@@ -239,6 +286,10 @@ Private Sub NMDC_ApplyNativeSourceCheckboxes(ByVal table As ListObject)
     Dim sourceFile As String
     Dim targetCell As Range
     Dim anySource As Boolean
+    Dim excelVersion As Double
+    Dim excelBuild As Long
+    Dim checkboxErr As Long
+    Dim checkboxDescription As String
 
     Set includeColumn = table.ListColumns("Include in Index?")
     Set sourceColumn = table.ListColumns("Source File")
@@ -256,8 +307,32 @@ Private Sub NMDC_ApplyNativeSourceCheckboxes(ByVal table As ListObject)
     Next rowIndex
 
     If anySource Then
+        ' CellControl is a runtime capability: keep the Boolean values usable
+        ' when an older Excel build does not expose SetCheckbox.
+        On Error Resume Next
+        excelVersion = CDbl(Application.Version)
+        excelBuild = CLng(Application.Build)
+        Err.Clear
+        On Error GoTo Fallback
+        If excelVersion < 16# Or excelBuild <= 0 Then
+            NMDC_LogError "NATIVE_CHECKBOX_UNAVAILABLE", _
+                "This Excel build does not advertise the modern in-cell checkbox capability. TRUE/FALSE source choices remain usable.", _
+                "Version=" & CStr(excelVersion) & "; Build=" & CStr(excelBuild)
+            Exit Sub
+        End If
+        On Error Resume Next
+        Err.Clear
         includeColumn.DataBodyRange.CellControl.SetCheckbox
-        includeColumn.DataBodyRange.HorizontalAlignment = xlCenter
+        checkboxErr = Err.Number
+        checkboxDescription = Err.Description
+        On Error GoTo Fallback
+        If checkboxErr <> 0 Then
+            NMDC_LogError "NATIVE_CHECKBOX_UNAVAILABLE", _
+                "Excel could not display the modern in-cell source checkboxes. TRUE/FALSE source choices remain usable.", _
+                checkboxErr & " - " & checkboxDescription
+        Else
+            includeColumn.DataBodyRange.HorizontalAlignment = xlCenter
+        End If
     End If
     Exit Sub
 

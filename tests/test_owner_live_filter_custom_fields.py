@@ -15,24 +15,25 @@ class OwnerLiveFilterCustomFieldsTests(unittest.TestCase):
         self.assertNotIn('ClassType:="Forms.TextBox.1"', live)
         self.assertNotIn("OLEObjects.Add", live)
         self.assertNotIn("TxtBox_Search_Change", live)
-        self.assertIn("Application.OnKey", live)
-        self.assertIn("NMDC_LiveFilterBindCaptureKeys", live)
-        self.assertIn("NMDC_LiveFilterAppend", live)
-        self.assertIn("Public Sub NMDC_LF_A()", live)
-        self.assertIn("Public Sub NMDC_LF_0()", live)
-        self.assertIn('Criteria1:="=*" & NMDC_LiveFilterEscapeWildcards(cleanText) & "*"', live)
-        self.assertNotIn("__NMDC_LiveFilter", live)
-        self.assertNotIn('"ALL COLUMNS"', live)
-        self.assertNotIn("NMDC_LiveFilterRowText", live)
+        self.assertNotIn("Application.OnKey", live)
+        self.assertIn("frmNMDC_LiveFilter", live)
+        self.assertIn("NMDC_LiveFilterFormChanged", live)
+        self.assertIn("NMDC_LiveFilterShow", live)
+        self.assertIn("NMDC_LiveFilterMatchesTerm", live)
+        form = self._read("excel/vba/frmNMDC_LiveFilter.frm")
+        self.assertIn('OleObjectBlob   =   "frmNMDC_LiveFilter.frx":0000', form)
+        self.assertTrue((ROOT / "excel/vba/frmNMDC_LiveFilter.frx").stat().st_size > 0)
+        self.assertIn("frmNMDC_LiveFilter.Show vbModeless", live)
+        self.assertIn("Me.cmbSearch.Text", form)
+        self.assertIn("Private Sub cmbSearch_Change()", form)
+        self.assertIn("Me.cmbSearch.SetFocus", form)
 
     def test_live_filter_requires_one_explicit_target_column(self):
         live = self._read("excel/vba/modNMDC_LiveFilter.bas")
 
-        self.assertIn('"Click the HEADER of the column you want to search."', live)
-        self.assertIn("targetColumn.DataBodyRange", live)
-        self.assertIn("NMDC_LiveFilterSetTarget ws, targetColumn", live)
-        self.assertIn('selectButton.TextFrame.Characters.Text = "SELECT COLUMN"', live)
-        self.assertIn('"COLUMN: " & targetName', live)
+        self.assertIn('"Click the HEADER of the column to search."', live)
+        self.assertIn("NMDC_LiveFilterChooseColumn", live)
+        self.assertIn('ws.Range("F3").Value = headerName', live)
 
         for sheet_name in (
             "MASTER DOCUMENTS",
@@ -52,10 +53,8 @@ class OwnerLiveFilterCustomFieldsTests(unittest.TestCase):
     def test_live_filter_reset_and_keyboard_release_are_safe(self):
         live = self._read("excel/vba/modNMDC_LiveFilter.bas")
         self.assertIn("Public Sub NMDC_LiveFilterClear()", live)
-        self.assertIn("NMDC_LiveFilterReleaseCaptureKeys", live)
-        self.assertIn('Application.OnKey "{BACKSPACE}"', live)
-        self.assertIn('Application.OnKey "{ESC}"', live)
-        self.assertIn("NMDC_LiveFilterStopCapture", live)
+        self.assertIn("NMDC_LiveFilterFormChanged", live)
+        self.assertNotIn("Application.OnKey", live)
 
     def test_custom_fields_workspace_and_keyword_dictionary_are_user_driven(self):
         setup = self._read("excel/vba/modNMDC_CustomFieldsSetup.bas")

@@ -21,11 +21,17 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
         for module in (
             "modNMDC_LiveFilter.bas",
+            "frmNMDC_LiveFilter.frm",
             "modNMDC_CustomFields.bas",
             "modNMDC_CustomFieldsSetup.bas",
         ):
             self.assertIn(f'RequireFile fso.BuildPath(modulesFolder, "{module}")', setup)
             self.assertIn(f'ImportModule workbook, fso.BuildPath(modulesFolder, "{module}")', setup)
+        self.assertIn('RequireFile fso.BuildPath(modulesFolder, "frmNMDC_LiveFilter.frm")', setup)
+        self.assertIn('ImportModule workbook, fso.BuildPath(modulesFolder, "frmNMDC_LiveFilter.frm")', setup)
+
+        assembler = self._read("tests/excel_e2e/assemble_package.py")
+        self.assertIn('glob("*.frm")', assembler)
 
     def test_setup_initializes_new_features_before_save(self):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
@@ -62,7 +68,10 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         custom = self._read("excel/vba/modNMDC_CustomFieldsSetup.bas")
         self.assertNotIn("TxtBox_Search_Change", live)
         self.assertNotIn("codeModule.AddFromString", live)
-        self.assertIn("Application.OnKey", live)
+        self.assertNotIn("Application.OnKey", live)
+        self.assertNotIn("Forms.TextBox.1", live)
+        self.assertIn("NMDC_LiveFilterFormChanged", live)
+        self.assertIn("NMDC_LiveFilterShow", live)
         self.assertIn("If codeModule.CountOfLines > 0 Then", custom)
         self.assertIn("sourceText = codeModule.Lines(1, codeModule.CountOfLines)", custom)
 

@@ -40,6 +40,10 @@ def assemble_package():
     # Copy vba
     for bas in (root / "excel" / "vba").glob("*.bas"):
         shutil.copy2(bas, package / "vba" / bas.name)
+    for frm in (root / "excel" / "vba").glob("*.frm"):
+        shutil.copy2(frm, package / "vba" / frm.name)
+    for frx in (root / "excel" / "vba").glob("*.frx"):
+        shutil.copy2(frx, package / "vba" / frx.name)
         
     # Copy scripts
     shutil.copy2(root / "packaging" / "Create_NMDC_Document_Index.vbs", package / "Create_NMDC_Document_Index.vbs")

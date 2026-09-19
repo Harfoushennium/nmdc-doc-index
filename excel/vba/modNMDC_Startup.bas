@@ -159,6 +159,7 @@ Private Sub NMDC_SetSheetBanner(ByVal sheetName As String, ByVal bannerText As S
 
     On Error Resume Next
     ws.Range(bannerAddress).UnMerge
+    ws.Range(bannerAddress).ClearContents
     ws.Range(bannerAddress).Merge
     On Error GoTo 0
 

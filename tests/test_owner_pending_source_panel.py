@@ -67,7 +67,16 @@ class OwnerPendingSourcePanelTests(unittest.TestCase):
     def test_source_selection_is_moved_onto_pending_update(self):
         checkboxes = self._read("excel/vba/modNMDC_Checkboxes.bas")
         self.assertIn('Set ws = ThisWorkbook.Worksheets("Pending Update")', checkboxes)
-        self.assertIn('Set sourceRange = ws.Range("L5:S6")', checkboxes)
+        self.assertIn('Set pendingTable = ws.ListObjects("PendingUpdate")', checkboxes)
+        self.assertIn(
+            "headerRow = pendingTable.Range.Row + pendingTable.Range.Rows.Count + 3",
+            checkboxes,
+        )
+        self.assertIn(
+            "Set sourceRange = ws.Range(ws.Cells(headerRow, firstColumn)",
+            checkboxes,
+        )
+        self.assertNotIn('ws.Range("L5:S6")', checkboxes)
         self.assertIn('"Include in Index?", "Project No.", "Source File"', checkboxes)
         self.assertIn('legacyWs.Visible = xlSheetVeryHidden', checkboxes)
         self.assertIn('button.OnAction = "NMDC_SaveSourceSelections"', checkboxes)

@@ -55,6 +55,8 @@ RequireFile fso.BuildPath(modulesFolder, "modNMDC_Performance.bas"), "The respon
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_OwnerUX.bas"), "The owner guidance module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Checkboxes.bas"), "The source-selection checkbox module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_LiveFilter.bas"), "The Live Filter module is missing."
+RequireFile fso.BuildPath(modulesFolder, "frmNMDC_LiveFilter.frm"), "The Live Filter UserForm is missing."
+RequireFile fso.BuildPath(modulesFolder, "frmNMDC_LiveFilter.frx"), "The Live Filter UserForm resource is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_CustomFields.bas"), "The Custom Fields module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_CustomFieldsSetup.bas"), "The Custom Fields setup module is missing."
 
@@ -100,12 +102,14 @@ If Err.Number <> 0 Then
     ShowFailure "Excel could not create NMDC_Document_Index.xlsm."
     WScript.Quit 6
 End If
+TraceStep "workbook-saved-as-xlsm"
 
 EnsureNamedTables workbook
 If Err.Number <> 0 Then
     ShowFailure "Excel could not validate the required named tables."
     WScript.Quit 7
 End If
+TraceStep "named-tables-ready"
 
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Engine.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Csv.bas")
@@ -119,18 +123,21 @@ ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Performance.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_OwnerUX.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Checkboxes.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_LiveFilter.bas")
+ImportModule workbook, fso.BuildPath(modulesFolder, "frmNMDC_LiveFilter.frm")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_CustomFields.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_CustomFieldsSetup.bas")
 If Err.Number <> 0 Then
     ShowFailure "Excel could not attach the production actions."
     WScript.Quit 8
 End If
+TraceStep "vba-modules-imported"
 
 ConfigureFastStartup workbook
 If Err.Number <> 0 Then
     ShowFailure "Excel could not configure the fast workbook startup."
     WScript.Quit 9
 End If
+TraceStep "fast-startup-configured"
 
 Err.Clear
 ConfigureOwnerEvents workbook
@@ -138,6 +145,7 @@ If Err.Number <> 0 Then
     ShowFailure "Excel could not configure the workbook interaction events."
     WScript.Quit 9
 End If
+TraceStep "owner-events-configured"
 
 SetWorkbookConfig workbook, "Engine Executable Path", enginePath
 SetWorkbookConfig workbook, "Runtime Folder", runtimeFolder
@@ -145,6 +153,7 @@ SetWorkbookConfig workbook, "Configuration Folder", configFolder
 SetWorkbookConfig workbook, "Classification Rules File", fso.BuildPath(configFolder, "classification_rules.csv")
 SetWorkbookConfig workbook, "Project Identity Overrides File", fso.BuildPath(configFolder, "project_identity_overrides.csv")
 SetWorkbookConfig workbook, "Source Exclusions File", fso.BuildPath(configFolder, "source_exclusions.csv")
+TraceStep "configuration-paths-written"
 
 StyleHomeDashboard workbook
 AttachHomeButtons workbook
@@ -152,6 +161,7 @@ ConfigureReviewFlags workbook
 ApplyUserDropdowns workbook
 workbook.Worksheets("System Data").Visible = 2
 NormalizeMergedUiRanges workbook
+TraceStep "base-ui-normalized"
 
 Err.Clear
 excel.Run "'" & workbook.Name & "'!NMDC_EnsureCustomFieldsStructure"
@@ -159,6 +169,7 @@ If Err.Number <> 0 Then
     ShowFailure "Excel could not create the Custom Fields & Keywords workspace."
     WScript.Quit 10
 End If
+TraceStep "custom-fields-structure-ready"
 
 Err.Clear
 excel.Run "'" & workbook.Name & "'!NMDC_CustomFieldsInitialize"
@@ -166,6 +177,7 @@ If Err.Number <> 0 Then
     ShowFailure "Excel could not initialize Custom Fields & Keywords."
     WScript.Quit 10
 End If
+TraceStep "custom-fields-initialized"
 
 Err.Clear
 excel.Run "'" & workbook.Name & "'!NMDC_LiveFilterInitialize"
@@ -173,6 +185,7 @@ If Err.Number <> 0 Then
     ShowFailure "Excel could not initialize the Live Filter."
     WScript.Quit 10
 End If
+TraceStep "live-filter-initialized"
 
 Err.Clear
 excel.Run "'" & workbook.Name & "'!NMDC_ApplyOwnerUX"
@@ -180,7 +193,9 @@ If Err.Number <> 0 Then
     ShowFailure "Excel could not apply the final owner guidance."
     WScript.Quit 10
 End If
+TraceStep "owner-ux-applied"
 workbook.Save
+TraceStep "final-workbook-saved"
 workbook.Close True
 excel.Quit
 On Error GoTo 0
@@ -424,6 +439,7 @@ Sub StyleHomeDashboard(ByVal wb)
 
     On Error Resume Next
     ws.Range("A11:L11").UnMerge
+    ws.Range("A11:L11").ClearContents
     ws.Range("A11:L11").Merge
     On Error GoTo 0
     With ws.Range("A11:L11")
@@ -437,6 +453,7 @@ Sub StyleHomeDashboard(ByVal wb)
 
     On Error Resume Next
     ws.Range("A26:L26").UnMerge
+    ws.Range("A26:L26").ClearContents
     ws.Range("A26:L26").Merge
     On Error GoTo 0
     With ws.Range("A26:L26")
@@ -527,6 +544,7 @@ Sub ConfigureReviewFlags(ByVal wb)
 
     On Error Resume Next
     ws.Range("A4:O4").UnMerge
+    ws.Range("A4:O4").ClearContents
     ws.Range("A4:O4").Merge
     On Error GoTo 0
     With ws.Range("A4:O4")
@@ -612,12 +630,26 @@ Sub NormalizeMergedUiRanges(ByVal wb)
 End Sub
 
 Sub ShowFailure(ByVal friendlyMessage)
-    Dim detail
+    Dim detail, logFile
     detail = Err.Number & " - " & Err.Description
+    On Error Resume Next
+    Set logFile = fso.CreateTextFile(fso.BuildPath(packageRoot, "setup_error.log"), True, True)
+    logFile.WriteLine friendlyMessage
+    logFile.WriteLine detail
+    logFile.Close
     On Error Resume Next
     If IsObject(workbook) Then workbook.Close False
     If IsObject(excel) Then excel.Quit
     MsgBox friendlyMessage & vbCrLf & vbCrLf & detail, vbCritical, "NMDC Document Index Setup"
+End Sub
+
+Sub TraceStep(ByVal message)
+    Dim traceFile
+    On Error Resume Next
+    Set traceFile = fso.OpenTextFile(fso.BuildPath(packageRoot, "setup_trace.log"), 8, True, -1)
+    traceFile.WriteLine SafeTimestamp() & " " & message
+    traceFile.Close
+    On Error GoTo 0
 End Sub
 
 Function SafeTimestamp()

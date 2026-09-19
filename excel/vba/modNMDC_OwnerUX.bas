@@ -329,13 +329,11 @@ Private Sub NMDC_SafeMergeAndSet(ByVal ws As Worksheet, ByVal addressText As Str
     Dim target As Range
     Set target = ws.Range(addressText)
 
-    Application.DisplayAlerts = False
     On Error Resume Next
     target.UnMerge
     target.ClearContents
     On Error GoTo 0
     target.Merge
-    Application.DisplayAlerts = True
 
     target.Cells(1, 1).Value = valueText
 End Sub
