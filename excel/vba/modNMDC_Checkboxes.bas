@@ -251,9 +251,9 @@ Private Sub NMDC_FormatPendingSourcePanel(ByVal ws As Worksheet, ByVal table As 
     ws.Range("A4:I4").ClearContents
     ws.Range("A4:I4").Merge
     ws.Range("A4").Value = _
-        "REVIEW WORKFLOW. Review staged changes in the left table. Use the native source checkboxes on this sheet at the right, then Save Source Choices & Restage. Approve/Hold/Reject applies to the remaining whole proposal."
+        "REVIEW WORKFLOW. Review staged changes in the first table. Use the native source checkboxes in the source-selection section below it, then Save Source Choices & Restage. Approve/Hold/Reject applies to the remaining whole proposal."
     ThisWorkbook.Worksheets("Home").Range("E34").Value = _
-        "Pending Update contains the source checkbox panel. Checked = include; unchecked = exclude. Save Source Choices & Restage once when finished."
+        "Pending Update contains the source-selection section below the staged changes table. Checked = include; unchecked = exclude. Save Source Choices & Restage once when finished."
     On Error GoTo 0
     Exit Sub
 
