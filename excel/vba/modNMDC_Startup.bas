@@ -42,7 +42,7 @@ Public Sub NMDC_ApplyWorkbookGuidance()
     NMDC_SetSheetBanner "Configuration", _
         "CONFIGURATION. Edit only supported user settings. Package/runtime paths are system settings created by setup. Read each column note before changing a value."
     NMDC_SetSheetBanner "Rules & Mappings", _
-        "SIMPLE RULE EDITOR. Use Add Simple Rule, then choose from the dropdowns: Enabled -> Source Family -> Look In (Match Scope) -> Match Method -> Match Words -> Discipline / Category / Subcategory -> Include. CONTAINS is recommended for normal users; REGEX and the hidden advanced columns are for exceptional cases only. Rules are validated before any scan is staged."
+        "SIMPLE RULE EDITOR. Use Add Simple Rule, then choose from the dropdowns: Enabled -> Source Family -> Look In (Match Scope) -> Match Method -> Match Words -> Discipline / Category / Subcategory -> Include. Use CONTAINS for most rules; EXACT, STARTS_WITH and ENDS_WITH cover normal alternatives. Legacy technical rule types stay internal. Rules are validated before any scan is staged."
     NMDC_SetSheetBanner "Update History", _
         "AUDIT OUTPUT - READ ONLY. One row per scan/decision. This is the history of staged, approved, held, rejected and review actions."
     NMDC_SetSheetBanner "Error Log", _
@@ -293,7 +293,7 @@ Public Sub NMDC_ConfigureRulesUserExperience()
     NMDC_ApplyRulesListValidation table, "Enabled", "YES,NO", "Enable rule", "YES = use this rule; NO = keep it but do not use it."
     NMDC_ApplyRulesListValidation table, "Source_Family", "ANY,METHODS,TECH", "Source family", "ANY = all sources; METHODS = methods registers only; TECH = technical registers only."
     NMDC_ApplyRulesListValidation table, "Match_Scope", "FILE,WORKSHEET,SECTION,HEADER,DOC_NUMBER,TITLE", "Where should Excel look?", "Choose FILE, WORKSHEET, SECTION, HEADER, DOC_NUMBER or TITLE."
-    NMDC_ApplyRulesListValidation table, "Match_Type", "CONTAINS,EXACT,FUZZY,REGEX", "How should it match?", "CONTAINS is recommended. EXACT requires the complete text. FUZZY allows similar text. REGEX is advanced."
+    NMDC_ApplyRulesListValidation table, "Match_Type", "CONTAINS,EXACT,STARTS_WITH,ENDS_WITH", "How should it match?", "CONTAINS is recommended. EXACT matches the complete field. STARTS_WITH and ENDS_WITH match text at the beginning or end."
     NMDC_ApplyRulesListValidation table, "Include", "YES,NO", "Keep or exclude?", "YES = classify/include matching data; NO = exclude matching content."
     NMDC_ApplyRulesListValidation table, "Stop_On_Match", "YES,NO", "Stop after match?", "YES is normally safest; later lower-priority rules will not override this match."
     NMDC_ApplyRulesWholeNumberValidation table, "Priority", 1, 999999
@@ -390,7 +390,7 @@ Private Sub NMDC_CreateRulesToolbar(ByVal ws As Worksheet, ByVal table As ListOb
     Set area = ws.Range("G2:R3")
     Set shape = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width, area.Height)
     shape.Name = "NMDC_Rules_Guide"
-    shape.TextFrame.Characters.Text = "Normal edit: choose dropdowns and type ordinary words in Match_Words. Use CONTAINS for most rules. Advanced fields and REGEX are hidden by default because they can change extraction behavior significantly."
+    shape.TextFrame.Characters.Text = "Normal edit: choose dropdowns and type ordinary words in Match_Words. Use CONTAINS for most rules; EXACT, STARTS_WITH and ENDS_WITH cover the normal alternatives. Technical legacy rule types stay outside the normal owner workflow."
     shape.Fill.ForeColor.RGB = RGB(247, 249, 252)
     shape.Line.ForeColor.RGB = RGB(216, 225, 232)
     shape.TextFrame.Characters.Font.Name = "Aptos"
@@ -670,9 +670,9 @@ Private Function NMDC_HeaderHelp(ByVal tableName As String, ByVal headerName As 
         Case "MATCH_SCOPE"
             NMDC_HeaderHelp = "USER INPUT - DROPDOWN. Choose where to look: FILE = file/path name; WORKSHEET = sheet/tab name; SECTION = section name; HEADER = table headers; DOC_NUMBER = document number; TITLE = document title."
         Case "MATCH_TYPE"
-            NMDC_HeaderHelp = "USER INPUT - DROPDOWN. CONTAINS is recommended for normal users. EXACT requires the complete text. FUZZY accepts similar text. REGEX is advanced and should only be used when necessary."
+            NMDC_HeaderHelp = "USER INPUT - DROPDOWN. CONTAINS is recommended. EXACT matches the whole field. STARTS_WITH and ENDS_WITH match text at the beginning or end."
         Case "MATCH_WORDS"
-            NMDC_HeaderHelp = "USER INPUT. For CONTAINS or EXACT, type ordinary words or a phrase exactly as you expect to see it. REGEX patterns are advanced and are not required for normal rules."
+            NMDC_HeaderHelp = "USER INPUT. Type ordinary words or a phrase exactly as you expect to see it. The selected Match Type controls whether the text may appear anywhere, must match the whole field, or must appear at the beginning/end."
         Case "EXCLUDE_WORDS"
             NMDC_HeaderHelp = "ADVANCED USER INPUT. Optional pattern that prevents this rule from matching. Leave blank unless you need an explicit exception."
         Case "PATH_QUALIFIER"
@@ -684,7 +684,7 @@ Private Function NMDC_HeaderHelp(ByVal tableName As String, ByVal headerName As 
         Case "INCLUDE"
             NMDC_HeaderHelp = "USER INPUT - DROPDOWN. YES = classify/include matching content. NO = intentionally exclude matching content from the index."
         Case "MIN_CONFIDENCE"
-            NMDC_HeaderHelp = "ADVANCED USER INPUT. Value from 0 to 1. Mainly used with FUZZY rules; 0.9 is the normal default."
+            NMDC_HeaderHelp = "ADVANCED INTERNAL INPUT. Confidence threshold retained for backward compatibility. Normal owner-created text rules do not need to change it."
         Case "STOP_ON_MATCH"
             NMDC_HeaderHelp = "ADVANCED USER INPUT - YES/NO. YES normally prevents lower-priority rules from changing the result after this rule matches."
         Case "NOTES"
