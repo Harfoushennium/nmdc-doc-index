@@ -9,10 +9,13 @@ This repository is intended to be worked on by multiple LLM/agent sessions over 
 Before proposing or changing implementation, read:
 
 1. `README.md`
-2. `PROJECT_SPEC.md`
-3. `CLASSIFICATION_MODEL.md`
-4. the current open collaboration PR and its complete discussion, if one exists
-5. the actual current repository tree and changed files
+2. `ANTIGRAVITY_HANDOFF.md` when PR #8 stabilization is active
+3. `PROJECT_SPEC.md`
+4. `USER_PRODUCT_REQUIREMENTS.md`
+5. `CLASSIFICATION_MODEL.md`
+6. `RELEASE_ACCEPTANCE_TEST_PLAN.md`
+7. the current open collaboration PR and its complete discussion, if one exists
+8. the actual current repository tree and changed files
 
 Treat GitHub as the source of truth for implementation state.
 
@@ -57,6 +60,13 @@ Planned Collaboration ID: `NMDC-DOC-INDEX-001`
 - Must not approve its own work when independent review is required.
 - Must not merge unless the user explicitly authorizes it.
 
+### Antigravity IDE
+
+- Current stabilization implementer/test environment for PR #8 when assigned by the owner.
+- Must run the real Microsoft Excel simulation described in `ANTIGRAVITY_HANDOFF.md`.
+- Must not treat static tests or green CI as owner acceptance.
+- Must not merge or approve its own work.
+
 ### GitHub
 
 - Source of truth and communication/audit bridge.
@@ -78,7 +88,7 @@ Merged sequence:
 
 Current active work is PR #8, branch `08-excel-user-interface`, for the Excel-only user interface and engine-integration layer. Its current PR title/status and the single `AGENT COLLABORATION — CURRENT STATUS` dashboard comment are authoritative. Do not assume the HEAD or review state from this file; live-fetch the PR first.
 
-The production `.xlsm`, actual macro attachment, packaged Windows executable, and end-to-end Microsoft Excel validation remain incomplete until explicitly implemented and tested. The future document-folder/hyperlink scanner must not begin before the core Excel/runtime path is proven.
+The packaged Windows path exists, but PR #8 is **not accepted** because the owner has reproduced Excel UX/runtime regressions. Follow `ANTIGRAVITY_HANDOFF.md` for the mandatory stabilization and real-Excel simulation gates. The future document-folder/hyperlink scanner must not begin before the core Excel/runtime path is proven.
 
 ## 6. Non-negotiable technical rules
 

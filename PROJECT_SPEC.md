@@ -1,6 +1,6 @@
 # NMDC Document Index — Project Specification
 
-> **Current implementation note:** Cycles 1–3 and the incremental staged-approval engine are complete. The earlier single-sheet Cycle-4 wording below records the original planning baseline; the approved multi-sheet Excel-only product requirements in `USER_PRODUCT_REQUIREMENTS.md`, `08_EXCEL_UI_PLAN.md`, and `excel/WORKBOOK_UI_SPEC.md` govern the current user interface and deployment direction.
+> **Current implementation note:** Cycles 1–3 and the incremental staged-approval engine are complete. The earlier single-sheet Cycle-4 wording below records the original planning baseline; the approved multi-sheet Excel-only product requirements in `USER_PRODUCT_REQUIREMENTS.md`, `RELEASE_ACCEPTANCE_TEST_PLAN.md`, `excel/WORKBOOK_UI_SPEC.md`, the active PR, and `ANTIGRAVITY_HANDOFF.md` govern the current user interface and deployment direction.
 
 ## 1. Objective
 

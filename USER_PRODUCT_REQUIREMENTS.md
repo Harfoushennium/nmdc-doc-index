@@ -69,7 +69,7 @@ This file captures the owner-visible product requirements that must remain true 
 ## Review workflow requirements
 
 - Pending Update is review-only and contains no normal row-level user input.
-- Source-level scope decisions are made in **Source Selection**, using include checkboxes and optional Owner Note.
+- Source-level scope decisions are made **inside Pending Update** in a same-sheet source-selection section, using modern Microsoft 365 in-cell checkboxes and an optional Owner Note. There is no separate owner-facing Source Selection worksheet.
 - Review Flags is only for genuine actionable anomalies.
 - Every table column has guidance explaining what the field means and whether it is system output, user input, or audit data.
 - Review decision choices must explain their effect; saving a decision records the review and does not silently rewrite the source workbook.

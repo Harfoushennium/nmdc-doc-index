@@ -1,5 +1,7 @@
 # NMDC Document Index — Release Acceptance Test Plan
 
+> **Current owner stabilization override (19 Sep 2026):** PR #8 is not release-accepted. Source selection must be integrated into **Pending Update** using modern Microsoft 365 in-cell checkboxes, and Live Filter must use a **real editable search input** with the search semantics/help from the owner's original reference module. Static tests and green CI are insufficient; real Microsoft Excel simulation is mandatory. See `ANTIGRAVITY_HANDOFF.md`.
+
 **Written by:** ChatGPT  
 **Role:** Implementer / Release Coordinator
 
@@ -53,7 +55,7 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 
 ## Gate D — Workbook structure and performance
 
-1. All required sheets and uniquely named tables must exist even when empty, including `Source Selection` / `SourceSelection`.
+1. All required sheets and uniquely named tables must exist even when empty, including all user-facing review/data tables. A legacy/internal `SourceSelection` table may exist only for backward compatibility; there must be no separate owner-facing Source Selection worksheet.
 2. No refresh may create/delete temporary worksheets.
 3. Home styling must be limited to the visible dashboard range; code must never format `ws.Cells` or otherwise style all 16,384 columns.
 4. The source base workbook must not contain a formatted M:XFD tail on Home.
@@ -70,8 +72,8 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 2. No visible CMD/console window during engine execution.
 3. Status/progress feedback remains visible while extraction and table refresh run.
 4. Every action on Home has plain-English guidance describing when to use it and what it changes.
-5. `Pending Update` is explicitly review-only; source-scope choices are performed in `Source Selection`, while `Review Flags` is reserved for genuine actionable anomalies.
-6. Empty Error Log/Review Flags/Source Selection tables remain valid Excel tables with headers and filters.
+5. `Pending Update` contains the review preview plus a clearly separated same-sheet source-selection section; `Review Flags` is reserved for genuine actionable anomalies.
+6. Empty Error Log/Review Flags and any same-sheet source-selection table remain valid Excel tables with headers and filters.
 7. Quoted commas/newlines in CSV exchange data must not split one logical row into multiple Excel rows.
 8. Body rows use professional default presentation: Aptos 10, automatic font color, no body fill, consistent alignment, sensible widths/heights, light borders and wrapping only where useful.
 9. Small tables AutoFit row height within safe limits; large extraction tables use compact stable row height to preserve performance.
@@ -90,7 +92,7 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 
 ## Gate G — Source Selection checkbox workflow
 
-1. `Source Selection` must show one Excel checkbox for each real source workbook row.
+1. The source-selection section inside `Pending Update` must show one modern Microsoft 365 in-cell checkbox for each real source workbook row.
 2. Checked means **include in index scope**; unchecked means **owner-excluded**.
 3. The underlying include value remains auditable/exportable even though the TRUE/FALSE text is hidden from normal view.
 4. Checkbox clicks update only the local selection state; they must **not** launch an engine scan individually.
@@ -105,18 +107,18 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 
 ## Gate H — Dynamic Live Filter
 
-1. Live Filter must be available only on table-heavy sheets that benefit from rapid search: Master Documents, Revisions, Transactions, Pending Update, Review Flags, User Decisions, Update History and Error Log.
-2. The implementation must use normal worksheet cells and ListObject filtering; it must not depend on an ActiveX textbox/MSForms control.
-3. Default mode searches **ALL COLUMNS** in the row.
-4. `Ctrl+Shift+F` lets the user click a table header and change the target column without editing VBA or table names.
-5. Normal search is case-insensitive and supports partial matching.
-6. Spaces and `+` mean **AND**; for example `SAFEEN + 3000` requires both terms.
-7. `-term` excludes a row containing that term; for example `SAFEEN -2000` includes SAFEEN rows but rejects rows containing 2000.
-8. A whole search expression enclosed in double quotes performs an exact case-sensitive cell match.
-9. Clearing the search cell removes only the live-filter criterion and does not delete data or corrupt other table content.
-10. The internal helper field must remain hidden and be prefixed `__NMDC_` so it cannot be confused with business data or used as a custom field name.
-11. Live Filter must survive ordinary table refreshes by rebuilding its helper field when required.
-12. Source Selection is intentionally excluded because its short list already has checkbox-specific interaction/status in row 3.
+1. Live Filter must be available on table-heavy sheets that benefit from rapid search: Master Documents, Revisions, Transactions, Pending Update, Review Flags, User Decisions, Update History and Error Log.
+2. The search input must be a **real editable Excel input**: the user can click inside it, see a caret, type normally, use Backspace normally, and never enter a global keyboard-capture mode.
+3. Filtering updates on **every keystroke** without Enter/Tab.
+4. The user explicitly chooses one target table column and the selected column is clearly displayed.
+5. The implementation must first inspect and preserve the search semantics/help from the owner's original Dynamic Live Filter reference module.
+6. At minimum test normal partial matching, multiple required terms/AND behaviour from the reference, excluded words, exact phrase matching and wildcard matching.
+7. Help/placeholder text must show the usable syntax with examples.
+8. The search implementation must work in the owner's corporate Microsoft 365 environment and must not reproduce runtime error 40040.
+9. A fake display shape plus `Application.OnKey` global keyboard capture is **not accepted**.
+10. Clearing/resetting Live Filter must never merge populated ranges, damage data, or disturb unrelated table filters.
+11. Live Filter must survive refresh, close/reopen and table rebuilds without manual VBA repair.
+12. Real Excel simulation is mandatory; static VBA string-contract tests are not sufficient evidence.
 
 ## Gate I — User Custom Fields & Keyword Mappings
 
@@ -179,7 +181,7 @@ After all automated gates are green, the owner should:
 6. confirm Review Flags is empty and Error Log contains no extraction/refresh error;
 7. sample Source File and Document Link hyperlinks across multiple projects and confirm every link opens the correct file;
 8. verify Pending Update remains a review-only change preview;
-9. open **Source Selection** and confirm every source row has an include checkbox; uncheck one harmless test source, add an Owner Note, click **Save Selection & Restage**, and verify that source is omitted from the staged proposal without modifying the original workbook;
+9. open **Pending Update** and confirm its source-selection section shows every source row with an include checkbox; uncheck one harmless test source, add an Owner Note, click **Save Selection & Restage**, and verify that source is omitted from the staged proposal without modifying the original workbook;
 10. re-check the same source, save/restage, and verify it returns to index scope;
 11. test **Check All** and cancel/confirm **Uncheck All** appropriately without approving the staged update;
 12. on Master Documents, test Live Filter in ALL COLUMNS mode with one term, two AND terms, one exclusion term and a quoted exact value; use Ctrl+Shift+F to target Document Title and clear the search afterward;
