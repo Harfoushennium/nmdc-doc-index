@@ -1,6 +1,9 @@
 # NMDC Document Index — Project Specification
 
-> **Current implementation note:** Cycles 1–3 and the incremental staged-approval engine are complete. The earlier single-sheet Cycle-4 wording below records the original planning baseline; the approved multi-sheet Excel-only product requirements in `USER_PRODUCT_REQUIREMENTS.md`, `RELEASE_ACCEPTANCE_TEST_PLAN.md`, `excel/WORKBOOK_UI_SPEC.md`, the active PR, and `ANTIGRAVITY_HANDOFF.md` govern the current user interface and deployment direction.
+**Revision:** 2.0 (Post-Stage 5 Stabilization & Real Excel Verification)  
+**Collaboration ID:** `NMDC-DOC-INDEX-001`  
+
+> **Current implementation note:** Cycles 1 through 4 are fully implemented and verified. The consolidated, macro-enabled Excel application (`NMDC_Document_Index.xlsm`), standalone high-speed engine (`nmdc_index_engine.exe`), Live Filter UserForm, 15 ListObjects, and 23-case real Microsoft Excel simulation matrix govern the production system. Complete user and release requirements are codified in `USER_PRODUCT_REQUIREMENTS.md` and `docs/RELEASE_ACCEPTANCE_TEST_PLAN.md`.
 
 ## 1. Objective
 
@@ -378,17 +381,22 @@ Perform reconciliation between:
 
 No unexplained row loss is acceptable.
 
-### Cycle 4 — Final Excel index
+### Cycle 4 — Final Excel Application & Integration (COMPLETED)
 
-Generate the user-facing XLSX plus the canonical CSV and verify formatting, hyperlinks, keys and PivotTable helpers.
+Generate the user-facing macro-enabled workbook (`NMDC_Document_Index.xlsm`), standalone high-speed engine, and interactive VBA controls:
+- Consolidated 15 worksheets and 15 unique named ListObjects.
+- Floating `frmNMDC_LiveFilter` UserForm with multi-column AND syntax search.
+- Formula-driven custom fields and keyword mappings.
+- In-cell source-selection checkboxes in `Pending Update`.
+- Fast responsive background staging with status bar progress.
+- 64-bit safe APIs (`PtrSafe Sleep`) and commercial OneDrive path resolution.
+- 23-case real Microsoft Excel simulation matrix (`test_real_excel_simulation.py`) passed cleanly.
 
-### Cycle 5 — Routine automation
+### Cycle 5 — Routine Automation & Maintenance (IN PROGRESS)
 
-Add local Windows refresh convenience and GitHub automation.
-
-Planned local entry point may be an `UPDATE_INDEX.cmd` or equivalent wrapper.
-
-GitHub Actions should rebuild when relevant `DATA/**` inputs or configuration rules change, while avoiding output-trigger loops.
+- Local entry point: Double-click `NMDC_Document_Index.xlsm` or use `packaging/Create_NMDC_Document_Index.vbs` for clean installation.
+- Clean packaging via `tests/excel_e2e/assemble_package.py` and SHA-256 base chunk verification (`9225a417...`).
+- GitHub Actions CI builds and verifies package integrity without modifying source `DATA/`.
 
 ## 14. Acceptance principles
 
@@ -400,11 +408,12 @@ Acceptance requires evidence that:
 - superseded sources are excluded for the correct reason;
 - merged-cell revision/event history is preserved;
 - hyperlinks survive where technically available;
-- unknown inputs are visible;
+- unknown inputs are visible in Review Flags;
 - no source rows disappear without reconciliation;
 - output classifications are traceable to rule IDs;
 - runtime refresh requires no LLM;
-- source files remain untouched.
+- source files in `DATA/` remain 100% untouched and read-only;
+- real desktop Microsoft Excel executes all automated macros and actions cleanly.
 
 ## 15. Collaboration governance
 
@@ -412,9 +421,9 @@ Planned Collaboration ID: `NMDC-DOC-INDEX-001`.
 
 Roles:
 
-- User: owner/final decision maker.
-- ChatGPT: architect/planner and independent reviewer.
-- Hermes: implementer.
-- GitHub PR: source of truth and communication bridge.
+- User / Owner: Final authority and decision maker. Merge authority belongs exclusively to the owner.
+- ChatGPT: Architect, planner, and independent reviewer.
+- Hermes / Codex: Implementer and test engineer.
+- GitHub PR #8: Authoritative tracking and communication bridge.
 
-Hermes must not approve its own implementation. No merge is authorized unless the user explicitly approves it.
+No agent may self-merge. The PR remains in CHANGES until the owner authorizes merge.

@@ -1,91 +1,85 @@
 # NMDC Document Index — User Product Requirements
 
-**Written by:** ChatGPT  
-**Role:** Implementer / Release Coordinator
+**Revision:** 2.0 (Post-Stage 5 Stabilization & Real Excel Verification)  
+**Collaboration ID:** `NMDC-DOC-INDEX-001`  
+**Role:** Implementer / Test Engineer / Release Coordinator  
 
-This file captures the owner-visible product requirements that must remain true as the Excel interface and extraction engine evolve.
+This file captures the owner-visible product requirements that govern the NMDC Document Index application, user interface, and backend engine.
 
-## Core product boundary
+---
 
-- Excel is the normal user interface.
-- The owner must not need Python, PowerShell, Command Prompt, GitHub, or direct runtime-file editing for normal use.
-- Source DATA workbooks are read-only inputs and must never be modified by the index.
-- No staged update may silently replace the approved index.
-- The owner remains the final approval and merge authority.
+## 1. Core Product Boundary
 
-## Reliability requirements
+- **Excel is the primary user interface:** The end-user operates the system entirely within Microsoft Excel (`NMDC_Document_Index.xlsm`).
+- **No Developer Tooling Required:** The owner does not need Python, PowerShell, Command Prompt, Git, or direct runtime-file editing for normal daily operations.
+- **Read-Only Source Policy:** Source `DATA/` workbooks (`METHODS/` and `TECH/`) are historical records and are **strictly read-only**. The index pipeline never unmerges, saves, edits, normalizes, or repairs files in `DATA/`.
+- **Staged Approval Model:** No scan or update may silently replace or modify the approved index. All extractions are initially staged into `Pending Update` for explicit operator review and approval.
+- **Merge & Acceptance Authority:** The repository owner alone holds final acceptance and merge authority.
 
-- The current known valid DATA corpus must complete a Full Rescan with no actionable extraction Review Flags and no extraction/refresh Error Log entries.
-- Known valid layout variations must be handled automatically.
-- Intentionally empty register sheets must not be reported as extraction failures.
-- Routine lifecycle information such as new/changed sources belongs in Pending Update/history, not Review Flags.
-- Genuine future faults (locked/corrupt sources, true conflicts, ambiguous duplicates) must remain visible and fail safely.
-- Transient Excel/OneDrive file-sharing errors must be retried automatically before a source is declared unavailable.
-- If a source remains unavailable after retries, the approved index must be protected and the source must not be interpreted as removed.
+---
 
-## Excel workbook requirements
+## 2. Reliability & Source Interpretation
 
-- Every required data sheet keeps a valid uniquely named Excel table even when empty.
-- Refresh populates tables by exact ListObject/table name and never destroys titles/navigation areas.
-- Active filters/sorts are reset before refreshed rows are replaced so hidden/sorted row state cannot mix data after updates.
-- Source File and Document Link hyperlinks are row-specific and must open the correct target.
-- No temporary worksheets may be left behind during refresh.
-- Empty result tables must remain structurally valid.
-- Dates must be real Excel dates, numeric counts real numbers, and document/revision identifiers preserved as text.
+- **Lossless Extraction:** Merged-cell hierarchies (`Project -> Document -> Revision -> Event`) must be preserved without uncontrolled fill-down leakage.
+- **Valid Baseline Corpus:** Full Rescan on the known valid `DATA/` corpus must complete with zero actionable extraction Review Flags and zero Error Log entries.
+- **Transient Error Handling:** File-sharing or lock errors on synchronized OneDrive files must be retried automatically before declaring a source unavailable.
+- **Safe Fallbacks:** If a source file is temporarily inaccessible, the approved index remains protected and the source is not marked as deleted.
+- **Empty Result Integrity:** Intentionally empty registers or empty search results must keep their named Excel tables structurally valid without crashing VBA.
 
-## Table presentation requirements
+---
 
-- Tables must be professionally formatted without manual cleanup.
-- Body cells use Aptos 10, automatic font color and no forced fill color.
-- Headers remain visually distinct and readable.
-- Long text wraps only where helpful.
-- Alignment is field-appropriate and consistent.
-- Row heights and column widths must be suitable for the actual data while preserving performance on large tables.
-- User-editable fields are clearly identifiable through notes, appropriate controls and guidance rather than relying on arbitrary body fill colors.
-- Table columns are ordered according to the review workflow: business identifiers and decisions first, technical/audit keys later.
+## 3. Excel Workbook Architecture
 
-## User-input control requirements
+The production workbook (`NMDC_Document_Index.xlsm`) consists of exactly **15 worksheets** and **15 unique named Excel tables (`ListObjects`)**:
 
-- Use Excel checkboxes for direct binary owner choices when practical.
-- Source workbook inclusion/exclusion is checkbox-first: checked means include in index scope; unchecked means intentionally exclude.
-- Checkbox changes are collected first and applied in one **Save Selection & Restage** action; checking/unchecking must not trigger a scan per click.
-- Provide **Check All** and **Uncheck All** controls for source selection.
-- Excluding a source never edits or deletes the source workbook and never changes the approved index until a later explicit approval.
-- Use dropdown menus when one field has three or more mutually exclusive choices, for example Review Flags decisions, resolution status, rule scope and match type.
-- Keep explanatory comments/notes as free text.
-- Do not add large numbers of unnecessary checkbox objects to large extraction tables because workbook responsiveness is a product requirement.
+1. **`Home`**: Executive dashboard, key metrics cards, and single-click action buttons.
+2. **`Master Documents`** (`MasterDocuments` table): Unique document-level register.
+3. **`Revisions`** (`RevisionRegister` table): Revision-level history with latest-revision flags.
+4. **`Transactions`** (`EventRegister` table): Complete event/submission/transmittal transaction log.
+5. **`Pending Update`** (`PendingUpdate` table): Staging area for new and changed records awaiting approval. Includes in-cell source-selection checkboxes.
+6. **`Review Flags`** (`ReviewFlags` table): Flags documents requiring classification review, ambiguous numbers, or syntax warnings.
+7. **`User Decisions`** (`UserDecisionLog` table): Persistent audit log of operator review decisions.
+8. **`Configuration`** (`Configuration` table): Path configurations (`Data Folder`, runtime directories, engine executable path).
+9. **`Rules & Mappings`** (`ClassificationRules` table): Non-coder editable document classification taxonomy.
+10. **`Custom Fields`** (`CustomFields` table): Formula-driven custom columns and user-defined metadata.
+11. **`Update History`** (`UpdateHistory` table): Historical record of all staged, approved, held, or rejected runs.
+12. **`Error Log`** (`ErrorLog` table): Plain-English error reporting with recommended actions.
+13. **`System Data`** (`BaselineCounts` & `SourceInventory` tables): Internal audit counts and source inventory.
+14. **`Source Selection`** (`SourceSelection` table): Backup source selection registry.
 
-## Rules & Mappings requirements
+---
 
-- Rules & Mappings must be usable by a non-coder.
-- The normal view must emphasize plain-language concepts: where to look, what to match, and what classification to assign.
-- Normal matching uses plain text: `CONTAINS`, `EXACT`, `STARTS_WITH`, or `ENDS_WITH`.
-- Shipped/default rules must not require REGEX.
-- Normal categorical inputs use dropdown menus.
-- Add Simple Rule should generate a safe Rule ID / Priority and sensible defaults.
-- `CONTAINS` is the preferred normal-user match method.
-- Invalid or duplicate rules must be blocked before staging rather than silently accepted.
+## 4. Live Filter & User Experience Requirements
 
-## Review workflow requirements
+- **Instant Multi-Column Live Filter:**
+  - Invoked via keyboard shortcut **`Ctrl+Shift+F`** or by clicking the **Live Filter** button.
+  - Displays a high-performance floating UserForm (`frmNMDC_LiveFilter`).
+  - Automatically targets the active worksheet (`Master Documents`, `Revisions`, `Transactions`, or `Pending Update`).
+  - Multi-term syntax support: typing multiple space-separated terms performs an `AND` filter across all columns.
+  - Instant **Clear** button resets table filters immediately without losing column layout or sorting.
+- **Visual Presentation Standards:**
+  - Font: Clean Aptos 10 typography across all data cells.
+  - Automatic font coloring with no harsh or arbitrary cell background fills.
+  - Distinct headers and field-appropriate column alignments.
+  - Row heights and column widths formatted to prevent visual clutter and maintain high scroll performance.
+- **64-Bit & Enterprise Path Compatibility:**
+  - VBA declarations use `PtrSafe` (e.g. `Declare PtrSafe Sub Sleep Lib "kernel32"`).
+  - Commercial OneDrive paths (`https://...my.sharepoint.com/...`) are automatically translated to local filesystem paths.
 
-- Pending Update is review-only and contains no normal row-level user input.
-- Source-level scope decisions are made **inside Pending Update** in a same-sheet source-selection section, using modern Microsoft 365 in-cell checkboxes and an optional Owner Note. There is no separate owner-facing Source Selection worksheet.
-- Review Flags is only for genuine actionable anomalies.
-- Every table column has guidance explaining what the field means and whether it is system output, user input, or audit data.
-- Review decision choices must explain their effect; saving a decision records the review and does not silently rewrite the source workbook.
-- Reset All Records and Undo Last Approval must protect source data/configuration/audit history.
+---
 
-## UX/performance requirements
+## 5. Staged Review & Admin Controls
 
-- No black command window during normal engine execution.
-- No merged-cell warning on workbook open.
-- No Excel slow-workbook warning caused by formatting the unused worksheet tail.
-- Full Rescan and refresh show meaningful progress/activity feedback.
-- The workbook should remain responsive during long engine operations.
-- Normal **Update Changed Files** should avoid rereading/reprocessing unchanged sources.
-- Profiling/extraction should use a persistent local cache where possible so OneDrive source workbooks are not repeatedly opened during normal scans.
-- Runtime/state/cache files should be stored outside the synchronized package folder when `%LOCALAPPDATA%` is available.
+- **Source Scope Controls:** Checkboxes inside `Pending Update` allow including or excluding entire source workbooks in a single **Save Selection & Restage** operation without repeatedly re-scanning.
+- **Non-Coder Rules Editor:** Plain-text match types (`CONTAINS`, `EXACT`, `STARTS_WITH`, `ENDS_WITH`). No complex regular expressions required for routine rules.
+- **Safe Recovery Actions:**
+  - **Reset All Records:** Deletes runtime cache and index records without touching source `DATA/` or configuration files.
+  - **Undo Last Approval:** Restores the previous approved index version from audit history.
 
-## Release rule
+---
 
-PR #8 remains CHANGES and unmerged until the owner completes the final Excel acceptance sequence on a fresh production package and explicitly authorizes merge.
+## 6. Acceptance & Release Criteria
+
+- **Real Excel Simulation Matrix:** Must pass all automated gates in the 23-case real Microsoft Excel matrix (`test_real_excel_simulation.py`) with zero failures.
+- **Production Package:** Verified standalone installation package containing `Create_NMDC_Document_Index.vbs`, pre-compiled engine, VBA modules, and SHA-256 verified base workbook chunks.
+- **Release Status:** PR #8 remains in `CHANGES` until the repository owner completes final interactive acceptance and authorizes merge.
