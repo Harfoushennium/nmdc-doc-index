@@ -228,6 +228,36 @@ Handler:
         Err.Number & " - " & Err.Description
 End Sub
 
+Public Sub NMDC_LiveFilterSelectColumnByName(ByVal sheetName As String, ByVal columnName As String)
+    On Error GoTo Handler
+
+    Dim ws As Worksheet
+    Dim table As ListObject
+    Dim targetColumn As ListColumn
+
+    Set ws = ThisWorkbook.Worksheets(sheetName)
+    Set table = NMDC_LiveFilterTableForSheet(ws)
+    If table Is Nothing Then Err.Raise vbObjectError + 951, "NMDC Live Filter", "No searchable table on " & sheetName
+
+    Set targetColumn = Nothing
+    On Error Resume Next
+    Set targetColumn = table.ListColumns(columnName)
+    On Error GoTo Handler
+    If targetColumn Is Nothing Then Err.Raise vbObjectError + 952, "NMDC Live Filter", "Unknown search column: " & columnName
+    If Left$(CStr(targetColumn.Name), 7) = "__NMDC_" Then Err.Raise vbObjectError + 953, "NMDC Live Filter", "Internal helper columns cannot be searched."
+
+    NMDC_LiveFilterSetTarget ws, targetColumn
+    ws.Range("F3").Value = targetColumn.Name
+    NMDC_LiveFilterApplyForSheet ws
+    Exit Sub
+
+Handler:
+    NMDC_LogError "LIVE_FILTER_TARGET_NAME_ERROR", _
+        "Excel could not set the Live Filter target column.", _
+        Err.Number & " - " & Err.Description
+    Err.Raise Err.Number, "NMDC Live Filter", Err.Description
+End Sub
+
 Public Sub NMDC_LiveFilterChooseColumn()
     On Error GoTo Handler
 
