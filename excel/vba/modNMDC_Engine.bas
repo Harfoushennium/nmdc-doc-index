@@ -2,7 +2,7 @@ Attribute VB_Name = "modNMDC_Engine"
 Option Explicit
 
 #If VBA7 Then
-Private Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As LongPtr)
+Private Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
 #Else
 Private Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
 #End If
@@ -13,7 +13,61 @@ Private Const EXCHANGE_RELATIVE_PATH As String = "excel_exchange"
 Private Const CONFIG_RELATIVE_PATH As String = "config"
 
 Public Function NMDC_WorkbookFolder() As String
-    NMDC_WorkbookFolder = ThisWorkbook.Path
+    Dim wbPath As String
+    wbPath = ThisWorkbook.Path
+    If Left$(wbPath, 4) = "http" Then
+        Dim localBase As String
+        localBase = NMDC_ResolveOneDriveLocalBase(wbPath)
+        If Len(localBase) > 0 Then
+            NMDC_WorkbookFolder = localBase
+            Exit Function
+        End If
+    End If
+    NMDC_WorkbookFolder = wbPath
+End Function
+
+Private Function NMDC_ResolveOneDriveLocalBase(ByVal webUrl As String) As String
+    On Error GoTo Fallback
+    Dim shell As Object
+    Dim fso As Object
+    Dim userFolder As String
+    Dim envVal As String
+    Dim relPath As String
+    Dim marker As String
+    Dim pos As Long
+    
+    Set shell = CreateObject("WScript.Shell")
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    
+    ' Check OneDrive Commercial Account
+    On Error Resume Next
+    userFolder = shell.RegRead("HKEY_CURRENT_USER\Software\Microsoft\OneDrive\Accounts\Business1\UserFolder")
+    On Error GoTo Fallback
+    
+    If Len(userFolder) > 0 And fso.FolderExists(userFolder) Then
+        marker = "NMDC DOCUMENTS INDEX"
+        pos = InStr(1, webUrl, marker, vbTextCompare)
+        If pos > 0 Then
+            relPath = Mid$(webUrl, pos)
+            relPath = Replace(relPath, "/", "\")
+            relPath = Replace(relPath, "%20", " ")
+            ' Try building from Desktop/NPCC/AI PROJECTS
+            Dim candidate As String
+            candidate = fso.BuildPath(userFolder, "Desktop\NPCC\AI PROJECTS\" & relPath)
+            If fso.FolderExists(candidate) Then
+                NMDC_ResolveOneDriveLocalBase = candidate
+                Exit Function
+            End If
+            candidate = fso.BuildPath(userFolder, relPath)
+            If fso.FolderExists(candidate) Then
+                NMDC_ResolveOneDriveLocalBase = candidate
+                Exit Function
+            End If
+        End If
+    End If
+
+Fallback:
+    NMDC_ResolveOneDriveLocalBase = ""
 End Function
 
 Public Function NMDC_EnginePath() As String
