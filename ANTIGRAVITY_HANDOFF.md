@@ -23,7 +23,7 @@ Do not return only a plan.
 - Repository: `Harfoushennium/nmdc-doc-index`
 - Active PR: `#8 — [08][CHANGES] Excel User Interface & Engine Integration`
 - Branch: `08-excel-user-interface`
-- Repository was cleaned for this handoff on commit `d98ee4c4bb28953f4f59dfe78c8907af1ab67c31`.
+- Repository cleanup baseline before this handoff: `9f8bafb050e4305b5687c85b6eb4667f2f1c0314`.
 - Always live-read PR #8 and use the actual current HEAD after pulling.
 - Owner is the **only final merge authority**.
 
@@ -46,30 +46,53 @@ Mandatory governance:
 
 ## 3. Clean-repository rules
 
-The branch has already been cleaned of obsolete historical cycle plans, duplicated owner-review workbooks, old pilot validation packages, and obsolete one-off workflows.
+The branch has been deliberately reduced to the files needed to develop, test, package and audit the current product.
 
-Do **not** restore those deleted artifacts just because they exist in git history.
+The latest cleanup removed:
+- generated `outputs/cycle1`, `outputs/cycle2` and `outputs/cycle3` snapshots (~30 MB);
+- the obsolete static `excel/REAL_DATA_REVIEW_PACKAGE.md` review-package note;
+- CI auto-commit behaviour for generated profiler/extractor outputs.
+
+Generated validation evidence is now rebuilt from read-only `DATA/` by the validation commands and GitHub Actions. **Do not restore or recommit `outputs/`.**
+
+Current-tree size after cleanup is approximately **16.35 MB / 155 tracked files**, dominated by:
+- real regression DATA (~7.6 MB);
+- audited workbook base chunks (~7.8 MB);
+- active source/tests/configuration.
 
 Canonical project areas to keep/use:
 
 - `DATA/` — authoritative read-only real-data regression corpus.
 - `config/` — editable deterministic configuration.
-- `excel/` — workbook contract and VBA source.
+- `excel/base_chunks/` — audited production workbook source chunks required by packaging.
+- `excel/contracts/` and `excel/vba/` — workbook contract and active VBA source.
 - `nmdc_profiler/` — profiler/extractor/update-engine implementation.
 - `packaging/` — Windows production package builder.
 - `tests/` — active regression tests; add real-Excel E2E tests here.
-- `tools/` — only current diagnostic/verification tools.
-- `outputs/` — deterministic validation outputs/baselines used by CI.
+- `tools/` — current diagnostics/verification tools.
 - `.github/workflows/` — active profiler, Cycle 2, Cycle 3 and production-package validation.
+- root entry points `profiler.py`, `sentinel_extract.py`, `full_extract.py`, `nmdc_index_engine.py`.
 - `README.md`, `PROJECT_SPEC.md`, `USER_PRODUCT_REQUIREMENTS.md`, `CLASSIFICATION_MODEL.md`, `RELEASE_ACCEPTANCE_TEST_PLAN.md`, `AGENTS.md` and this handoff.
 
-Use a **local non-OneDrive workspace** for development and repeated simulation.
+`outputs/` is intentionally ignored and is generated locally/CI only.
+
+Do not delete or “clean up” `DATA/` duplicates/versions: several are intentional regression inputs used to test newest-version selection and exclusion logic.
+
+For the cleanest Antigravity checkout, use a shallow branch clone rather than downloading historical blobs:
+
+```powershell
+git clone --depth 1 --branch 08-excel-user-interface https://github.com/Harfoushennium/nmdc-doc-index.git C:\NMDC_Index_Antigravity_Test
+cd C:\NMDC_Index_Antigravity_Test
+git status
+```
+
+Do not work directly inside the owner's OneDrive project folder.
 
 The owner's normal project folder is:
 
 `C:\0\OneDrive - NMDC Group\Desktop\NPCC\AI PROJECTS\NMDC DOCUMENTS INDEX`
 
-Recommended scratch/test location:
+Use a local scratch/test location such as:
 
 `C:\NMDC_Index_Antigravity_Test`
 
@@ -754,7 +777,7 @@ Do not deliver a locally assembled package that differs from the validated GitHu
 
 Execute in this order:
 
-1. Pull latest `08-excel-user-interface`.
+1. Clone/pull the latest `08-excel-user-interface`. Prefer the shallow clone command in Section 3 so historical generated artifacts are not downloaded unnecessarily.
 2. Live-read PR #8 and dashboard.
 3. Confirm cleanup commit/history and current HEAD.
 4. Create local non-OneDrive test workspace.
