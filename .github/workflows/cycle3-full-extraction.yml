@@ -87,18 +87,6 @@ jobs:
             exit 1
           fi
 
-      - name: Commit deterministic Cycle 3 outputs
-        if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add outputs/cycle3/full_records.csv outputs/cycle3/full_reconciliation.json outputs/cycle3/review_queue.csv outputs/cycle3/full_report.md
-          if git diff --cached --quiet; then
-            echo 'Cycle 3 outputs already current.'
-          else
-            git commit -m 'chore: regenerate Cycle 3 full extraction outputs [skip ci]'
-            git push
-          fi
 
   validate-windows:
     runs-on: windows-latest

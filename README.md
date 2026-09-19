@@ -122,3 +122,8 @@ Planned Collaboration ID: `NMDC-DOC-INDEX-001`
 - **GitHub PR** — source of truth and communication/audit bridge.
 
 PR titles use `[SEQ][STATUS] Title`, important comments identify `Written by` and `Role`, and one `AGENT COLLABORATION — CURRENT STATUS` comment is updated in place. No merge is allowed unless the owner explicitly authorizes it.
+
+
+## Generated validation outputs
+
+The `outputs/` directory is intentionally **not tracked**. Profiler, sentinel, and full-extraction evidence is regenerated deterministically from the read-only `DATA/` sources by local validation and GitHub Actions. This keeps a fresh clone focused on source code, tests, configuration, the audited workbook base, and the real test DATA rather than carrying ~30 MB of stale generated CSV/JSON snapshots.

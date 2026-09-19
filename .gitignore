@@ -14,3 +14,6 @@ __pycache__/
 /tests/excel_e2e/artifacts/
 *.log
 ~$*.xls*
+
+# Generated profiler/extractor evidence; CI regenerates this from DATA/
+/outputs/

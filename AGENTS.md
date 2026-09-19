@@ -299,3 +299,8 @@ If you are a fresh LLM/agent arriving at this repository:
 4. Continue from the last accepted state; do not re-ask the user for requirements already recorded here.
 5. If implementation and documentation conflict, stop and surface the conflict to the planner/user rather than guessing.
 6. If no collaboration PR exists, inspect the merged history and current product status to plan the next numbered phase; do not restart a completed cycle.
+
+
+## 15. Repository cleanliness
+
+Generated validation outputs are not repository source. The `outputs/` directory is ignored and must be regenerated from `DATA/` when tests require it. Do not commit profiler/sentinel/full-extraction CSV, JSON, or report snapshots. Keep source code, configuration, tests, documentation, workbook base chunks, and read-only `DATA/` in the repository.
