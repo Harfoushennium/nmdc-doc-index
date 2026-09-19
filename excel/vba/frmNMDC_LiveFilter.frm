@@ -24,6 +24,18 @@ Public Sub NMDC_Bind(ByVal sheetName As String, ByVal currentText As String, ByV
     Me.lblHelp.Caption = "Partial terms; spaces/+ = AND; -word = exclude; quotes = exact; * and ? = wildcard. Results update as you type."
 End Sub
 
+Public Sub NMDC_FocusSearch()
+    On Error Resume Next
+    Me.cmbSearch.SetFocus
+    Me.cmbSearch.SelStart = Len(Me.cmbSearch.Text)
+    On Error GoTo 0
+End Sub
+
+Public Sub NMDC_SetSearchText(ByVal value As String)
+    Me.cmbSearch.Text = value
+    NMDC_FocusSearch
+End Sub
+
 Private Sub UserForm_Activate()
     Me.cmbSearch.SetFocus
     Me.cmbSearch.SelStart = Len(Me.cmbSearch.Text)
