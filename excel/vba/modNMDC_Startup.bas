@@ -34,7 +34,7 @@ Public Sub NMDC_ApplyWorkbookGuidance()
     NMDC_SetSheetBanner "Transactions", _
         "SYSTEM OUTPUT - READ ONLY. One row per extracted event/transaction. Filters and sorts are reset on refresh. Use Source File / Document Link to verify the source record."
     NMDC_SetSheetBanner "Pending Update", _
-        "REVIEW ONLY - NO USER INPUT ON THIS SHEET. This table shows what will change if the staged update is approved. Filters and sorts are reset on refresh. Make decisions only in Review Flags, then use Approve / Hold / Reject from Home."
+        "REVIEW + SOURCE SELECTION. The staged-changes table is read only. In the source-selection section below it, use Include in Index? checkboxes and optional Owner Note, then Save Source Choices & Restage. Approve / Hold / Reject is done from Home."
     NMDC_SetSheetBanner "Review Flags", _
         "USER ACTION SHEET. Editable fields are User Decision, User Comment and Resolution Status. Filters and sorts are reset on refresh. Decisions record your review; they do NOT edit the source workbook or silently rewrite extracted data."
     NMDC_SetSheetBanner "User Decisions", _
@@ -618,7 +618,15 @@ Private Function NMDC_HeaderHelp(ByVal tableName As String, ByVal headerName As 
         Case "PLAIN-ENGLISH SUMMARY"
             NMDC_HeaderHelp = "SYSTEM OUTPUT - READ ONLY. Explains what this staged row means if the update is approved."
         Case "REVIEW REQUIRED"
-            NMDC_HeaderHelp = "SYSTEM OUTPUT - READ ONLY. YES means the change deserves user attention before approval. Review decisions are entered on Review Flags, not Pending Update."
+            NMDC_HeaderHelp = "SYSTEM OUTPUT - READ ONLY. YES means the staged change deserves attention before approval. Row-level review decisions are entered on Review Flags; source include/exclude choices are made in the source-selection section on Pending Update."
+        Case "INCLUDE IN INDEX?"
+            NMDC_HeaderHelp = "USER INPUT - CHECKBOX. Checked = include this entire source workbook in the next staged proposal. Unchecked = intentionally exclude it. The source file itself is never deleted or edited. Click Save Source Choices & Restage after finishing your selections."
+        Case "OWNER NOTE"
+            NMDC_HeaderHelp = "USER INPUT - OPTIONAL TEXT. Add a short reason or reminder for this source decision, for example Duplicate register, Not authoritative, or Outside index scope."
+        Case "SELECTION REASON"
+            NMDC_HeaderHelp = "SYSTEM/AUDIT OUTPUT - READ ONLY. Explains why this source is currently included or excluded, including an owner decision or automatic source-selection rule."
+        Case "LAST PROCESSED RUN"
+            NMDC_HeaderHelp = "SYSTEM/AUDIT OUTPUT - READ ONLY. The most recent scan/run that processed this source workbook."
         Case "USER DECISION"
             NMDC_HeaderHelp = "USER INPUT. ACKNOWLEDGED = I reviewed the flag; extraction is unchanged. NO ACTION REQUIRED = accept current extraction for this flag. NEEDS SOURCE CORRECTION = source workbook must be corrected and rescanned; no automatic edit occurs. NEEDS PARSER/MAPPING FIX = parser/rule needs correction and a new scan; no automatic edit occurs. HOLD FOR REVIEW = leave unresolved; do not approve yet. Saving a decision records it; it does not silently rewrite extracted data."
         Case "USER COMMENT"
