@@ -129,7 +129,7 @@ Public Sub NMDC_StageFastCompleted()
 
     Application.StatusBar = False
     MsgBox "The proposed update is ready for review." & vbCrLf & vbCrLf & _
-           "Review Pending Update. Use the native Excel checkboxes in the source panel on the right to include or exclude source workbooks, then Save Source Choices & Restage." & vbCrLf & _
+           "Review Pending Update. Use the native Excel checkboxes in the source-selection section below the staged changes table to include or exclude source workbooks, then Save Source Choices & Restage." & vbCrLf & _
            "When acceptable, return Home and choose Approve Update, Hold Update, or Reject Update.", _
            vbInformation, "NMDC Document Index"
     NMDC_GoToSheet "Pending Update"
