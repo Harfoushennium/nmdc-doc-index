@@ -221,10 +221,10 @@ Private Sub NMDC_ApplyHomeWorkflowGuide()
     NMDC_SetGuideRow ws, 31, "1", "SELECT SOURCE", "Select Data Folder once. Application/runtime stays local; source files may remain in OneDrive."
     NMDC_SetGuideRow ws, 32, "2", "SCAN", "Use Update Changed Files normally. Full Rescan is only for deliberate rebuilds or troubleshooting."
     NMDC_SetGuideRow ws, 33, "3", "REVIEW", "Open Pending Update. The left table is the proposed change list. Nothing is approved yet."
-    NMDC_SetGuideRow ws, 34, "4", "CHOOSE SOURCES", "On Pending Update, use the native Excel checkboxes in the source panel at the right: checked = include, unchecked = exclude. Save Source Choices & Restage once."
+    NMDC_SetGuideRow ws, 34, "4", "CHOOSE SOURCES", "On Pending Update, use the native Excel checkboxes in the source-selection section below the staged changes table: checked = include, unchecked = exclude. Save Source Choices & Restage once."
     NMDC_SetGuideRow ws, 35, "5", "DECIDE", "Approve = accept the whole remaining proposal; Hold = postpone; Reject = discard the staged proposal."
     NMDC_SetGuideRow ws, 36, "6", "EXCEPTIONS", "Review Flags is only for genuine extraction/data exceptions. The validated current DATA should produce zero extraction flags."
-    NMDC_SetGuideRow ws, 37, "TIP", "LIVE FILTER", "Choose one table column, then type. Filtering updates on every key. Esc/Enter stops typing mode; Reset clears it."
+    NMDC_SetGuideRow ws, 37, "TIP", "LIVE FILTER", "Choose one table column, then click the search bar (or OPEN LIVE FILTER) and type in the real search input. Results update on every key; Reset clears the filter."
     NMDC_SetGuideRow ws, 38, "TIP", "RULES", "Rules & Mappings uses normal text matching: CONTAINS, EXACT, STARTS WITH or ENDS WITH."
 End Sub
 
@@ -254,7 +254,7 @@ Private Sub NMDC_ApplyPendingUpdateDecisionGuide()
     Set ws = ThisWorkbook.Worksheets("Pending Update")
 
     NMDC_SafeMergeAndSet ws, "A4:I4", _
-        "REVIEW WORKFLOW. Left table = proposed record changes. Right panel = source workbook choices using native Excel checkboxes. Checked = include; unchecked = exclude. Save Source Choices & Restage after changes. Approve/Hold/Reject applies to the remaining whole proposal."
+        "REVIEW WORKFLOW. The first table shows proposed record changes. The source-selection section below it contains one native Excel checkbox per source workbook. Checked = include; unchecked = exclude. Save Source Choices & Restage after changes. Approve/Hold/Reject applies to the remaining whole proposal."
 
     With ws.Range("A4:I4")
         .Interior.Color = RGB(255, 247, 219)
