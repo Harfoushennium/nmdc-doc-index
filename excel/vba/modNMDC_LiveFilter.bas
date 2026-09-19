@@ -208,6 +208,26 @@ Handler:
         Err.Number & " - " & Err.Description
 End Sub
 
+Public Sub NMDC_LiveFilterSelectionChange(ByVal Sh As Object, ByVal Target As Range)
+    On Error GoTo Handler
+
+    Dim ws As Worksheet
+    If Sh Is Nothing Then Exit Sub
+    If Target Is Nothing Then Exit Sub
+    If TypeName(Sh) <> "Worksheet" Then Exit Sub
+    Set ws = Sh
+    If NMDC_LiveFilterTableForSheet(ws) Is Nothing Then Exit Sub
+    If Intersect(Target, ws.Range("B3:D3")) Is Nothing Then Exit Sub
+
+    NMDC_LiveFilterShowForSheet ws
+    Exit Sub
+
+Handler:
+    NMDC_LogError "LIVE_FILTER_SELECTION_ERROR", _
+        "Excel could not open the Live Filter input from the search bar.", _
+        Err.Number & " - " & Err.Description
+End Sub
+
 Public Sub NMDC_LiveFilterChooseColumn()
     On Error GoTo Handler
 
@@ -271,21 +291,25 @@ End Sub
 
 Public Sub NMDC_LiveFilterShow()
     On Error GoTo Handler
-    Dim ws As Worksheet
-    Dim table As ListObject
     If ActiveSheet Is Nothing Then Exit Sub
     If TypeName(ActiveSheet) <> "Worksheet" Then Exit Sub
-    Set ws = ActiveSheet
-    Set table = NMDC_LiveFilterTableForSheet(ws)
-    If table Is Nothing Then Exit Sub
-    NMDC_LiveFilterConfigureSheet ws
-    frmNMDC_LiveFilter.NMDC_Bind ws.Name, CStr(ws.Range("B3").Value), CStr(ws.Range("F3").Value)
-    frmNMDC_LiveFilter.Show vbModeless
+    NMDC_LiveFilterShowForSheet ActiveSheet
     Exit Sub
 Handler:
     NMDC_LogError "LIVE_FILTER_FORM_ERROR", _
         "Excel could not open the modeless Live Filter input.", _
         Err.Number & " - " & Err.Description
+End Sub
+
+Private Sub NMDC_LiveFilterShowForSheet(ByVal ws As Worksheet)
+    Dim table As ListObject
+    Set table = NMDC_LiveFilterTableForSheet(ws)
+    If table Is Nothing Then Exit Sub
+
+    NMDC_LiveFilterConfigureSheet ws
+    frmNMDC_LiveFilter.NMDC_Bind ws.Name, CStr(ws.Range("B3").Value), CStr(ws.Range("F3").Value)
+    If Not frmNMDC_LiveFilter.Visible Then frmNMDC_LiveFilter.Show vbModeless
+    frmNMDC_LiveFilter.NMDC_FocusSearch
 End Sub
 
 Public Sub NMDC_LiveFilterFormChanged(ByVal sheetName As String, ByVal queryText As String)
