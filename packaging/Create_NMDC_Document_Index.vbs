@@ -104,6 +104,18 @@ If Err.Number <> 0 Then
 End If
 TraceStep "workbook-saved-as-xlsm"
 
+Err.Clear
+Set workbook = ReacquireSavedWorkbook(excel, outputWorkbook)
+If workbook Is Nothing Then
+    Err.Raise vbObjectError + 111, "NMDC Setup", "Saved workbook could not be reacquired after SaveAs: " & outputWorkbook
+End If
+If Err.Number <> 0 Then
+    ShowFailure "Excel created the XLSM but could not reacquire the saved workbook safely."
+    WScript.Quit 6
+End If
+TraceStep "workbook-reacquired-after-saveas"
+
+Err.Clear
 EnsureNamedTables workbook
 If Err.Number <> 0 Then
     ShowFailure "Excel could not validate the required named tables."
@@ -205,6 +217,35 @@ MsgBox "NMDC_Document_Index.xlsm was created successfully." & vbCrLf & vbCrLf & 
        "Open the workbook, enable macros, select the DATA folder, and use Update Changed Files for normal work. Full Rescan is intended only for deliberate rebuilds.", _
        vbInformation, "NMDC Document Index Setup"
 
+Function ReacquireSavedWorkbook(ByVal excelApp, ByVal expectedPath)
+    Dim candidate, expectedName, candidatePath
+    Set ReacquireSavedWorkbook = Nothing
+    expectedName = fso.GetFileName(expectedPath)
+
+    On Error Resume Next
+    Err.Clear
+    Set candidate = excelApp.Workbooks(expectedName)
+    If Not candidate Is Nothing Then
+        Set ReacquireSavedWorkbook = candidate
+        Err.Clear
+        Exit Function
+    End If
+    Err.Clear
+
+    For Each candidate In excelApp.Workbooks
+        candidatePath = ""
+        candidatePath = candidate.FullName
+        If Err.Number = 0 Then
+            If StrComp(fso.GetAbsolutePathName(candidatePath), fso.GetAbsolutePathName(expectedPath), 1) = 0 Then
+                Set ReacquireSavedWorkbook = candidate
+                Exit Function
+            End If
+        End If
+        Err.Clear
+    Next
+    On Error GoTo 0
+End Function
+
 Sub ImportModule(ByVal wb, ByVal modulePath)
     If Not fso.FileExists(modulePath) Then
         Err.Raise vbObjectError + 100, "NMDC Setup", "Missing VBA module: " & modulePath
@@ -263,6 +304,7 @@ End Sub
 
 Sub EnsureTable(ByVal wb, ByVal sheetName, ByVal tableName, ByVal headerRow, ByVal expectedHeaders)
     Dim ws, table, candidate, lastCol, lastRow, index, headerCount, sourceRange
+    TraceStep "ensure-table-start " & sheetName & "!" & tableName
     Set ws = wb.Worksheets(sheetName)
     Set table = Nothing
 
@@ -304,6 +346,7 @@ Sub EnsureTable(ByVal wb, ByVal sheetName, ByVal tableName, ByVal headerRow, ByV
     End If
 
     If table.ListRows.Count = 0 Then table.ListRows.Add
+    TraceStep "ensure-table-ok " & sheetName & "!" & tableName
 End Sub
 
 Sub ConfigureFastStartup(ByVal wb)
@@ -365,6 +408,7 @@ Sub ConfigureOwnerEvents(ByVal wb)
             "Private Sub Workbook_SheetActivate(ByVal Sh As Object)" & vbCrLf & _
             "    On Error Resume Next" & vbCrLf & _
             "    NMDC_LiveFilterSheetActivate Sh" & vbCrLf & _
+            "    NMDC_LiveFilterSelectionChange Sh, Target" & vbCrLf & _
             "    NMDC_EnsureCustomFieldsCurrent Sh" & vbCrLf & _
             "    On Error GoTo 0" & vbCrLf & _
             "End Sub" & vbCrLf
