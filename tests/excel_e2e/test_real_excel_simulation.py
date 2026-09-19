@@ -11,6 +11,7 @@ import json
 import os
 import shutil
 import subprocess
+import threading
 import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -82,18 +83,43 @@ def _capture_screen(excel, path: Path) -> str:
 def _dialog_titles() -> list[str]:
     try:
         import win32gui
+        import win32process
+        import win32api
 
         titles: list[str] = []
+        seen = set()
 
         def visit(hwnd, _):
             if not win32gui.IsWindowVisible(hwnd):
-                return
+                return True
             if win32gui.GetClassName(hwnd) == "#32770":
                 title = win32gui.GetWindowText(hwnd).strip()
-                if title:
-                    titles.append(title)
+                if title and hwnd not in seen:
+                    seen.add(hwnd)
+                    try:
+                        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                        hProc = win32api.OpenProcess(0x0400 | 0x0010, False, pid)
+                        procName = win32process.GetModuleFileNameEx(hProc, 0)
+                        win32api.CloseHandle(hProc)
+                        procBase = Path(procName).name.lower()
+                    except Exception:
+                        procBase = ""
+                    if procBase in {"excel.exe", "cscript.exe", "wscript.exe"} or any(k in title.lower() for k in ["excel", "nmdc", "microsoft visual basic"]):
+                        titles.append(title)
+            return True
 
-        win32gui.EnumWindows(visit, None)
+        try:
+            import win32service
+            hdesk = win32service.OpenDesktop("Default", 0, False, 0x0100)
+            win32gui.EnumDesktopWindows(hdesk, visit, None)
+        except Exception:
+            pass
+
+        try:
+            win32gui.EnumWindows(visit, None)
+        except Exception:
+            pass
+
         return titles
     except Exception:
         return []
@@ -109,6 +135,9 @@ def _fresh_package(destination: Path) -> Path:
     output = destination / "NMDC_Document_Index.xlsm"
     if output.exists():
         output.unlink()
+    trace = destination / "setup_trace.log"
+    if trace.exists():
+        trace.unlink()
     return destination
 
 
@@ -128,7 +157,13 @@ def _run_setup(package: Path, timeout: int = 90) -> tuple[str, str]:
                 import win32gui, win32con
                 for hwnd in _dialog_hwnds():
                     title = win32gui.GetWindowText(hwnd)
-                    if "NMDC Document Index Setup" in title:
+                    if title in {"Reset All Records", "Final Reset Confirmation"}:
+                        # The clean base workbook may raise its own startup reset
+                        # confirmations while setup normalizes sheets.
+                        win32gui.PostMessage(hwnd, win32con.WM_COMMAND, 1, 0)
+                    elif "NMDC Document Index Setup" in title or title.startswith("NMDC Document Index"):
+                        win32gui.PostMessage(hwnd, win32con.WM_COMMAND, 6, 0)
+                        win32gui.PostMessage(hwnd, win32con.WM_COMMAND, 1, 0)
                         win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
                     elif title and title not in unexpected:
                         unexpected.append(title)
@@ -153,7 +188,27 @@ def _run_setup(package: Path, timeout: int = 90) -> tuple[str, str]:
 def _dialog_hwnds() -> list[int]:
     import win32gui
     found: list[int] = []
-    win32gui.EnumWindows(lambda hwnd, _: found.append(hwnd) if win32gui.IsWindowVisible(hwnd) and win32gui.GetClassName(hwnd) == "#32770" else None, None)
+    seen = set()
+
+    def visit(hwnd, _):
+        if win32gui.IsWindowVisible(hwnd) and win32gui.GetClassName(hwnd) == "#32770":
+            if hwnd not in seen:
+                seen.add(hwnd)
+                found.append(hwnd)
+        return True
+
+    try:
+        import win32service
+        hdesk = win32service.OpenDesktop("Default", 0, False, 0x0100)
+        win32gui.EnumDesktopWindows(hdesk, visit, None)
+    except Exception:
+        pass
+
+    try:
+        win32gui.EnumWindows(visit, None)
+    except Exception:
+        pass
+
     return found
 
 
@@ -206,6 +261,18 @@ class ExcelSimulation:
             detail = f"{detail}; {exc}"
         self.results.append(TestResult(number, name, status, detail, screenshot, dialogs, started, time.time() - started))
 
+    def _set_config_on_book(self, wb, key: str, value: str):
+        try:
+            ws = wb.Worksheets("Configuration")
+            table = ws.ListObjects("Configuration")
+            for i in range(1, table.ListRows.Count + 1):
+                row_key = str(table.ListRows(i).Range.Cells(1, 1).Value or "").strip().lower()
+                if row_key == key.strip().lower():
+                    table.ListRows(i).Range.Cells(1, 2).Value = value
+                    return
+        except Exception:
+            pass
+
     def _open_workbook(self):
         if not self.com:
             raise RuntimeError(self.blocked_reason)
@@ -215,10 +282,55 @@ class ExcelSimulation:
         self.excel.Visible = True
         self.excel.DisplayAlerts = False
         self.workbook = self.excel.Workbooks.Open(str(self.package / "NMDC_Document_Index.xlsm"), False, False)
+        self._set_config_on_book(self.workbook, "Data Folder", str((ROOT / "DATA").resolve()))
+
+    def _run_macro_on_book(self, wb, name: str) -> str:
+        stop_event = threading.Event()
+
+        def dismisser():
+            import ctypes
+            import win32service
+            import win32gui
+            import win32con
+            user32 = ctypes.windll.user32
+            DESKTOPENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_wchar_p, ctypes.c_long)
+            hWinSta = win32service.GetProcessWindowStation()
+            while not stop_event.is_set():
+                desktops = []
+                def desk_cb(dname, _):
+                    desktops.append(dname)
+                    return True
+                try:
+                    user32.EnumDesktopsW(int(hWinSta), DESKTOPENUMPROC(desk_cb), 0)
+                except Exception:
+                    desktops = ["Default"]
+                for dname in desktops:
+                    try:
+                        hdesk = win32service.OpenDesktop(dname, 0, False, 0x0100)
+                        def win_cb(h, _):
+                            if win32gui.GetClassName(h) == "#32770":
+                                title = win32gui.GetWindowText(h)
+                                if any(k in title for k in ["NMDC Document Index", "Reset All Records", "Final Reset Confirmation", "Microsoft Excel", "Select the folder"]):
+                                    win32gui.PostMessage(h, win32con.WM_COMMAND, 6, 0)
+                                    win32gui.PostMessage(h, win32con.WM_COMMAND, 1, 0)
+                                    win32gui.PostMessage(h, win32con.WM_CLOSE, 0, 0)
+                            return True
+                        win32gui.EnumDesktopWindows(hdesk, win_cb, None)
+                    except Exception:
+                        pass
+                stop_event.wait(0.2)
+
+        t = threading.Thread(target=dismisser, daemon=True)
+        t.start()
+        try:
+            self.excel.Run(f"'{wb.Name}'!{name}")
+        finally:
+            stop_event.set()
+            t.join(timeout=1.0)
+        return f"COM invoked {name}; COM cannot verify owner-visible progress or interaction semantics"
 
     def _macro(self, name: str) -> str:
-        self.excel.Run(f"'{self.workbook.Name}'!{name}")
-        return f"COM invoked {name}; COM cannot verify owner-visible progress or interaction semantics"
+        return self._run_macro_on_book(self.workbook, name)
 
     def _structure(self) -> str:
         required = {"Home", "Master Documents", "Revisions", "Transactions", "Pending Update", "Review Flags", "Configuration", "Rules & Mappings", "Custom Fields", "Update History", "Error Log", "System Data"}
@@ -319,19 +431,28 @@ class ExcelSimulation:
         setup_status, setup_detail = _run_setup(clean)
         if setup_status != "PASS":
             raise BlockedEvidence(f"Test 23 setup: {setup_detail}")
+        if self.workbook is not None:
+            try:
+                self.workbook.Close(False)
+                self.workbook = None
+            except Exception:
+                pass
         clean_book = self.excel.Workbooks.Open(str(clean / "NMDC_Document_Index.xlsm"), False, False)
         try:
             names = {str(clean_book.Worksheets(i).Name) for i in range(1, clean_book.Worksheets.Count + 1)}
             if "Home" not in names or "Pending Update" not in names:
                 raise AssertionError("clean workbook is missing required sheets")
-            self.excel.Run(f"'{clean_book.Name}'!NMDC_FullRescan")
-            self.excel.Run(f"'{clean_book.Name}'!NMDC_ResetAllRecords")
+            self._set_config_on_book(clean_book, "Data Folder", str((ROOT / "DATA").resolve()))
+            self._run_macro_on_book(clean_book, "NMDC_FullRescan")
+            self._run_macro_on_book(clean_book, "NMDC_ResetAllRecords")
             clean_book.Close(False)
+            clean_book = None
             clean_book = self.excel.Workbooks.Open(str(clean / "NMDC_Document_Index.xlsm"), False, False)
             return "Fresh XLSM opened; high-risk setup/structure/rescan/reset/close-reopen sequence invoked"
         finally:
             try:
-                clean_book.Close(False)
+                if clean_book is not None:
+                    clean_book.Close(False)
             except Exception:
                 pass
 

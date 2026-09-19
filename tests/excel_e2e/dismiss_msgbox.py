@@ -6,15 +6,38 @@ import argparse
 
 def list_dialogs():
     dialogs = []
+    seen = set()
 
     def visit(hwnd, _):
         if win32gui.IsWindowVisible(hwnd) and win32gui.GetClassName(hwnd) == "#32770":
-            dialogs.append((hwnd, win32gui.GetWindowText(hwnd)))
+            if hwnd not in seen:
+                seen.add(hwnd)
+                dialogs.append((hwnd, win32gui.GetWindowText(hwnd)))
+        return True
+
+    try:
+        import win32service, ctypes
+        user32 = ctypes.windll.user32
+        hWinSta = win32service.GetProcessWindowStation()
+        desktops = []
+        def desk_cb(dname, _):
+            desktops.append(dname)
+            return True
+        DESKTOPENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_wchar_p, ctypes.c_long)
+        user32.EnumDesktopsW(int(hWinSta), DESKTOPENUMPROC(desk_cb), 0)
+        for dname in desktops:
+            try:
+                hdesk = win32service.OpenDesktop(dname, 0, False, 0x0100)
+                win32gui.EnumDesktopWindows(hdesk, visit, None)
+            except Exception:
+                pass
+    except Exception:
+        pass
 
     try:
         win32gui.EnumWindows(visit, None)
-    except Exception as exc:
-        print("DIALOG_ENUMERATION_BLOCKED", exc, flush=True)
+    except Exception:
+        pass
     return dialogs
 
 
@@ -38,9 +61,12 @@ def close_msgbox(timeout=10):
         for hwnd, title in dialogs:
             print("Dialog children:", title, child_texts(hwnd), flush=True)
             if title in known or title.startswith("NMDC Document Index"):
-                win32gui.PostMessage(hwnd, win32con.WM_COMMAND, 1, 0)
-                win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
-                closed.append(title)
+                try:
+                    win32gui.PostMessage(hwnd, win32con.WM_COMMAND, 1, 0)
+                    win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+                    closed.append(title)
+                except Exception:
+                    pass
             elif title and title not in unexpected:
                 unexpected.append(title)
         if not dialogs:

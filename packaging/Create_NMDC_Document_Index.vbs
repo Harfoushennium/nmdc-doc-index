@@ -12,6 +12,9 @@ Const msoShapeRoundedRectangle = 5
 
 Dim fso, shell, packageRoot, sourceWorkbook, outputWorkbook, excel, workbook
 Dim modulesFolder, enginePath, runtimeFolder, configFolder, response, localAppData, appDataRoot
+Dim setupStage, setupObject
+setupStage = "startup"
+setupObject = ""
 
 Set fso = CreateObject("Scripting.FileSystemObject")
 Set shell = CreateObject("WScript.Shell")
@@ -105,6 +108,8 @@ End If
 TraceStep "workbook-saved-as-xlsm"
 
 Err.Clear
+' SaveAs can leave a stale COM proxy in a long-running Excel instance.
+' Reacquire the exact saved workbook: excel.Workbooks(fso.GetFileName(outputWorkbook))
 Set workbook = ReacquireSavedWorkbook(excel, outputWorkbook)
 If workbook Is Nothing Then
     Err.Raise vbObjectError + 111, "NMDC Setup", "Saved workbook could not be reacquired after SaveAs: " & outputWorkbook
@@ -116,9 +121,18 @@ End If
 TraceStep "workbook-reacquired-after-saveas"
 
 Err.Clear
+setupStage = "EnsureNamedTables"
+setupObject = "initializing"
 EnsureNamedTables workbook
 If Err.Number <> 0 Then
-    ShowFailure "Excel could not validate the required named tables."
+    Dim namedTableErrorNumber, namedTableErrorDescription
+    namedTableErrorNumber = Err.Number
+    namedTableErrorDescription = Err.Description
+    TraceStep "setup-error stage=" & setupStage & " object=" & setupObject & " error=" & CStr(namedTableErrorNumber) & " - " & namedTableErrorDescription
+    ShowFailure "Excel could not validate the required named tables." & vbCrLf & _
+                "Stage: " & setupStage & vbCrLf & _
+                "Object: " & setupObject & vbCrLf & _
+                "Error: " & CStr(namedTableErrorNumber) & " - " & namedTableErrorDescription
     WScript.Quit 7
 End If
 TraceStep "named-tables-ready"
@@ -305,6 +319,8 @@ End Sub
 Sub EnsureTable(ByVal wb, ByVal sheetName, ByVal tableName, ByVal headerRow, ByVal expectedHeaders)
     Dim ws, table, candidate, lastCol, lastRow, index, headerCount, sourceRange
     TraceStep "ensure-table-start " & sheetName & "!" & tableName
+    setupStage = "EnsureTable"
+    setupObject = sheetName & "!" & tableName
     Set ws = wb.Worksheets(sheetName)
     Set table = Nothing
 

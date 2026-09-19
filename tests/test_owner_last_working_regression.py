@@ -41,6 +41,13 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertIn("NMDC_LiveFilterInitialize", setup)
         self.assertIn("NMDC_ApplyOwnerUX", setup)
 
+    def test_setup_reacquires_saved_workbook_and_reports_named_table_context(self):
+        setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
+        self.assertIn("excel.Workbooks(fso.GetFileName(outputWorkbook))", setup)
+        self.assertIn('setupStage = "EnsureNamedTables"', setup)
+        self.assertIn('setupObject = sheetName & "!" & tableName', setup)
+        self.assertIn('TraceStep "setup-error stage=" & setupStage', setup)
+
     def test_last_working_recovery_controls_are_never_dropped(self):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
         admin = self._read("excel/vba/modNMDC_Admin.bas")

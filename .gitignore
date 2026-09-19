@@ -7,6 +7,7 @@ __pycache__/
 
 # Generated from the audited chunk set during production packaging
 /excel/NMDC_Document_Index_Base.xlsx
+/NMDC_Document_Index.xlsm
 
 # Antigravity / local Excel simulation artifacts
 /.antigravity/
@@ -21,6 +22,7 @@ __pycache__/
 # PyInstaller build artefacts (regenerable: pyinstaller nmdc_index_engine.spec)
 /build/
 /dist/
+/engine/
 /*.spec
 
 # Local runtime test/scan state (regenerable engine output; not project source)
@@ -39,6 +41,11 @@ __pycache__/
 # Antigravity collaboration skill (local only; not NMDC project source)
 /.agents/
 
+# Local archive for scratch/build/intermediate files
+/_ARCHIVE/
+
 # Local production-package assembly (regenerable via assemble_package.py)
-# Uncomment below to also ignore the assembled package folder
-# /production-package/
+/production-package/
+/NMDC_Document_Index_Production_Windows_FINAL/
+/NMDC_Document_Index_Production_Windows_FINAL.zip
+*.zip
