@@ -435,6 +435,7 @@ Public Sub NMDC_ApplyCustomFieldsUX()
 
     On Error Resume Next
     ws.Range("A4:N4").UnMerge
+    ws.Range("A4:N4").ClearContents
     ws.Range("A4:N4").Merge
     On Error GoTo Handler
     With ws.Range("A4:N4")
