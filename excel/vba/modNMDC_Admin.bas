@@ -61,7 +61,9 @@ Public Sub NMDC_SaveReviewDecisions()
     Dim comment As String
     Dim status As String
     Dim savedRows As Long
+    Dim fixRows As Long
     Dim exitCode As Long
+    Dim requestPath As String
 
     Set ws = ThisWorkbook.Worksheets("Review Flags")
     Set table = ws.ListObjects("ReviewFlags")
@@ -78,6 +80,8 @@ Public Sub NMDC_SaveReviewDecisions()
         decision = Trim$(CStr(NMDC_AdminTableValue(table, row, "User Decision")))
         comment = Trim$(CStr(NMDC_AdminTableValue(table, row, "User Comment")))
         status = UCase$(Trim$(CStr(NMDC_AdminTableValue(table, row, "Resolution Status"))))
+
+        If UCase$(decision) = "NEEDS PARSER/MAPPING FIX" Then fixRows = fixRows + 1
 
         If Len(decision) > 0 Or Len(comment) > 0 Or (Len(status) > 0 And status <> "OPEN") Then
             stream.WriteText _
@@ -112,8 +116,20 @@ Public Sub NMDC_SaveReviewDecisions()
     End If
 
     If NMDC_RunEngine("export-excel") = 0 Then NMDC_RefreshExchangeData
-    MsgBox CStr(savedRows) & " Review Flag decision(s) were saved to the staged update audit trail.", _
-           vbInformation, "NMDC Document Index"
+
+    If fixRows > 0 Then
+        requestPath = NMDC_RuntimePath() & "\support\LATEST_PARSER_MAPPING_FIX_REQUEST.md"
+        MsgBox CStr(savedRows) & " Review Flag decision(s) were saved." & vbCrLf & vbCrLf & _
+               CStr(fixRows) & " parser/mapping fix request(s) were prepared at:" & vbCrLf & _
+               requestPath & vbCrLf & vbCrLf & _
+               "The current workbook will not rewrite its own packaged parser code automatically. " & _
+               "Upload this request together with the affected source workbook(s) to ChatGPT / the project maintainer. " & _
+               "After the corrected parser or mapping is installed, click Retry After Fix.", _
+               vbInformation, "NMDC Document Index"
+    Else
+        MsgBox CStr(savedRows) & " Review Flag decision(s) were saved to the staged update audit trail.", _
+               vbInformation, "NMDC Document Index"
+    End If
     NMDC_GoToSheet "Review Flags"
     Exit Sub
 
@@ -125,6 +141,81 @@ Handler:
         Err.Number & " - " & Err.Description
     MsgBox "Review decisions could not be saved. Please review the Error Log.", vbExclamation, "NMDC Document Index"
 End Sub
+
+Public Sub NMDC_RequestParserMappingFix()
+    On Error GoTo Handler
+
+    Dim ws As Worksheet
+    Dim table As ListObject
+    Dim selectedRow As ListRow
+    Dim rowIndex As Long
+    Dim userNote As String
+    Dim commentCell As Range
+    Dim decisionCell As Range
+    Dim statusCell As Range
+
+    If ActiveSheet Is Nothing Then Exit Sub
+    If StrComp(ActiveSheet.Name, "Review Flags", vbTextCompare) <> 0 Then
+        NMDC_GoToSheet "Review Flags"
+        MsgBox "Select the Review Flag row that needs an extraction fix, then click Request Parser / Mapping Fix again.", _
+               vbInformation, "NMDC Document Index"
+        Exit Sub
+    End If
+
+    Set ws = ActiveSheet
+    Set table = ws.ListObjects("ReviewFlags")
+    If table.DataBodyRange Is Nothing Then
+        MsgBox "There are no Review Flags requiring a fix.", vbInformation, "NMDC Document Index"
+        Exit Sub
+    End If
+    If Intersect(ActiveCell, table.DataBodyRange) Is Nothing Then
+        MsgBox "Select a cell in the Review Flag row that needs correction.", vbExclamation, "NMDC Document Index"
+        Exit Sub
+    End If
+
+    rowIndex = ActiveCell.Row - table.DataBodyRange.Row + 1
+    Set selectedRow = table.ListRows(rowIndex)
+    Set decisionCell = selectedRow.Range.Cells(1, table.ListColumns("User Decision").Index)
+    Set commentCell = selectedRow.Range.Cells(1, table.ListColumns("User Comment").Index)
+    Set statusCell = selectedRow.Range.Cells(1, table.ListColumns("Resolution Status").Index)
+
+    userNote = Trim$(CStr(commentCell.Value))
+    If Len(userNote) = 0 Then
+        userNote = InputBox( _
+            "Describe what the parser should extract from this source/sheet." & vbCrLf & vbCrLf & _
+            "Example: Document No. is in column C, title in D, data starts at row 7; each revision must be retained.", _
+            "Request Parser / Mapping Fix")
+        If Len(Trim$(userNote)) = 0 Then Exit Sub
+        commentCell.Value = userNote
+    End If
+
+    decisionCell.Value = "NEEDS PARSER/MAPPING FIX"
+    statusCell.Value = "OPEN"
+    NMDC_SaveReviewDecisions
+    Exit Sub
+
+Handler:
+    NMDC_LogError "PARSER_FIX_REQUEST_ERROR", _
+        "Excel could not prepare the parser/mapping fix request.", _
+        Err.Number & " - " & Err.Description
+    MsgBox "The fix request could not be prepared. Please review the Error Log.", _
+           vbExclamation, "NMDC Document Index"
+End Sub
+
+Public Sub NMDC_RetryAfterParserMappingFix()
+    Dim answer As VbMsgBoxResult
+
+    answer = MsgBox( _
+        "Retry extraction using the parser and mappings currently installed?" & vbCrLf & vbCrLf & _
+        "This runs a Full Rescan so unchanged flagged source workbooks are reprocessed. " & _
+        "Source DATA is not edited and nothing is approved automatically." & vbCrLf & vbCrLf & _
+        "If the same Review Flag returns, the installed parser/mapping still needs correction.", _
+        vbQuestion + vbYesNo + vbDefaultButton2, "Retry After Fix")
+    If answer <> vbYes Then Exit Sub
+
+    NMDC_FullRescanFast
+End Sub
+
 
 Private Function NMDC_AdminTableValue(ByVal table As ListObject, ByVal row As ListRow, ByVal headerName As String) As Variant
     On Error GoTo Missing

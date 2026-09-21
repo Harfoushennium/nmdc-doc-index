@@ -608,7 +608,7 @@ Sub ConfigureReviewFlags(ByVal wb)
     ws.Range("A4:O4").Merge
     On Error GoTo 0
     With ws.Range("A4:O4")
-        .Value = "HOW TO REVIEW: 1) Open the Source File hyperlink. 2) Choose User Decision from the dropdown. 3) Add a User Comment only when explanation is needed. 4) Choose Resolution Status. 5) Click Save Review Decisions."
+        .Value = "HOW TO REVIEW: 1) Open the Source File hyperlink. 2) For extraction/layout problems, select the row and click Request Parser / Mapping Fix; describe the expected layout. 3) The workbook creates a fix-request file but never rewrites its own parser silently. 4) After a corrected parser/config is installed, click Retry After Fix. Other decisions can still be saved with Save Review Decisions."
         .Interior.Color = RGB(255, 247, 219)
         .Font.Color = RGB(122, 90, 0)
         .Font.Bold = True
@@ -625,10 +625,13 @@ Sub ConfigureReviewFlags(ByVal wb)
     ws.Columns("N").ColumnWidth = 22
 
     For Each shape In ws.Shapes
-        If CStr(shape.Name) = "NMDC_Save_Review" Then shape.Delete
+        If CStr(shape.Name) = "NMDC_Save_Review" Or _
+           CStr(shape.Name) = "NMDC_Request_Review_Fix" Or _
+           CStr(shape.Name) = "NMDC_Retry_Review_Fix" Then shape.Delete
     Next
     ws.Columns("P:S").ColumnWidth = 14
-    Set area = ws.Range("P4:S5")
+
+    Set area = ws.Range("P4:S4")
     Set button = ws.Shapes.AddShape(msoShapeRoundedRectangle, area.Left, area.Top, area.Width, area.Height)
     button.Name = "NMDC_Save_Review"
     button.OnAction = "NMDC_SaveReviewDecisions"
@@ -638,7 +641,35 @@ Sub ConfigureReviewFlags(ByVal wb)
     button.Fill.ForeColor.RGB = RGB(46, 125, 50)
     button.Line.ForeColor.RGB = RGB(46, 125, 50)
     button.TextFrame.Characters.Font.Name = "Aptos"
-    button.TextFrame.Characters.Font.Size = 10
+    button.TextFrame.Characters.Font.Size = 9
+    button.TextFrame.Characters.Font.Bold = True
+    button.TextFrame.Characters.Font.Color = RGB(255,255,255)
+
+    Set area = ws.Range("P5:S5")
+    Set button = ws.Shapes.AddShape(msoShapeRoundedRectangle, area.Left, area.Top, area.Width, area.Height)
+    button.Name = "NMDC_Request_Review_Fix"
+    button.OnAction = "NMDC_RequestParserMappingFix"
+    button.TextFrame.Characters.Text = "Request Parser / Mapping Fix"
+    button.TextFrame.HorizontalAlignment = -4108
+    button.TextFrame.VerticalAlignment = 3
+    button.Fill.ForeColor.RGB = RGB(194, 139, 0)
+    button.Line.ForeColor.RGB = RGB(194, 139, 0)
+    button.TextFrame.Characters.Font.Name = "Aptos"
+    button.TextFrame.Characters.Font.Size = 9
+    button.TextFrame.Characters.Font.Bold = True
+    button.TextFrame.Characters.Font.Color = RGB(255,255,255)
+
+    Set area = ws.Range("P6:S6")
+    Set button = ws.Shapes.AddShape(msoShapeRoundedRectangle, area.Left, area.Top, area.Width, area.Height)
+    button.Name = "NMDC_Retry_Review_Fix"
+    button.OnAction = "NMDC_RetryAfterParserMappingFix"
+    button.TextFrame.Characters.Text = "Retry After Fix"
+    button.TextFrame.HorizontalAlignment = -4108
+    button.TextFrame.VerticalAlignment = 3
+    button.Fill.ForeColor.RGB = RGB(20, 108, 148)
+    button.Line.ForeColor.RGB = RGB(20, 108, 148)
+    button.TextFrame.Characters.Font.Name = "Aptos"
+    button.TextFrame.Characters.Font.Size = 9
     button.TextFrame.Characters.Font.Bold = True
     button.TextFrame.Characters.Font.Color = RGB(255,255,255)
 End Sub

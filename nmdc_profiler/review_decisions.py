@@ -65,6 +65,83 @@ def _key_from_row(row: Mapping[str, str]) -> Tuple[str, ...]:
     )
 
 
+def _clean_md(value: Any) -> str:
+    return str(value or "").replace("\r", " ").replace("\n", " ").replace("|", "\\|").strip()
+
+
+def _write_parser_mapping_fix_request(
+    state_dir: Path,
+    run_id: str,
+    flags: Iterable[Mapping[str, Any]],
+) -> Path:
+    support_dir = Path(state_dir) / "support"
+    support_dir.mkdir(parents=True, exist_ok=True)
+    rows = [dict(flag) for flag in flags]
+    payload = {
+        "request_type": "PARSER_MAPPING_FIX",
+        "run_id": run_id,
+        "created_at": _utc_now(),
+        "instructions": (
+            "Upload this request together with the affected source workbook(s) to the NMDC Document Index "
+            "maintainer / ChatGPT. The installed workbook records and retries extraction, but it does not "
+            "rewrite its own packaged parser code automatically."
+        ),
+        "flags": rows,
+    }
+    json_path = support_dir / "LATEST_PARSER_MAPPING_FIX_REQUEST.json"
+    _write_json(json_path, payload)
+
+    lines = [
+        "# NMDC Document Index — Parser / Mapping Fix Request",
+        "",
+        f"- Staged run: `{run_id}`",
+        f"- Created: `{payload['created_at']}`",
+        f"- Affected review flags: **{len(rows)}**",
+        "",
+        "## What the owner is asking",
+        "",
+        "The owner selected **NEEDS PARSER/MAPPING FIX**. The current installed workbook will preserve the",
+        "approved index and source DATA. It will not pretend to rewrite its own packaged parser automatically.",
+        "Use this request together with the affected source workbook(s) to implement and test the correction.",
+        "",
+        "After a corrected parser/configuration is installed, use **Retry After Fix** in Review Flags (or Full Rescan)",
+        "to re-extract the source. The flag should disappear only when the new extraction succeeds.",
+        "",
+        "## Affected items",
+        "",
+        "| Source File | Source Sheet | Project No. | Document No. | Revision | Flag Code | Owner Comment |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for flag in rows:
+        lines.append(
+            "| " + " | ".join(
+                [
+                    _clean_md(flag.get("source", "")),
+                    _clean_md(flag.get("source_sheet", "")),
+                    _clean_md(flag.get("project_no", "")),
+                    _clean_md(flag.get("document_no", "")),
+                    _clean_md(flag.get("revision", "")),
+                    _clean_md(flag.get("code", "")),
+                    _clean_md(flag.get("user_comment", "")),
+                ]
+            ) + " |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Maintainer acceptance",
+            "",
+            "- Reproduce against the exact source workbook/sheet.",
+            "- Fix parser/configuration only; never modify source DATA.",
+            "- Add regression coverage for the reproduced layout/mapping.",
+            "- Re-run extraction and confirm the Review Flag no longer appears.",
+        ]
+    )
+    md_path = support_dir / "LATEST_PARSER_MAPPING_FIX_REQUEST.md"
+    md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return md_path
+
+
 def apply_review_decisions(state_dir: Path, decisions_file: Path) -> Dict[str, Any]:
     state_dir = Path(state_dir)
     decisions_file = Path(decisions_file)
@@ -92,6 +169,7 @@ def apply_review_decisions(state_dir: Path, decisions_file: Path) -> Dict[str, A
 
     updated = 0
     unmatched: List[Tuple[str, ...]] = []
+    fix_request_flags: List[Dict[str, Any]] = []
     for row in rows:
         decision = str(row.get("User Decision", "")).strip().upper()
         comment = str(row.get("User Comment", "")).strip()
@@ -116,13 +194,31 @@ def apply_review_decisions(state_dir: Path, decisions_file: Path) -> Dict[str, A
             if status:
                 flag["resolution_status"] = status
             flag["reviewed_at"] = _utc_now()
+            if decision == "NEEDS PARSER/MAPPING FIX":
+                fix_request_flags.append(flag)
             updated += 1
 
     _write_json(flags_path, flags)
+
+    unique_fix_flags: Dict[Tuple[str, ...], Dict[str, Any]] = {}
+    for flag in fix_request_flags:
+        unique_fix_flags[_key_from_flag(flag)] = flag
+    fix_request_file = ""
+    if unique_fix_flags:
+        fix_request_file = str(
+            _write_parser_mapping_fix_request(
+                state_dir,
+                run_id,
+                unique_fix_flags.values(),
+            )
+        )
+
     result = {
         "run_id": run_id,
         "updated_flags": updated,
         "unmatched_decisions": len(unmatched),
+        "parser_mapping_fix_requests": len(unique_fix_flags),
+        "fix_request_file": fix_request_file,
         "saved_at": _utc_now(),
     }
     _append_history(state_dir, {"event": "REVIEW_DECISIONS_SAVED", **result})

@@ -82,6 +82,17 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertIn("If codeModule.CountOfLines > 0 Then", custom)
         self.assertIn("sourceText = codeModule.Lines(1, codeModule.CountOfLines)", custom)
 
+    def test_review_flags_parser_fix_is_actionable_not_a_dead_end(self):
+        admin = self._read("excel/vba/modNMDC_Admin.bas")
+        setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
+        review = self._read("nmdc_profiler/review_decisions.py")
+        self.assertIn("Public Sub NMDC_RequestParserMappingFix()", admin)
+        self.assertIn("Public Sub NMDC_RetryAfterParserMappingFix()", admin)
+        self.assertIn("LATEST_PARSER_MAPPING_FIX_REQUEST.md", admin)
+        self.assertIn('"Request Parser / Mapping Fix"', setup)
+        self.assertIn('"Retry After Fix"', setup)
+        self.assertIn("parser_mapping_fix_requests", review)
+
     def test_setup_keeps_fast_scan_and_last_working_recovery_controls_together(self):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
         self.assertIn('"NMDC_UpdateChangedFilesFast"', setup)

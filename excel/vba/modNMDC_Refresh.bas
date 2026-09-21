@@ -555,7 +555,9 @@ Private Sub NMDC_EnhanceReviewFlagGuidance(ByVal table As ListObject)
                 "This does not necessarily mean the workbook is badly formatted."
             row.Range.Cells(1, actionCol).Value = _
                 "Open the Source File and named Source Sheet. If it is empty, choose NO ACTION REQUIRED. " & _
-                "If it contains normal register data, choose NEEDS PARSER/MAPPING FIX and explain the expected layout in User Comment."
+                "If it contains normal register data, select the row and click Request Parser / Mapping Fix. " & _
+                "Describe the expected layout in User Comment; the workbook will create a fix-request handoff file. " & _
+                "After a corrected parser/config is installed, click Retry After Fix."
         End If
     Next row
     Exit Sub

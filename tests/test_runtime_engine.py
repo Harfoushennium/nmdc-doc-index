@@ -11,6 +11,7 @@ from nmdc_profiler.excel_bridge import export_excel_exchange, resolve_document_t
 from nmdc_profiler.extractor import read_sheet_model
 from nmdc_profiler.full_extractor import resolve_sheet_name
 from nmdc_profiler.runtime_engine import record_user_flag, resolution_route
+from nmdc_profiler.review_decisions import apply_review_decisions
 from nmdc_profiler.update_engine import approve_stage, scan_sources, stage_update
 
 
@@ -126,6 +127,50 @@ class RuntimeEngineTests(unittest.TestCase):
                 (state / "staging" / reused["run_id"] / "flags.json").read_text(encoding="utf-8")
             )
             self.assertTrue(any(flag["code"] == "UNRECOGNIZED_LAYOUT" for flag in reused_flags))
+
+    def test_parser_mapping_review_decision_creates_fix_request_handoff(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp) / "runtime"
+            stage = state / "staging" / "RUN-1"
+            stage.mkdir(parents=True)
+            (state / "staging" / "latest.json").write_text(
+                json.dumps({"run_id": "RUN-1"}), encoding="utf-8"
+            )
+            (stage / "flags.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "level": "REVIEW",
+                            "code": "UNRECOGNIZED_LAYOUT",
+                            "source": "METHODS/register.xlsx",
+                            "source_sheet": "Deliverables",
+                            "project_no": "2171",
+                            "document_no": "",
+                            "revision": "",
+                            "event_key": "",
+                            "resolution_status": "OPEN",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            decisions = Path(tmp) / "review_decisions.csv"
+            decisions.write_text(
+                "Flag Code,Source File,Source Sheet,Event Key,Project No.,Document No.,Revision,User Decision,User Comment,Resolution Status\n"
+                "UNRECOGNIZED_LAYOUT,METHODS/register.xlsx,Deliverables,,2171,,,NEEDS PARSER/MAPPING FIX,"
+                "Document number is in column C and data starts at row 7,OPEN\n",
+                encoding="utf-8-sig",
+            )
+
+            result = apply_review_decisions(state, decisions)
+
+            self.assertEqual(result["parser_mapping_fix_requests"], 1)
+            handoff = state / "support" / "LATEST_PARSER_MAPPING_FIX_REQUEST.md"
+            self.assertTrue(handoff.exists())
+            content = handoff.read_text(encoding="utf-8")
+            self.assertIn("METHODS/register.xlsx", content)
+            self.assertIn("Deliverables", content)
+            self.assertIn("Document number is in column C", content)
 
     def test_cli_exports_empty_excel_exchange(self):
         with tempfile.TemporaryDirectory() as tmp:
