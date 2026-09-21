@@ -155,6 +155,13 @@ class Stage3SmokeTests(unittest.TestCase):
             for tbl_name in expected_core_tables:
                 self.assertIn(tbl_name, seen_tables, f"Expected table '{tbl_name}' not found in any sheet")
 
+            # 6. Verify the Microsoft Forms reference required by the REV03 listener.
+            reference_names = {
+                str(wb.VBProject.References.Item(i).Name)
+                for i in range(1, wb.VBProject.References.Count + 1)
+            }
+            self.assertIn("MSForms", reference_names, "Microsoft Forms 2.0 (MSForms) reference missing")
+
             # 6. Verify owner-reference Live Filter components and real worksheet controls
             vba_components = {wb.VBProject.VBComponents.Item(i).Name for i in range(1, wb.VBProject.VBComponents.Count + 1)}
             self.assertIn("Mod_LiveFilter", vba_components, "Owner-reference Mod_LiveFilter module missing from VBProject")

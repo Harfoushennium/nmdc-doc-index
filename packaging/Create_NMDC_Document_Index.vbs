@@ -136,6 +136,21 @@ If Err.Number <> 0 Then
 End If
 TraceStep "named-tables-ready"
 
+Err.Clear
+setupStage = "EnsureMSFormsReference"
+setupObject = "Microsoft Forms 2.0 Object Library"
+EnsureMSFormsReference workbook
+If Err.Number <> 0 Then
+    Dim formsErrorNumber, formsErrorDescription
+    formsErrorNumber = Err.Number
+    formsErrorDescription = Err.Description
+    TraceStep "setup-error stage=" & setupStage & " object=" & setupObject & " error=" & CStr(formsErrorNumber) & " - " & formsErrorDescription
+    ShowFailure "Excel could not enable the Microsoft Forms library required by the REV03 Live Filter." & vbCrLf & _
+                "Error: " & CStr(formsErrorNumber) & " - " & formsErrorDescription
+    WScript.Quit 8
+End If
+TraceStep "msforms-reference-ready"
+
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Engine.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Csv.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Refresh.bas")
@@ -258,6 +273,54 @@ Function ReacquireSavedWorkbook(ByVal excelApp, ByVal expectedPath)
     Next
     On Error GoTo 0
 End Function
+
+Sub EnsureMSFormsReference(ByVal wb)
+    Const vbext_ct_MSForm = 3
+
+    Dim referenceItem, tempForm, found
+    found = False
+
+    On Error Resume Next
+    For Each referenceItem In wb.VBProject.References
+        If StrComp(CStr(referenceItem.Name), "MSForms", 1) = 0 Then
+            found = True
+            Exit For
+        End If
+    Next
+    On Error GoTo 0
+
+    If found Then Exit Sub
+
+    ' Primary path: register the standard Microsoft Forms 2.0 type library.
+    On Error Resume Next
+    Set referenceItem = wb.VBProject.References.AddFromGuid( _
+        "{0D452EE1-E08F-101A-852E-02608C4D0BB4}", 2, 0)
+    If Err.Number = 0 And Not referenceItem Is Nothing Then found = True
+    Err.Clear
+
+    ' Fallback: creating a temporary UserForm makes Excel register MSForms
+    ' itself on systems where AddFromGuid is unavailable or version-sensitive.
+    If Not found Then
+        Set tempForm = wb.VBProject.VBComponents.Add(vbext_ct_MSForm)
+        If Err.Number = 0 And Not tempForm Is Nothing Then
+            wb.VBProject.VBComponents.Remove tempForm
+            Err.Clear
+            For Each referenceItem In wb.VBProject.References
+                If StrComp(CStr(referenceItem.Name), "MSForms", 1) = 0 Then
+                    found = True
+                    Exit For
+                End If
+            Next
+        End If
+    End If
+    On Error GoTo 0
+
+    If Not found Then
+        Err.Raise vbObjectError + 112, "NMDC Setup", _
+            "Microsoft Forms 2.0 Object Library (MSForms) is not available. " & _
+            "The REV03 Live Filter requires this standard Excel/Office component."
+    End If
+End Sub
 
 Sub ImportModule(ByVal wb, ByVal modulePath)
     If Not fso.FileExists(modulePath) Then
@@ -423,7 +486,6 @@ Sub ConfigureOwnerEvents(ByVal wb)
             "Private Sub Workbook_SheetActivate(ByVal Sh As Object)" & vbCrLf & _
             "    On Error Resume Next" & vbCrLf & _
             "    NMDC_LiveFilterSheetActivate Sh" & vbCrLf & _
-            "    NMDC_LiveFilterSelectionChange Sh, Target" & vbCrLf & _
             "    NMDC_EnsureCustomFieldsCurrent Sh" & vbCrLf & _
             "    On Error GoTo 0" & vbCrLf & _
             "End Sub" & vbCrLf

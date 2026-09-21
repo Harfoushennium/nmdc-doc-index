@@ -100,6 +100,22 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertIn("default=DEFAULT_PARSER_VERSION", engine)
         self.assertNotIn('default="cycle3-extractor-v1"', engine)
 
+    def test_setup_registers_msforms_before_importing_rev03_listener(self):
+        setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
+        ensure_pos = setup.index("EnsureMSFormsReference workbook")
+        listener_pos = setup.index('ImportModule workbook, fso.BuildPath(modulesFolder, "Cls_LiveFilter_Listener.cls")')
+        self.assertGreaterEqual(ensure_pos, 0)
+        self.assertGreater(listener_pos, ensure_pos)
+        self.assertIn('{0D452EE1-E08F-101A-852E-02608C4D0BB4}', setup)
+        self.assertIn("VBComponents.Add(vbext_ct_MSForm)", setup)
+        self.assertIn('TraceStep "msforms-reference-ready"', setup)
+
+    def test_sheet_activate_event_does_not_reference_nonexistent_target_argument(self):
+        setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
+        activate_block = setup.split('Private Sub Workbook_SheetActivate(ByVal Sh As Object)', 1)[1].split('End Sub', 1)[0]
+        self.assertIn("NMDC_LiveFilterSheetActivate Sh", activate_block)
+        self.assertNotIn("NMDC_LiveFilterSelectionChange Sh, Target", activate_block)
+
     def test_setup_keeps_fast_scan_and_last_working_recovery_controls_together(self):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
         self.assertIn('"NMDC_UpdateChangedFilesFast"', setup)
