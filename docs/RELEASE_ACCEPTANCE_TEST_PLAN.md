@@ -159,6 +159,7 @@ A genuine `UNRECOGNIZED_LAYOUT` or equivalent extraction flag must not end in a 
 3. If direct access continues to fail, the engine should attempt a temporary read-only snapshot before declaring the source unavailable.
 4. A persistent access failure must become one clear `SOURCE_HASH_ERROR`/blocking source-access finding instead of crashing the packaged engine with exit code 2.
 5. A persistently unavailable source must never be treated as removed from the approved index.
+6. Parser/cache compatibility must be versioned. When parser behavior changes in a way that can alter extraction or Review Flags, the shared parser version must change so unchanged sources cannot silently reuse stale extraction caches.
 6. The recommended action must tell the user to close the source workbook if open and wait for OneDrive synchronization before retrying.
 7. Regression tests must verify transient PermissionError recovery and the real Project 2369 source remains readable in the repository baseline.
 

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Sequence, Tuple
 
 ENGINE_SCHEMA_VERSION = "1"
-DEFAULT_PARSER_VERSION = "cycle3-extractor-v1"
+DEFAULT_PARSER_VERSION = "cycle3-extractor-v2"
 NON_OVERRIDABLE_CONFLICT_CODES = {
     "SOURCE_HASH_ERROR",
     "PARSER_ERROR",

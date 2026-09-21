@@ -15,7 +15,7 @@ from nmdc_profiler.source_access import install_resilient_source_access
 from nmdc_profiler.source_selection import set_source_selection, set_source_selections_from_file
 from nmdc_profiler.source_selection_view import export_source_selection
 from nmdc_profiler.ui_layout import install_review_first_column_order
-from nmdc_profiler.update_engine import approve_stage, hold_stage, reject_stage
+from nmdc_profiler.update_engine import DEFAULT_PARSER_VERSION, approve_stage, hold_stage, reject_stage
 
 
 def _common(parser: argparse.ArgumentParser) -> None:
@@ -32,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
     _common(stage)
     stage.add_argument("--mode", choices=("incremental", "full"), default="incremental")
     stage.add_argument("--data-dir", type=Path, required=True)
-    stage.add_argument("--parser-version", default="cycle3-extractor-v1")
+    stage.add_argument("--parser-version", default=DEFAULT_PARSER_VERSION)
 
     export = subparsers.add_parser("export-excel", help="Export approved and staged views for Excel")
     _common(export)

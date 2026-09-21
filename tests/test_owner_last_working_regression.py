@@ -93,6 +93,13 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertIn('"Retry After Fix"', setup)
         self.assertIn("parser_mapping_fix_requests", review)
 
+    def test_packaged_engine_uses_shared_parser_cache_version(self):
+        engine = self._read("nmdc_index_engine.py")
+        update = self._read("nmdc_profiler/update_engine.py")
+        self.assertIn('DEFAULT_PARSER_VERSION = "cycle3-extractor-v2"', update)
+        self.assertIn("default=DEFAULT_PARSER_VERSION", engine)
+        self.assertNotIn('default="cycle3-extractor-v1"', engine)
+
     def test_setup_keeps_fast_scan_and_last_working_recovery_controls_together(self):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
         self.assertIn('"NMDC_UpdateChangedFilesFast"', setup)
