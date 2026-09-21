@@ -9,31 +9,32 @@ class OwnerLiveFilterCustomFieldsTests(unittest.TestCase):
     def _read(self, relative: str) -> str:
         return (ROOT / relative).read_text(encoding="utf-8-sig")
 
-    def test_live_filter_is_per_keystroke_without_activex(self):
+    def test_live_filter_matches_owner_rev03_activex_listener_pattern(self):
+        live = self._read("excel/vba/modNMDC_LiveFilter.bas")
+        listener = self._read("excel/vba/Cls_LiveFilter_Listener.cls")
+
+        self.assertIn('ClassType:="Forms.TextBox.1"', live)
+        self.assertIn('SEARCH_BOX_NAME As String = "TxtBox_Search"', live)
+        self.assertIn('Application.OnKey "^+F", "Ask_User_For_Target_Column"', live)
+        self.assertIn('ThisWorkbook.Names.Add Name:="LiveFilter_Anchor"', live)
+        self.assertIn('TheBox.Value = "Search " & ColName & "... (+AND / -EXCLUDE) (Ctrl+Shift+F: Change Column)"', live)
+        self.assertIn('resetButton.Caption = "RESET SEARCH"', live)
+
+        self.assertIn("Public WithEvents SearchBox As MSForms.TextBox", listener)
+        self.assertIn("Private Sub SearchBox_MouseDown", listener)
+        self.assertIn("Private Sub SearchBox_Change()", listener)
+        self.assertIn("Private Sub SearchBox_KeyDown", listener)
+        self.assertIn("Run_Live_Filter(SearchBox.Value)", listener)
+
+    def test_live_filter_requires_header_target_and_uses_reference_filter_semantics(self):
         live = self._read("excel/vba/modNMDC_LiveFilter.bas")
 
-        self.assertNotIn('ClassType:="Forms.TextBox.1"', live)
-        self.assertNotIn("OLEObjects.Add", live)
-        self.assertNotIn("TxtBox_Search_Change", live)
-        self.assertNotIn("Application.OnKey", live)
-        self.assertIn("frmNMDC_LiveFilter", live)
-        self.assertIn("NMDC_LiveFilterFormChanged", live)
-        self.assertIn("NMDC_LiveFilterShow", live)
-        self.assertIn("NMDC_LiveFilterMatchesTerm", live)
-        form = self._read("excel/vba/frmNMDC_LiveFilter.frm")
-        self.assertIn('OleObjectBlob   =   "frmNMDC_LiveFilter.frx":0000', form)
-        self.assertTrue((ROOT / "excel/vba/frmNMDC_LiveFilter.frx").stat().st_size > 0)
-        self.assertIn("frmNMDC_LiveFilter.Show vbModeless", live)
-        self.assertIn("Me.cmbSearch.Text", form)
-        self.assertIn("Private Sub cmbSearch_Change()", form)
-        self.assertIn("Me.cmbSearch.SetFocus", form)
-
-    def test_live_filter_requires_one_explicit_target_column(self):
-        live = self._read("excel/vba/modNMDC_LiveFilter.bas")
-
-        self.assertIn('"Click the HEADER of the column to search."', live)
-        self.assertIn("NMDC_LiveFilterChooseColumn", live)
-        self.assertIn('ws.Range("F3").Value = headerName', live)
+        self.assertIn('"Click the HEADER of the column to filter:"', live)
+        self.assertIn("Public Sub Setup_New_Target(TheHeader As Range)", live)
+        self.assertIn('tempStr = Replace(CleanText, "+", " ")', live)
+        self.assertIn('If Left(token, 1) = "-" And Len(token) > 1 Then', live)
+        self.assertIn("StrComp(Cell.Value, CleanText, vbBinaryCompare)", live)
+        self.assertIn('Criteria1:="=*" & posTerms(0) & "*"', live)
 
         for sheet_name in (
             "MASTER DOCUMENTS",
@@ -47,14 +48,12 @@ class OwnerLiveFilterCustomFieldsTests(unittest.TestCase):
         ):
             self.assertIn(sheet_name, live)
 
-        table_mapping = live.split("Private Function NMDC_LiveFilterTableForSheet", 1)[1]
-        self.assertNotIn('Case "SOURCE SELECTION"', table_mapping)
-
-    def test_live_filter_reset_and_keyboard_release_are_safe(self):
+    def test_live_filter_reset_matches_reference_tool(self):
         live = self._read("excel/vba/modNMDC_LiveFilter.bas")
+        self.assertIn("Public Sub Reset_Search_Click()", live)
+        self.assertIn("TargetTable.AutoFilter.ShowAllData", live)
+        self.assertIn("Call Fix_Placeholder_Text(TheListener.SearchBox)", live)
         self.assertIn("Public Sub NMDC_LiveFilterClear()", live)
-        self.assertIn("NMDC_LiveFilterFormChanged", live)
-        self.assertNotIn("Application.OnKey", live)
 
     def test_custom_fields_workspace_and_keyword_dictionary_are_user_driven(self):
         setup = self._read("excel/vba/modNMDC_CustomFieldsSetup.bas")

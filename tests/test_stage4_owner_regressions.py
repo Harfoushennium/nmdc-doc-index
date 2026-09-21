@@ -24,16 +24,15 @@ class Stage4OwnerRegressionTests(unittest.TestCase):
         self.assertIn('"CONTAINS,EXACT,STARTS_WITH,ENDS_WITH"', text)
         self.assertNotIn('"CONTAINS,EXACT,FUZZY,REGEX"', text)
 
-    def test_visible_search_bar_click_opens_real_input(self):
+    def test_visible_search_bar_is_owner_reference_activex_input(self):
         setup = self.read("packaging/Create_NMDC_Document_Index.vbs")
         live = self.read("excel/vba/modNMDC_LiveFilter.bas")
-        form = self.read("excel/vba/frmNMDC_LiveFilter.frm")
-        self.assertIn("NMDC_LiveFilterSelectionChange Sh, Target", setup)
-        self.assertIn("Public Sub NMDC_LiveFilterSelectionChange", live)
-        self.assertIn('Intersect(Target, ws.Range("B3:D3"))', live)
-        self.assertIn("NMDC_LiveFilterShowForSheet ws", live)
-        self.assertIn("Public Sub NMDC_FocusSearch()", form)
-        self.assertNotIn("Application.OnKey", live)
+        listener = self.read("excel/vba/Cls_LiveFilter_Listener.cls")
+        self.assertIn('ImportModule workbook, fso.BuildPath(modulesFolder, "Cls_LiveFilter_Listener.cls")', setup)
+        self.assertIn('ClassType:="Forms.TextBox.1"', live)
+        self.assertIn('Application.OnKey "^+F", "Ask_User_For_Target_Column"', live)
+        self.assertIn("Private Sub SearchBox_Change()", listener)
+        self.assertIn("Call Mod_LiveFilter.Run_Live_Filter(SearchBox.Value)", listener)
 
     def test_pending_update_guidance_matches_below_table_design(self):
         owner = self.read("excel/vba/modNMDC_OwnerUX.bas")

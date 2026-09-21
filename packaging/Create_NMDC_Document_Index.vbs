@@ -58,8 +58,7 @@ RequireFile fso.BuildPath(modulesFolder, "modNMDC_Performance.bas"), "The respon
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_OwnerUX.bas"), "The owner guidance module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Checkboxes.bas"), "The source-selection checkbox module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_LiveFilter.bas"), "The Live Filter module is missing."
-RequireFile fso.BuildPath(modulesFolder, "frmNMDC_LiveFilter.frm"), "The Live Filter UserForm is missing."
-RequireFile fso.BuildPath(modulesFolder, "frmNMDC_LiveFilter.frx"), "The Live Filter UserForm resource is missing."
+RequireFile fso.BuildPath(modulesFolder, "Cls_LiveFilter_Listener.cls"), "The Live Filter listener class is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_CustomFields.bas"), "The Custom Fields module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_CustomFieldsSetup.bas"), "The Custom Fields setup module is missing."
 
@@ -149,7 +148,7 @@ ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Performance.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_OwnerUX.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Checkboxes.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_LiveFilter.bas")
-ImportModule workbook, fso.BuildPath(modulesFolder, "frmNMDC_LiveFilter.frm")
+ImportModule workbook, fso.BuildPath(modulesFolder, "Cls_LiveFilter_Listener.cls")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_CustomFields.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_CustomFieldsSetup.bas")
 If Err.Number <> 0 Then

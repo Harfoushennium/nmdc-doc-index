@@ -1,37 +1,27 @@
-Attribute VB_Name = "modNMDC_LiveFilter"
+Attribute VB_Name = "Mod_LiveFilter"
 Option Explicit
 
-Private Const NMDC_LIVE_HELPER As String = "__NMDC_LiveFilter"
-Private Const NMDC_LIVE_ALL_COLUMNS As String = "ALL COLUMNS"
-Private Const NMDC_LIVE_OPEN_BUTTON As String = "NMDC_LiveFilter_Open"
-Private Const NMDC_LIVE_RESET_BUTTON As String = "NMDC_LiveFilter_Reset"
+' ==============================================================================
+' MODULE: Mod_LiveFilter
+' DESCRIPTION: NMDC integration of the owner's Dynamic Live Filter Tool REV03.
+' ==============================================================================
 
-' Dynamic filter concept adapted from the owner's forensic Live Filter tool.
-' The production workbook deliberately uses worksheet cells instead of an
-' ActiveX textbox so the feature remains reliable on locked-down corporate PCs.
-' The modeless MSForms input supplies the visible caret and per-keystroke
-' Change event.  B3 mirrors the current query for persistence and filtering;
-' it is not presented as the live typing surface.
-'
-' Syntax:
-'   word1 word2   -> AND (both must appear)
-'   word1+word2   -> AND (same as spaces)
-'   -word         -> exclude rows containing the word
-'   "Exact Text"  -> exact, case-sensitive cell match
-' The Select Column action chooses one table column; ALL COLUMNS searches the
-' whole row.  Wildcards * and ? are supported in terms.
+Public TheListener As Cls_LiveFilter_Listener
 
-Public Sub NMDC_LiveFilterInitialize()
-    On Error GoTo Handler
-    NMDC_ApplyLiveFilterUX
-    Exit Sub
-Handler:
-    NMDC_LogError "LIVE_FILTER_INIT_ERROR", _
-        "Excel could not initialize the live filter controls.", _
-        Err.Number & " - " & Err.Description
+Private Const SEARCH_BOX_NAME As String = "TxtBox_Search"
+Private Const RESET_BUTTON_NAME As String = "Btn_Reset_Search"
+
+Private Sub Auto_Open()
+    Call NMDC_LiveFilterInitialize
 End Sub
 
-Public Sub NMDC_ApplyLiveFilterUX()
+Private Sub Auto_Close()
+    On Error Resume Next
+    Application.OnKey "^+F"
+    On Error GoTo 0
+End Sub
+
+Public Sub NMDC_LiveFilterInitialize()
     On Error GoTo Handler
 
     Dim sheetNames As Variant
@@ -47,185 +37,435 @@ Public Sub NMDC_ApplyLiveFilterUX()
         On Error Resume Next
         Set ws = ThisWorkbook.Worksheets(CStr(item))
         On Error GoTo Handler
-        If Not ws Is Nothing Then NMDC_LiveFilterConfigureSheet ws
+        If Not ws Is Nothing Then NMDC_EnsureReferenceLiveFilterControls ws
     Next item
+
+    Call Enable_The_Shortcut_Safe
+
+    If Not ActiveSheet Is Nothing Then
+        If TypeName(ActiveSheet) = "Worksheet" Then
+            If Not NMDC_LiveFilterTableForSheet(ActiveSheet) Is Nothing Then
+                Call Wake_Up_The_Tool(False)
+            End If
+        End If
+    End If
     Exit Sub
 
 Handler:
-    NMDC_LogError "LIVE_FILTER_UX_ERROR", _
-        "Excel could not prepare one or more live filter search bars.", _
+    NMDC_LogError "LIVE_FILTER_INIT_ERROR", _
+        "Excel could not initialize the owner-reference Live Filter controls.", _
         Err.Number & " - " & Err.Description
+End Sub
+
+Private Sub NMDC_EnsureReferenceLiveFilterControls(ByVal ws As Worksheet)
+    On Error GoTo Handler
+
+    Dim TheOle As OLEObject
+    Dim TheBox As Object
+    Dim area As Range
+    Dim resetButton As Button
+
+    If NMDC_LiveFilterTableForSheet(ws) Is Nothing Then Exit Sub
+
+    On Error Resume Next
+    ws.Shapes("NMDC_LiveFilter_Open").Delete
+    ws.Shapes("NMDC_LiveFilter_Reset").Delete
+    On Error GoTo Handler
+
+    Set TheOle = Nothing
+    On Error Resume Next
+    Set TheOle = ws.OLEObjects(SEARCH_BOX_NAME)
+    On Error GoTo Handler
+
+    Set area = ws.Range("B3:J3")
+
+    If TheOle Is Nothing Then
+        Set TheOle = ws.OLEObjects.Add( _
+            ClassType:="Forms.TextBox.1", _
+            Link:=False, _
+            DisplayAsIcon:=False, _
+            Left:=area.Left + 1, _
+            Top:=area.Top + 1, _
+            Width:=area.Width - 2, _
+            Height:=area.Height - 2)
+        TheOle.Name = SEARCH_BOX_NAME
+    Else
+        TheOle.Left = area.Left + 1
+        TheOle.Top = area.Top + 1
+        TheOle.Width = area.Width - 2
+        TheOle.Height = area.Height - 2
+    End If
+
+    TheOle.Placement = xlMoveAndSize
+    Set TheBox = TheOle.Object
+    On Error Resume Next
+    TheBox.MultiLine = False
+    TheBox.EnterKeyBehavior = False
+    TheBox.WordWrap = False
+    TheBox.BorderStyle = 1
+    TheBox.SpecialEffect = 0
+    TheBox.BackColor = RGB(255, 255, 255)
+    TheBox.Font.Name = "Calibri"
+    TheBox.Font.Size = 11
+    On Error GoTo Handler
+
+    Set resetButton = Nothing
+    On Error Resume Next
+    Set resetButton = ws.Buttons(RESET_BUTTON_NAME)
+    On Error GoTo Handler
+
+    Set area = ws.Range("K3:L3")
+    If resetButton Is Nothing Then
+        Set resetButton = ws.Buttons.Add(area.Left + 1, area.Top + 1, area.Width - 2, area.Height - 2)
+        resetButton.Name = RESET_BUTTON_NAME
+    Else
+        resetButton.Left = area.Left + 1
+        resetButton.Top = area.Top + 1
+        resetButton.Width = area.Width - 2
+        resetButton.Height = area.Height - 2
+    End If
+
+    resetButton.Caption = "RESET SEARCH"
+    resetButton.OnAction = "Reset_Search_Click"
+    resetButton.Placement = xlMoveAndSize
+    On Error Resume Next
+    resetButton.Font.Name = "Calibri"
+    resetButton.Font.Size = 10
+    resetButton.Font.Bold = True
+    On Error GoTo Handler
+
+    ws.Rows(3).RowHeight = 31.5
+    Exit Sub
+
+Handler:
+    Err.Raise Err.Number, "NMDC Live Filter control setup on " & ws.Name, Err.Description
+End Sub
+
+Public Sub Wake_Up_The_Tool(Optional ShowErrors As Boolean = False)
+    Dim ws As Worksheet
+    Dim TheBox As Object
+
+    If ActiveSheet Is Nothing Then Exit Sub
+    If TypeName(ActiveSheet) <> "Worksheet" Then Exit Sub
+    Set ws = ActiveSheet
+
+    If NMDC_LiveFilterTableForSheet(ws) Is Nothing Then Exit Sub
+
+    On Error Resume Next
+    Set TheBox = ws.OLEObjects(SEARCH_BOX_NAME).Object
+    If Err.Number <> 0 Or TheBox Is Nothing Then
+        Err.Clear
+        NMDC_EnsureReferenceLiveFilterControls ws
+        Set TheBox = ws.OLEObjects(SEARCH_BOX_NAME).Object
+    End If
+
+    If Err.Number <> 0 Or TheBox Is Nothing Then
+        On Error GoTo 0
+        If ShowErrors Then
+            MsgBox "MISSING OBJECT: '" & SEARCH_BOX_NAME & "'" & vbCrLf & _
+                   "The tool cannot find the search box. Please run setup again.", vbCritical
+        End If
+        Exit Sub
+    End If
+    On Error GoTo 0
+
+    Set TheListener = New Cls_LiveFilter_Listener
+    Set TheListener.ExcelApp = Application
+    Set TheListener.SearchBox = TheBox
+
+    Call Enable_The_Shortcut_Safe
+    Call Fix_Placeholder_Text(TheBox)
+End Sub
+
+Public Sub Reset_Search_Click()
+    Dim SavedLocation As Range
+    Dim TargetTable As ListObject
+
+    Call Wake_Up_The_Tool(ShowErrors:=True)
+    If TheListener Is Nothing Then Exit Sub
+
+    On Error Resume Next
+    Set SavedLocation = ThisWorkbook.Names("LiveFilter_Anchor").RefersToRange
+    If Err.Number <> 0 Or SavedLocation Is Nothing Then
+        Err.Clear
+        On Error GoTo 0
+        MsgBox "CONFIGURATION MISSING" & vbCrLf & _
+               "Press 'Ctrl + Shift + F' to select a column first.", vbExclamation
+        Exit Sub
+    End If
+
+    Set TargetTable = SavedLocation.ListObject
+    If TargetTable Is Nothing Then
+        On Error GoTo 0
+        MsgBox "BROKEN TABLE LINK" & vbCrLf & "Target column is not inside a table.", vbCritical
+        Exit Sub
+    End If
+    On Error GoTo 0
+
+    If TargetTable.ShowAutoFilter Then
+        If TargetTable.AutoFilter.FilterMode Then TargetTable.AutoFilter.ShowAllData
+    End If
+
+    If Not TheListener.SearchBox Is Nothing Then
+        TheListener.SearchBox.Value = ""
+        Call Fix_Placeholder_Text(TheListener.SearchBox)
+        On Error Resume Next
+        TheListener.SearchBox.Activate
+        On Error GoTo 0
+    End If
+End Sub
+
+Private Sub Enable_The_Shortcut_Safe()
+    On Error Resume Next
+    Application.OnKey "^+F", "Ask_User_For_Target_Column"
+    On Error GoTo 0
+End Sub
+
+Public Sub Ask_User_For_Target_Column()
+    Dim UserSelection As Range
+    On Error Resume Next
+    Set UserSelection = Application.InputBox("Click the HEADER of the column to filter:", "Set Search Target", Type:=8)
+    On Error GoTo 0
+    If UserSelection Is Nothing Then Exit Sub
+    Call Setup_New_Target(UserSelection)
+End Sub
+
+Public Sub Setup_New_Target(TheHeader As Range)
+    Dim TheTable As ListObject
+    Dim TheColumn As ListColumn
+
+    On Error Resume Next
+    Set TheTable = TheHeader.ListObject
+    If TheTable Is Nothing Then
+        On Error GoTo 0
+        MsgBox "Click inside an EXCEL TABLE.", vbExclamation
+        Exit Sub
+    End If
+
+    If Intersect(TheHeader, TheTable.HeaderRowRange) Is Nothing Then
+        On Error GoTo 0
+        MsgBox "Click the HEADER row.", vbExclamation
+        Exit Sub
+    End If
+
+    Set TheColumn = TheTable.ListColumns(TheHeader.Value)
+    If TheColumn Is Nothing Then
+        On Error GoTo 0
+        MsgBox "Column not found.", vbCritical
+        Exit Sub
+    End If
+    On Error GoTo 0
+
+    If Left$(CStr(TheColumn.Name), 7) = "__NMDC_" Then
+        MsgBox "Choose a normal user-visible column.", vbExclamation
+        Exit Sub
+    End If
+
+    If TheColumn.DataBodyRange Is Nothing Then
+        MsgBox "This table does not contain data rows yet.", vbInformation
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    ThisWorkbook.Names("LiveFilter_Anchor").Delete
+    On Error GoTo 0
+    ThisWorkbook.Names.Add Name:="LiveFilter_Anchor", RefersTo:=TheColumn.DataBodyRange, Visible:=False
+
+    TheTable.Parent.Activate
+    Call Wake_Up_The_Tool(ShowErrors:=True)
+    If Not TheListener Is Nothing Then
+        Call Fix_Placeholder_Text(TheListener.SearchBox, CStr(TheHeader.Value))
+    End If
+End Sub
+
+Public Sub Run_Live_Filter(ByVal UserText As String)
+    Dim TheTable As ListObject, TargetRange As Range
+    Dim VisibleRows As Range, Cell As Range, RowsToHide As Range
+    Dim ColumnNumber As Long
+    Dim CleanText As String
+    Dim rawTokens() As String
+    Dim posTerms() As String, negTerms() As String
+    Dim pCount As Long, nCount As Long
+    Dim token As String, tempStr As String
+    Dim i As Long
+    Dim MatchFailed As Boolean
+
+    If InStr(1, UserText, "(Ctrl+Shift+F)") > 0 Then Exit Sub
+
+    On Error Resume Next
+    Set TargetRange = ThisWorkbook.Names("LiveFilter_Anchor").RefersToRange
+    If TargetRange Is Nothing Then Exit Sub
+    Set TheTable = TargetRange.ListObject
+    If TheTable Is Nothing Then Exit Sub
+    On Error GoTo 0
+
+    ColumnNumber = TargetRange.Column - TheTable.DataBodyRange.Column + 1
+    Application.ScreenUpdating = False
+
+    If Left(UserText, 1) = """" And Right(UserText, 1) = """" And Len(UserText) > 1 Then
+        CleanText = Mid(UserText, 2, Len(UserText) - 2)
+        TheTable.Range.AutoFilter Field:=ColumnNumber, Criteria1:=CleanText
+
+        On Error Resume Next
+        Set VisibleRows = TargetRange.SpecialCells(xlCellTypeVisible)
+        On Error GoTo 0
+        If Not VisibleRows Is Nothing Then
+            For Each Cell In VisibleRows
+                If StrComp(Cell.Value, CleanText, vbBinaryCompare) <> 0 Then
+                    If RowsToHide Is Nothing Then Set RowsToHide = Cell Else Set RowsToHide = Union(RowsToHide, Cell)
+                End If
+            Next Cell
+            If Not RowsToHide Is Nothing Then RowsToHide.EntireRow.Hidden = True
+        End If
+        Application.ScreenUpdating = True
+        Exit Sub
+    End If
+
+    CleanText = Trim(UserText)
+
+    If CleanText = "" Then
+        TheTable.Range.AutoFilter Field:=ColumnNumber
+        Application.ScreenUpdating = True
+        Exit Sub
+    End If
+
+    tempStr = Replace(CleanText, "+", " ")
+    rawTokens = Split(tempStr, " ")
+
+    pCount = 0: nCount = 0
+    ReDim posTerms(0 To UBound(rawTokens))
+    ReDim negTerms(0 To UBound(rawTokens))
+
+    For i = LBound(rawTokens) To UBound(rawTokens)
+        token = Trim(rawTokens(i))
+        If Len(token) > 0 Then
+            If Left(token, 1) = "-" And Len(token) > 1 Then
+                negTerms(nCount) = Mid(token, 2)
+                nCount = nCount + 1
+            Else
+                posTerms(pCount) = token
+                pCount = pCount + 1
+            End If
+        End If
+    Next i
+
+    If pCount > 0 Then
+        TheTable.Range.AutoFilter Field:=ColumnNumber, Criteria1:="=*" & posTerms(0) & "*"
+    Else
+        TheTable.Range.AutoFilter Field:=ColumnNumber
+    End If
+
+    If pCount > 1 Or nCount > 0 Then
+        On Error Resume Next
+        Set VisibleRows = TargetRange.SpecialCells(xlCellTypeVisible)
+        On Error GoTo 0
+
+        If Not VisibleRows Is Nothing Then
+            For Each Cell In VisibleRows
+                MatchFailed = False
+
+                If pCount > 1 Then
+                    For i = 1 To pCount - 1
+                        If InStr(1, Cell.Value, posTerms(i), vbTextCompare) = 0 Then
+                            MatchFailed = True
+                            Exit For
+                        End If
+                    Next i
+                End If
+
+                If Not MatchFailed And nCount > 0 Then
+                    For i = 0 To nCount - 1
+                        If InStr(1, Cell.Value, negTerms(i), vbTextCompare) > 0 Then
+                            MatchFailed = True
+                            Exit For
+                        End If
+                    Next i
+                End If
+
+                If MatchFailed Then
+                    If RowsToHide Is Nothing Then Set RowsToHide = Cell Else Set RowsToHide = Union(RowsToHide, Cell)
+                End If
+            Next Cell
+
+            If Not RowsToHide Is Nothing Then RowsToHide.EntireRow.Hidden = True
+        End If
+    End If
+
+    Application.ScreenUpdating = True
+End Sub
+
+Public Sub Fix_Placeholder_Text(TheBox As Object, Optional ColName As String = "")
+    If TheBox Is Nothing Then Exit Sub
+
+    If ColName = "" Then
+        On Error Resume Next
+        ColName = ThisWorkbook.Names("LiveFilter_Anchor").RefersToRange.ListObject.HeaderRowRange.Cells(1, _
+                  ThisWorkbook.Names("LiveFilter_Anchor").RefersToRange.Column - _
+                  ThisWorkbook.Names("LiveFilter_Anchor").RefersToRange.ListObject.DataBodyRange.Column + 1).Value
+        On Error GoTo 0
+    End If
+    If ColName = "" Then ColName = "Target"
+
+    On Error Resume Next
+    If Trim(TheBox.Value) = "" Or TheBox.Value Like "Search *" Then
+        Application.ScreenUpdating = False
+        TheBox.ForeColor = RGB(150, 150, 150)
+        TheBox.Value = "Search " & ColName & "... (+AND / -EXCLUDE) (Ctrl+Shift+F: Change Column)"
+        Application.ScreenUpdating = True
+    End If
+    On Error GoTo 0
+End Sub
+
+Public Sub Clear_Placeholder_Text(TheBox As Object)
+    If TheBox Is Nothing Then Exit Sub
+    On Error Resume Next
+    If TheBox.ForeColor = RGB(150, 150, 150) Then
+        TheBox.Value = ""
+        TheBox.ForeColor = RGB(0, 0, 0)
+    End If
+    On Error GoTo 0
 End Sub
 
 Public Sub NMDC_LiveFilterWake()
-    ' Compatibility entry point used by Pending Update rebuilds.  It only
-    ' refreshes the form launch UI; it never installs a global key hook.
-    NMDC_ApplyLiveFilterUX
-End Sub
-
-Private Sub NMDC_LiveFilterConfigureSheet(ByVal ws As Worksheet)
-    On Error GoTo Handler
-
-    Dim table As ListObject
-    Dim searchText As String
-    Dim targetText As String
-    Dim area As Range
-    Dim button As Shape
-
-    Set table = NMDC_LiveFilterTableForSheet(ws)
-    If table Is Nothing Then Exit Sub
-
-    searchText = CStr(ws.Range("B3").Value)
-    targetText = CStr(ws.Range("F3").Value)
-
-    ws.Range("A3").Value = "LIVE FILTER"
-    ' B3/F3 are persisted mirrors for the modeless form state; the form owns
-    ' the editable caret and per-keystroke Change event.
-    ws.Range("B3:D3").UnMerge
-    ws.Range("F3:H3").UnMerge
-    ws.Range("B3:D3").ClearContents
-    ws.Range("F3:H3").ClearContents
-    ws.Range("B3").Value = searchText
-    ws.Range("E3").Value = "IN"
-    If Len(Trim$(targetText)) = 0 Then targetText = NMDC_LIVE_ALL_COLUMNS
-    ws.Range("F3").Value = targetText
-
-    With ws.Range("A3:H3")
-        .Font.Name = "Aptos"
-        .Font.Size = 9
-        .VerticalAlignment = xlCenter
-        .RowHeight = 24
-    End With
-    With ws.Range("A3")
-        .Font.Bold = True
-        .Font.Color = RGB(31, 70, 90)
-    End With
-    With ws.Range("E3")
-        .Font.Bold = True
-        .Font.Color = RGB(31, 70, 90)
-        .HorizontalAlignment = xlCenter
-    End With
-    With ws.Range("B3:D3")
-        .Interior.Color = RGB(255, 255, 255)
-        .Borders.LineStyle = xlContinuous
-        .Borders.Color = RGB(20, 108, 148)
-        .Font.Color = RGB(0, 0, 0)
-        .HorizontalAlignment = xlLeft
-    End With
-    With ws.Range("F3:H3")
-        .Interior.Color = RGB(232, 241, 247)
-        .Borders.LineStyle = xlContinuous
-        .Borders.Color = RGB(20, 108, 148)
-        .Font.Color = RGB(31, 70, 90)
-        .Font.Bold = True
-    End With
-
-    On Error Resume Next
-    ws.Range("B3").Validation.Delete
-    ws.Range("B3").Validation.Add Type:=xlValidateInputOnly
-    ws.Range("B3").Validation.InputTitle = "Live Filter"
-    ws.Range("B3").Validation.InputMessage = _
-        "Click OPEN LIVE FILTER to type; spaces or + = AND; -word = exclude; quotes = exact; * and ? = wildcards. Use Choose Column to change the target."
-    ws.Range("B3").Validation.ShowInput = True
-    On Error GoTo Handler
-
-    On Error Resume Next
-    ws.Shapes(NMDC_LIVE_OPEN_BUTTON).Delete
-    ws.Shapes(NMDC_LIVE_RESET_BUTTON).Delete
-    On Error GoTo Handler
-    Set area = ws.Range("I3:J3")
-    Set button = ws.Shapes.AddShape(5, area.Left + 1, area.Top + 1, area.Width - 2, area.Height - 2)
-    button.Name = NMDC_LIVE_OPEN_BUTTON
-    button.OnAction = "NMDC_LiveFilterShow"
-    button.TextFrame.Characters.Text = "OPEN LIVE FILTER"
-    NMDC_LiveFilterFormatButton button, RGB(20, 108, 148)
-    Set area = ws.Range("K3:L3")
-    Set button = ws.Shapes.AddShape(5, area.Left + 1, area.Top + 1, area.Width - 2, area.Height - 2)
-    button.Name = NMDC_LIVE_RESET_BUTTON
-    button.OnAction = "NMDC_LiveFilterClear"
-    button.TextFrame.Characters.Text = "RESET"
-    NMDC_LiveFilterFormatButton button, RGB(91, 100, 112)
-
-    NMDC_LiveFilterEnsureHelper table
-
-    If Len(Trim$(searchText)) > 0 Then NMDC_LiveFilterApplyForSheet ws
-    Exit Sub
-
-Handler:
-    NMDC_LogError "LIVE_FILTER_SHEET_UX_ERROR", _
-        "Excel could not prepare the live filter on " & ws.Name & ".", _
-        Err.Number & " - " & Err.Description
-End Sub
-
-Private Sub NMDC_LiveFilterFormatButton(ByVal button As Shape, ByVal fillColor As Long)
-    With button
-        .TextFrame.HorizontalAlignment = xlCenter
-        .TextFrame.VerticalAlignment = 3
-        .Fill.ForeColor.RGB = fillColor
-        .Line.ForeColor.RGB = fillColor
-        .TextFrame.Characters.Font.Name = "Aptos"
-        .TextFrame.Characters.Font.Size = 8
-        .TextFrame.Characters.Font.Bold = True
-        .TextFrame.Characters.Font.Color = RGB(255, 255, 255)
-        .Placement = xlMoveAndSize
-    End With
-End Sub
-
-Public Sub NMDC_LiveFilterSheetChange(ByVal Sh As Object, ByVal Target As Range)
-    On Error GoTo Handler
-
-    Dim ws As Worksheet
-    Dim table As ListObject
-
-    If Sh Is Nothing Then Exit Sub
-    If TypeName(Sh) <> "Worksheet" Then Exit Sub
-    Set ws = Sh
-    Set table = NMDC_LiveFilterTableForSheet(ws)
-    If table Is Nothing Then Exit Sub
-
-    If Intersect(Target, ws.Range("B3:D3")) Is Nothing And _
-       Intersect(Target, ws.Range("F3:H3")) Is Nothing Then Exit Sub
-
-    NMDC_LiveFilterApplyForSheet ws
-    Exit Sub
-
-Handler:
-    NMDC_LogError "LIVE_FILTER_CHANGE_ERROR", _
-        "Excel could not apply the live filter on " & Sh.Name & ".", _
-        Err.Number & " - " & Err.Description
+    Call Wake_Up_The_Tool(False)
 End Sub
 
 Public Sub NMDC_LiveFilterSheetActivate(ByVal Sh As Object)
-    On Error GoTo Handler
+    On Error Resume Next
     If Sh Is Nothing Then Exit Sub
     If TypeName(Sh) <> "Worksheet" Then Exit Sub
     If NMDC_LiveFilterTableForSheet(Sh) Is Nothing Then Exit Sub
-    NMDC_LiveFilterConfigureSheet Sh
-    Exit Sub
-Handler:
-    NMDC_LogError "LIVE_FILTER_ACTIVATE_ERROR", _
-        "Excel could not refresh the live filter controls.", _
-        Err.Number & " - " & Err.Description
+    NMDC_EnsureReferenceLiveFilterControls Sh
+    Sh.Activate
+    Call Wake_Up_The_Tool(False)
+    On Error GoTo 0
+End Sub
+
+Public Sub NMDC_LiveFilterSheetChange(ByVal Sh As Object, ByVal Target As Range)
+    ' Native ActiveX SearchBox_Change is the typing event.
 End Sub
 
 Public Sub NMDC_LiveFilterSelectionChange(ByVal Sh As Object, ByVal Target As Range)
-    On Error GoTo Handler
+    ' Native ActiveX textbox receives the click/caret directly.
+End Sub
 
-    Dim ws As Worksheet
-    If Sh Is Nothing Then Exit Sub
-    If Target Is Nothing Then Exit Sub
-    If TypeName(Sh) <> "Worksheet" Then Exit Sub
-    Set ws = Sh
-    If NMDC_LiveFilterTableForSheet(ws) Is Nothing Then Exit Sub
-    If Intersect(Target, ws.Range("B3:D3")) Is Nothing Then Exit Sub
+Public Sub NMDC_LiveFilterChooseColumn()
+    Ask_User_For_Target_Column
+End Sub
 
-    NMDC_LiveFilterShowForSheet ws
-    Exit Sub
+Public Sub NMDC_LiveFilterClear()
+    Reset_Search_Click
+End Sub
 
-Handler:
-    NMDC_LogError "LIVE_FILTER_SELECTION_ERROR", _
-        "Excel could not open the Live Filter input from the search bar.", _
-        Err.Number & " - " & Err.Description
+Public Sub NMDC_LiveFilterShow()
+    On Error Resume Next
+    Wake_Up_The_Tool True
+    If Not TheListener Is Nothing Then TheListener.SearchBox.Activate
+    On Error GoTo 0
+End Sub
+
+Public Sub NMDC_LiveFilterFormChanged(ByVal sheetName As String, ByVal queryText As String)
+    If StrComp(ActiveSheet.Name, sheetName, vbTextCompare) = 0 Then Run_Live_Filter queryText
 End Sub
 
 Public Sub NMDC_LiveFilterSelectColumnByName(ByVal sheetName As String, ByVal columnName As String)
@@ -239,16 +479,12 @@ Public Sub NMDC_LiveFilterSelectColumnByName(ByVal sheetName As String, ByVal co
     Set table = NMDC_LiveFilterTableForSheet(ws)
     If table Is Nothing Then Err.Raise vbObjectError + 951, "NMDC Live Filter", "No searchable table on " & sheetName
 
-    Set targetColumn = Nothing
-    On Error Resume Next
     Set targetColumn = table.ListColumns(columnName)
-    On Error GoTo Handler
     If targetColumn Is Nothing Then Err.Raise vbObjectError + 952, "NMDC Live Filter", "Unknown search column: " & columnName
     If Left$(CStr(targetColumn.Name), 7) = "__NMDC_" Then Err.Raise vbObjectError + 953, "NMDC Live Filter", "Internal helper columns cannot be searched."
 
-    NMDC_LiveFilterSetTarget ws, targetColumn
-    ws.Range("F3").Value = targetColumn.Name
-    NMDC_LiveFilterApplyForSheet ws
+    ws.Activate
+    Setup_New_Target targetColumn.Range.Cells(1, 1)
     Exit Sub
 
 Handler:
@@ -257,357 +493,6 @@ Handler:
         Err.Number & " - " & Err.Description
     Err.Raise Err.Number, "NMDC Live Filter", Err.Description
 End Sub
-
-Public Sub NMDC_LiveFilterChooseColumn()
-    On Error GoTo Handler
-
-    Dim ws As Worksheet
-    Dim table As ListObject
-    Dim picked As Range
-    Dim hit As Range
-    Dim headerName As String
-    Dim previousEvents As Boolean
-
-    If ActiveSheet Is Nothing Then Exit Sub
-    Set ws = ActiveSheet
-    Set table = NMDC_LiveFilterTableForSheet(ws)
-    If table Is Nothing Then
-        MsgBox "Live Filter is available on the main data/review tables only.", _
-               vbInformation, "NMDC Document Index"
-        Exit Sub
-    End If
-
-    On Error Resume Next
-    Set picked = Application.InputBox( _
-        "Click the HEADER of the column to search." & vbCrLf & vbCrLf & _
-        "Cancel to keep the current target. To search the whole row, type ALL COLUMNS in the target box.", _
-        "Choose Live Filter Column", Type:=8)
-    On Error GoTo Handler
-    If picked Is Nothing Then Exit Sub
-
-    Set hit = Intersect(picked.Cells(1, 1), table.HeaderRowRange)
-    If hit Is Nothing Then
-        MsgBox "Please click a header cell inside the table on this sheet.", _
-               vbExclamation, "NMDC Document Index"
-        Exit Sub
-    End If
-
-    headerName = CStr(hit.Value)
-    If Left$(headerName, 7) = "__NMDC_" Then
-        MsgBox "That is an internal helper column. Choose a normal user-visible field.", _
-               vbExclamation, "NMDC Document Index"
-        Exit Sub
-    End If
-
-    previousEvents = Application.EnableEvents
-    Application.EnableEvents = False
-    ws.Range("F3").Value = headerName
-    Application.EnableEvents = previousEvents
-
-    NMDC_LiveFilterApplyForSheet ws
-    On Error Resume Next
-    frmNMDC_LiveFilter.NMDC_Bind ws.Name, CStr(ws.Range("B3").Value), headerName
-    On Error GoTo 0
-    Exit Sub
-
-Handler:
-    On Error Resume Next
-    Application.EnableEvents = previousEvents
-    On Error GoTo 0
-    NMDC_LogError "LIVE_FILTER_TARGET_ERROR", _
-        "Excel could not change the live filter target column.", _
-        Err.Number & " - " & Err.Description
-End Sub
-
-Public Sub NMDC_LiveFilterShow()
-    On Error GoTo Handler
-    If ActiveSheet Is Nothing Then Exit Sub
-    If TypeName(ActiveSheet) <> "Worksheet" Then Exit Sub
-    NMDC_LiveFilterShowForSheet ActiveSheet
-    Exit Sub
-Handler:
-    NMDC_LogError "LIVE_FILTER_FORM_ERROR", _
-        "Excel could not open the modeless Live Filter input.", _
-        Err.Number & " - " & Err.Description
-End Sub
-
-Private Sub NMDC_LiveFilterShowForSheet(ByVal ws As Worksheet)
-    Dim table As ListObject
-    Set table = NMDC_LiveFilterTableForSheet(ws)
-    If table Is Nothing Then Exit Sub
-
-    NMDC_LiveFilterConfigureSheet ws
-    frmNMDC_LiveFilter.NMDC_Bind ws.Name, CStr(ws.Range("B3").Value), CStr(ws.Range("F3").Value)
-    If Not frmNMDC_LiveFilter.Visible Then frmNMDC_LiveFilter.Show vbModeless
-    frmNMDC_LiveFilter.NMDC_FocusSearch
-End Sub
-
-Public Sub NMDC_LiveFilterFormChanged(ByVal sheetName As String, ByVal queryText As String)
-    On Error GoTo Handler
-    Dim ws As Worksheet
-    Dim previousEvents As Boolean
-    Set ws = ThisWorkbook.Worksheets(sheetName)
-    previousEvents = Application.EnableEvents
-    Application.EnableEvents = False
-    ws.Range("B3").Value = queryText
-    Application.EnableEvents = previousEvents
-    NMDC_LiveFilterApplyForSheet ws
-    Exit Sub
-Handler:
-    On Error Resume Next
-    Application.EnableEvents = previousEvents
-    On Error GoTo 0
-    NMDC_LogError "LIVE_FILTER_CHANGE_ERROR", _
-        "Excel could not apply the Live Filter while typing.", _
-        Err.Number & " - " & Err.Description
-End Sub
-
-Public Sub NMDC_LiveFilterClear()
-    On Error GoTo Handler
-
-    Dim ws As Worksheet
-    Dim table As ListObject
-    Dim previousEvents As Boolean
-
-    If ActiveSheet Is Nothing Then Exit Sub
-    Set ws = ActiveSheet
-    Set table = NMDC_LiveFilterTableForSheet(ws)
-    If table Is Nothing Then Exit Sub
-
-    previousEvents = Application.EnableEvents
-    Application.EnableEvents = False
-    ws.Range("B3").Value = ""
-    Application.EnableEvents = previousEvents
-    NMDC_LiveFilterApplyForSheet ws
-    Exit Sub
-
-Handler:
-    On Error Resume Next
-    Application.EnableEvents = previousEvents
-    On Error GoTo 0
-    NMDC_LogError "LIVE_FILTER_CLEAR_ERROR", _
-        "Excel could not clear the live filter.", _
-        Err.Number & " - " & Err.Description
-End Sub
-
-Public Sub NMDC_LiveFilterApplyForSheet(ByVal ws As Worksheet)
-    On Error GoTo Handler
-
-    Dim table As ListObject
-    Dim helper As ListColumn
-    Dim searchText As String
-    Dim targetName As String
-    Dim targetIndex As Long
-    Dim values As Variant
-    Dim resultValues() As Variant
-    Dim rowCount As Long
-    Dim rowIndex As Long
-    Dim columnIndex As Long
-    Dim rowText As String
-    Dim cleanText As String
-    Dim strictMode As Boolean
-    Dim rawTokens() As String
-    Dim posTerms() As String
-    Dim negTerms() As String
-    Dim pCount As Long
-    Dim nCount As Long
-    Dim token As String
-    Dim i As Long
-    Dim matched As Boolean
-    Dim previousScreen As Boolean
-    Dim previousEvents As Boolean
-
-    Set table = NMDC_LiveFilterTableForSheet(ws)
-    If table Is Nothing Then Exit Sub
-    Set helper = NMDC_LiveFilterEnsureHelper(table)
-    If helper Is Nothing Then Exit Sub
-
-    searchText = Trim$(CStr(ws.Range("B3").Value))
-    targetName = Trim$(CStr(ws.Range("F3").Value))
-    If Len(targetName) = 0 Then targetName = NMDC_LIVE_ALL_COLUMNS
-
-    If Len(searchText) = 0 Then
-        On Error Resume Next
-        table.Range.AutoFilter Field:=helper.Index
-        helper.Range.EntireColumn.Hidden = True
-        On Error GoTo Handler
-        Exit Sub
-    End If
-
-    If table.DataBodyRange Is Nothing Then Exit Sub
-    rowCount = table.DataBodyRange.Rows.Count
-    values = table.DataBodyRange.Value2
-    ReDim resultValues(1 To rowCount, 1 To 1)
-
-    targetIndex = 0
-    If StrComp(targetName, NMDC_LIVE_ALL_COLUMNS, vbTextCompare) <> 0 Then
-        On Error Resume Next
-        targetIndex = table.ListColumns(targetName).Index
-        On Error GoTo Handler
-        If targetIndex > 0 Then
-            If Left$(CStr(table.ListColumns(targetIndex).Name), 7) = "__NMDC_" Then targetIndex = 0
-        End If
-    End If
-
-    cleanText = searchText
-    strictMode = False
-    If Len(cleanText) > 1 Then
-        If Left$(cleanText, 1) = Chr$(34) And Right$(cleanText, 1) = Chr$(34) Then
-            strictMode = True
-            cleanText = Mid$(cleanText, 2, Len(cleanText) - 2)
-        End If
-    End If
-
-    pCount = 0
-    nCount = 0
-    If Not strictMode Then
-        rawTokens = Split(Replace(cleanText, "+", " "), " ")
-        ReDim posTerms(0 To UBound(rawTokens))
-        ReDim negTerms(0 To UBound(rawTokens))
-        For i = LBound(rawTokens) To UBound(rawTokens)
-            token = Trim$(rawTokens(i))
-            If Len(token) > 0 Then
-                If Left$(token, 1) = "-" And Len(token) > 1 Then
-                    negTerms(nCount) = Mid$(token, 2)
-                    nCount = nCount + 1
-                Else
-                    posTerms(pCount) = token
-                    pCount = pCount + 1
-                End If
-            End If
-        Next i
-    End If
-
-    previousScreen = Application.ScreenUpdating
-    previousEvents = Application.EnableEvents
-    Application.ScreenUpdating = False
-    Application.EnableEvents = False
-
-    For rowIndex = 1 To rowCount
-        matched = True
-
-        If strictMode Then
-            matched = False
-            If targetIndex > 0 Then
-                matched = NMDC_LiveFilterMatchesExact(CStr(values(rowIndex, targetIndex)), cleanText)
-            Else
-                For columnIndex = 1 To table.ListColumns.Count
-                    If Left$(CStr(table.ListColumns(columnIndex).Name), 7) <> "__NMDC_" Then
-                        If NMDC_LiveFilterMatchesExact(CStr(values(rowIndex, columnIndex)), cleanText) Then
-                            matched = True
-                            Exit For
-                        End If
-                    End If
-                Next columnIndex
-            End If
-        Else
-            If targetIndex > 0 Then
-                rowText = CStr(values(rowIndex, targetIndex))
-            Else
-                rowText = NMDC_LiveFilterRowText(table, values, rowIndex)
-            End If
-
-            If pCount > 0 Then
-                For i = 0 To pCount - 1
-                    If Not NMDC_LiveFilterMatchesTerm(rowText, posTerms(i)) Then
-                        matched = False
-                        Exit For
-                    End If
-                Next i
-            End If
-
-            If matched And nCount > 0 Then
-                For i = 0 To nCount - 1
-                    If NMDC_LiveFilterMatchesTerm(rowText, negTerms(i)) Then
-                        matched = False
-                        Exit For
-                    End If
-                Next i
-            End If
-        End If
-
-        resultValues(rowIndex, 1) = matched
-    Next rowIndex
-
-    helper.DataBodyRange.Value2 = resultValues
-    table.Range.AutoFilter Field:=helper.Index, Criteria1:=True
-    helper.Range.EntireColumn.Hidden = True
-
-CleanExit:
-    Application.EnableEvents = previousEvents
-    Application.ScreenUpdating = previousScreen
-    Exit Sub
-
-Handler:
-    On Error Resume Next
-    Application.EnableEvents = previousEvents
-    Application.ScreenUpdating = previousScreen
-    On Error GoTo 0
-    NMDC_LogError "LIVE_FILTER_APPLY_ERROR", _
-        "Excel could not apply the live filter on " & ws.Name & ".", _
-        Err.Number & " - " & Err.Description
-End Sub
-
-Private Function NMDC_LiveFilterMatchesExact(ByVal valueText As String, ByVal patternText As String) As Boolean
-    If InStr(1, patternText, "*", vbBinaryCompare) > 0 Or _
-       InStr(1, patternText, "?", vbBinaryCompare) > 0 Then
-        NMDC_LiveFilterMatchesExact = (LCase$(valueText) Like LCase$(patternText))
-    Else
-        NMDC_LiveFilterMatchesExact = (StrComp(valueText, patternText, vbBinaryCompare) = 0)
-    End If
-End Function
-
-Private Function NMDC_LiveFilterMatchesTerm(ByVal valueText As String, ByVal termText As String) As Boolean
-    If InStr(1, termText, "*", vbBinaryCompare) > 0 Or _
-       InStr(1, termText, "?", vbBinaryCompare) > 0 Then
-        NMDC_LiveFilterMatchesTerm = (LCase$(valueText) Like LCase$(termText))
-    Else
-        NMDC_LiveFilterMatchesTerm = (InStr(1, valueText, termText, vbTextCompare) > 0)
-    End If
-End Function
-
-Private Function NMDC_LiveFilterRowText(ByVal table As ListObject, ByVal values As Variant, ByVal rowIndex As Long) As String
-    Dim columnIndex As Long
-    Dim valueText As String
-    Dim combined As String
-
-    combined = ""
-    For columnIndex = 1 To table.ListColumns.Count
-        If Left$(CStr(table.ListColumns(columnIndex).Name), 7) <> "__NMDC_" Then
-            valueText = CStr(values(rowIndex, columnIndex))
-            If Len(valueText) > 0 Then
-                If Len(combined) > 0 Then combined = combined & " | "
-                combined = combined & valueText
-            End If
-        End If
-    Next columnIndex
-    NMDC_LiveFilterRowText = combined
-End Function
-
-Public Function NMDC_LiveFilterEnsureHelper(ByVal table As ListObject) As ListColumn
-    On Error GoTo Handler
-
-    Dim helper As ListColumn
-    Set helper = Nothing
-    On Error Resume Next
-    Set helper = table.ListColumns(NMDC_LIVE_HELPER)
-    On Error GoTo Handler
-
-    If helper Is Nothing Then
-        Set helper = table.ListColumns.Add
-        helper.Name = NMDC_LIVE_HELPER
-    End If
-
-    helper.Range.EntireColumn.Hidden = True
-    Set NMDC_LiveFilterEnsureHelper = helper
-    Exit Function
-
-Handler:
-    NMDC_LogError "LIVE_FILTER_HELPER_ERROR", _
-        "Excel could not prepare the internal live-filter helper field for table " & table.Name & ".", _
-        Err.Number & " - " & Err.Description
-    Set NMDC_LiveFilterEnsureHelper = Nothing
-End Function
 
 Private Function NMDC_LiveFilterTableForSheet(ByVal ws As Worksheet) As ListObject
     Dim tableName As String

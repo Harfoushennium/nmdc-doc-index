@@ -155,11 +155,25 @@ class Stage3SmokeTests(unittest.TestCase):
             for tbl_name in expected_core_tables:
                 self.assertIn(tbl_name, seen_tables, f"Expected table '{tbl_name}' not found in any sheet")
 
-            # 6. Verify VBProject components (specifically frmNMDC_LiveFilter)
+            # 6. Verify owner-reference Live Filter components and real worksheet controls
             vba_components = {wb.VBProject.VBComponents.Item(i).Name for i in range(1, wb.VBProject.VBComponents.Count + 1)}
-            self.assertIn("frmNMDC_LiveFilter", vba_components, "UserForm frmNMDC_LiveFilter missing from VBProject")
-            self.assertIn("modNMDC_LiveFilter", vba_components, "modNMDC_LiveFilter missing from VBProject")
+            self.assertIn("Mod_LiveFilter", vba_components, "Owner-reference Mod_LiveFilter module missing from VBProject")
+            self.assertIn("Cls_LiveFilter_Listener", vba_components, "Live Filter listener class missing from VBProject")
             self.assertIn("modNMDC_CustomFields", vba_components, "modNMDC_CustomFields missing from VBProject")
+
+            for sheet_name in (
+                "Master Documents",
+                "Revisions",
+                "Transactions",
+                "Pending Update",
+                "Review Flags",
+                "User Decisions",
+                "Update History",
+                "Error Log",
+            ):
+                ws = wb.Worksheets(sheet_name)
+                control = ws.OLEObjects("TxtBox_Search")
+                self.assertIsNotNone(control, f"TxtBox_Search missing on {sheet_name}")
 
             # 7. Test close and reopen
             wb.Close(False)
@@ -169,7 +183,7 @@ class Stage3SmokeTests(unittest.TestCase):
             wb.Close(False)
             wb = None
 
-            print(f"Stage 3 smoke PASSED: {len(actual_sheets)} sheets, {len(seen_tables)} unique tables, frmNMDC_LiveFilter verified.")
+            print(f"Stage 3 smoke PASSED: {len(actual_sheets)} sheets, {len(seen_tables)} unique tables, owner-reference ActiveX Live Filter verified.")
 
         finally:
             if excel is not None:

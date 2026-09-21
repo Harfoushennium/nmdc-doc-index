@@ -80,6 +80,7 @@ jobs:
           Copy-Item .\dist\nmdc_index_engine.exe "$package\engine\nmdc_index_engine.exe"
           Copy-Item .\config\classification_rules.csv, .\config\project_identity_overrides.csv, .\config\source_exclusions.csv "$package\config\"
           Copy-Item .\excel\vba\*.bas "$package\vba\"
+          Copy-Item .\excel\vba\*.cls "$package\vba\"
           Copy-Item .\excel\vba\*.frm, .\excel\vba\*.frx "$package\vba\"
           Copy-Item .\packaging\Create_NMDC_Document_Index.vbs, .\packaging\README.md "$package\"
           Compress-Archive -Path "$package\*" -DestinationPath NMDC_Document_Index_Production_Windows.zip -Force

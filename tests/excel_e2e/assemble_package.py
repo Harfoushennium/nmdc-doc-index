@@ -40,6 +40,8 @@ def assemble_package():
     # Copy vba
     for bas in (root / "excel" / "vba").glob("*.bas"):
         shutil.copy2(bas, package / "vba" / bas.name)
+    for cls in (root / "excel" / "vba").glob("*.cls"):
+        shutil.copy2(cls, package / "vba" / cls.name)
     for frm in (root / "excel" / "vba").glob("*.frm"):
         shutil.copy2(frm, package / "vba" / frm.name)
     for frx in (root / "excel" / "vba").glob("*.frx"):

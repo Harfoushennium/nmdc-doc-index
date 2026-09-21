@@ -115,7 +115,7 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 6. At minimum test normal partial matching, multiple required terms/AND behaviour from the reference, excluded words, exact phrase matching and wildcard matching.
 7. Help/placeholder text must show the usable syntax with examples.
 8. The search implementation must work in the owner's corporate Microsoft 365 environment and must not reproduce runtime error 40040.
-9. A fake display shape plus `Application.OnKey` global keyboard capture is **not accepted**.
+9. The owner REV03 architecture is required: a real worksheet ActiveX `TxtBox_Search` with a listener-class `Change` event. `Application.OnKey` is permitted only for the `Ctrl+Shift+F` target-column shortcut; it must never capture normal typing.
 10. Clearing/resetting Live Filter must never merge populated ranges, damage data, or disturb unrelated table filters.
 11. Live Filter must survive refresh, close/reopen and table rebuilds without manual VBA repair.
 12. Real Excel simulation is mandatory; static VBA string-contract tests are not sufficient evidence.
