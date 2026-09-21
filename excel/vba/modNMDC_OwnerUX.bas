@@ -224,7 +224,7 @@ Private Sub NMDC_ApplyHomeWorkflowGuide()
     NMDC_SetGuideRow ws, 34, "4", "CHOOSE SOURCES", "On Pending Update, use the native Excel checkboxes in the source-selection section below the staged changes table: checked = include, unchecked = exclude. Save Source Choices & Restage once."
     NMDC_SetGuideRow ws, 35, "5", "DECIDE", "Approve = accept the whole remaining proposal; Hold = postpone; Reject = discard the staged proposal."
     NMDC_SetGuideRow ws, 36, "6", "EXCEPTIONS", "Review Flags is only for genuine extraction/data exceptions. The validated current DATA should produce zero extraction flags."
-    NMDC_SetGuideRow ws, 37, "TIP", "LIVE FILTER", "Choose one table column, then click the search bar (or OPEN LIVE FILTER) and type in the real search input. Results update on every key; Reset clears the filter."
+    NMDC_SetGuideRow ws, 37, "TIP", "LIVE FILTER", "Use the REV03 search box on the sheet. Press Ctrl+Shift+F only to choose the target table header, then type directly in TxtBox_Search. Spaces or + = AND; -word = EXCLUDE; quoted text = exact. RESET SEARCH clears the filter."
     NMDC_SetGuideRow ws, 38, "TIP", "RULES", "Rules & Mappings uses normal text matching: CONTAINS, EXACT, STARTS WITH or ENDS WITH."
 End Sub
 

@@ -51,12 +51,14 @@ The production workbook (`NMDC_Document_Index.xlsm`) consists of exactly **15 wo
 
 ## 4. Live Filter & User Experience Requirements
 
-- **Instant Multi-Column Live Filter:**
-  - Invoked via keyboard shortcut **`Ctrl+Shift+F`** or by clicking the **Live Filter** button.
-  - Displays a high-performance floating UserForm (`frmNMDC_LiveFilter`).
-  - Automatically targets the active worksheet (`Master Documents`, `Revisions`, `Transactions`, or `Pending Update`).
-  - Multi-term syntax support: typing multiple space-separated terms performs an `AND` filter across all columns.
-  - Instant **Clear** button resets table filters immediately without losing column layout or sorting.
+- **Dynamic Live Filter — owner REV03 reference architecture:**
+  - A real worksheet ActiveX textbox named `TxtBox_Search` is the typing surface.
+  - `Cls_LiveFilter_Listener` handles `MouseDown`, `Change`, and `KeyDown`; filtering updates from the textbox `Change` event on every keystroke.
+  - `Ctrl+Shift+F` is used only to choose a target **table header** and store that target in `LiveFilter_Anchor`; it must not capture normal typing.
+  - Placeholder/help text follows the reference tool: `Search <Column>... (+AND / -EXCLUDE) (Ctrl+Shift+F: Change Column)`.
+  - Spaces or `+` mean required/AND terms; `-word` excludes rows containing that term; surrounding quotes invoke the reference exact-match behavior.
+  - A visible **RESET SEARCH** button clears the table filter, clears the textbox, restores the placeholder, and returns focus to the search box.
+  - The same control pattern is installed on Master Documents, Revisions, Transactions, Pending Update, Review Flags, User Decisions, Update History, and Error Log.
 - **Visual Presentation Standards:**
   - Font: Clean Aptos 10 typography across all data cells.
   - Automatic font coloring with no harsh or arbitrary cell background fills.
@@ -72,6 +74,7 @@ The production workbook (`NMDC_Document_Index.xlsm`) consists of exactly **15 wo
 
 - **Source Scope Controls:** Checkboxes inside `Pending Update` allow including or excluding entire source workbooks in a single **Save Selection & Restage** operation without repeatedly re-scanning.
 - **Non-Coder Rules Editor:** Plain-text match types (`CONTAINS`, `EXACT`, `STARTS_WITH`, `ENDS_WITH`). No complex regular expressions required for routine rules.
+- **Actionable parser/mapping exception workflow:** When a genuine extraction/layout Review Flag is marked `NEEDS PARSER/MAPPING FIX`, the workbook must prepare a stable fix-request handoff containing the source file/sheet and owner comment. It must explain that the installed executable cannot safely rewrite its own parser code. After a corrected parser/configuration is installed, **Retry After Fix** must reprocess the source through Full Rescan without modifying source DATA or approving the staged proposal automatically.
 - **Safe Recovery Actions:**
   - **Reset All Records:** Deletes runtime cache and index records without touching source `DATA/` or configuration files.
   - **Undo Last Approval:** Restores the previous approved index version from audit history.

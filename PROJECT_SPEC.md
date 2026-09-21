@@ -3,7 +3,7 @@
 **Revision:** 2.0 (Post-Stage 5 Stabilization & Real Excel Verification)  
 **Collaboration ID:** `NMDC-DOC-INDEX-001`  
 
-> **Current implementation note:** Cycles 1 through 4 are fully implemented and verified. The consolidated, macro-enabled Excel application (`NMDC_Document_Index.xlsm`), standalone high-speed engine (`nmdc_index_engine.exe`), Live Filter UserForm, 15 ListObjects, and 23-case real Microsoft Excel simulation matrix govern the production system. Complete user and release requirements are codified in `USER_PRODUCT_REQUIREMENTS.md` and `docs/RELEASE_ACCEPTANCE_TEST_PLAN.md`.
+> **Current implementation note:** Cycles 1 through 4 are implemented. The consolidated, macro-enabled Excel application (`NMDC_Document_Index.xlsm`), standalone high-speed engine (`nmdc_index_engine.exe`), owner-reference REV03 ActiveX Live Filter (`TxtBox_Search` + `Cls_LiveFilter_Listener`), 15 ListObjects, and the real Microsoft Excel acceptance matrix govern the production system. Automated gates do not replace the remaining owner interaction/visual acceptance checks. Complete user and release requirements are codified in `USER_PRODUCT_REQUIREMENTS.md` and `docs/RELEASE_ACCEPTANCE_TEST_PLAN.md`.
 
 ## 1. Objective
 
@@ -385,12 +385,12 @@ No unexplained row loss is acceptable.
 
 Generate the user-facing macro-enabled workbook (`NMDC_Document_Index.xlsm`), standalone high-speed engine, and interactive VBA controls:
 - Consolidated 15 worksheets and 15 unique named ListObjects.
-- Floating `frmNMDC_LiveFilter` UserForm with multi-column AND syntax search.
+- Owner-reference Dynamic Live Filter REV03 architecture: worksheet ActiveX `TxtBox_Search`, `Cls_LiveFilter_Listener` per-keystroke events, `Ctrl+Shift+F` target-header selection, `+AND / -EXCLUDE` syntax, quoted exact matching, and `RESET SEARCH`.
 - Formula-driven custom fields and keyword mappings.
 - In-cell source-selection checkboxes in `Pending Update`.
 - Fast responsive background staging with status bar progress.
 - 64-bit safe APIs (`PtrSafe Sleep`) and commercial OneDrive path resolution.
-- 23-case real Microsoft Excel simulation matrix (`test_real_excel_simulation.py`) passed cleanly.
+- 23-case real Microsoft Excel simulation matrix (`test_real_excel_simulation.py`) records automated evidence and explicitly leaves human caret/typing/visual interactions for owner acceptance rather than falsely marking them PASS.
 
 ### Cycle 5 — Routine Automation & Maintenance (IN PROGRESS)
 

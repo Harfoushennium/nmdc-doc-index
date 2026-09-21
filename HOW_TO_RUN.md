@@ -25,10 +25,10 @@ Welcome to the **NMDC Document Index** tool. This workbook consolidates, normali
 
 | Feature | Where to Find It | What It Does |
 |:---|:---|:---|
-| **Live Filter** | Press `Ctrl+Shift+F` or click **Live Filter** on Home | Instant multi-column search across all master documents and revision registers |
+| **Live Filter** | On a supported table sheet, press `Ctrl+Shift+F` to choose the target column, then type directly in the **Search** box | Owner REV03 live search: per-keystroke filtering; spaces/`+` = AND, `-word` = exclude, quoted text = exact; **RESET SEARCH** clears it |
 | **Update Changed Files** | Button on **Home** sheet | Quickly checks if any workbooks in `DATA/` were edited and indexes only changed files |
 | **Pending Update** | **`Pending Update`** sheet | Review newly extracted deliverables before approving them |
-| **Review Flags** | **`Review Flags`** sheet | Inspect any documents with ambiguous classifications or project number warnings |
+| **Review Flags** | **`Review Flags`** sheet | Inspect genuine extraction/data exceptions. For a parser/layout issue, select the row and use **Request Parser / Mapping Fix**; after a corrected parser/config is installed, use **Retry After Fix** |
 | **Admin Reset** | Button on **Home** sheet | Clears indexed tables if you ever want a completely fresh start |
 
 ---

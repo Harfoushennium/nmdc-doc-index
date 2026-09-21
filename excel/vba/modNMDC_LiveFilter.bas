@@ -72,6 +72,13 @@ Private Sub NMDC_EnsureReferenceLiveFilterControls(ByVal ws As Worksheet)
     ws.Shapes("NMDC_LiveFilter_Reset").Delete
     On Error GoTo Handler
 
+    ' Remove the superseded cell-based/filter-form surface so the visible UI
+    ' is the owner REV03 search box + RESET SEARCH control only.
+    On Error Resume Next
+    ws.Range("A3:L3").UnMerge
+    ws.Range("A3:L3").ClearContents
+    On Error GoTo Handler
+
     Set TheOle = Nothing
     On Error Resume Next
     Set TheOle = ws.OLEObjects(SEARCH_BOX_NAME)

@@ -112,13 +112,24 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 3. Filtering updates on **every keystroke** without Enter/Tab.
 4. The user explicitly chooses one target table column and the selected column is clearly displayed.
 5. The implementation must first inspect and preserve the search semantics/help from the owner's original Dynamic Live Filter reference module.
-6. At minimum test normal partial matching, multiple required terms/AND behaviour from the reference, excluded words, exact phrase matching and wildcard matching.
+6. Test the behavior actually present in the owner REV03 reference: normal partial matching, multiple required terms/AND behavior using spaces or `+`, excluded words using `-`, and quoted exact-match behavior. Do not add a different search grammar and call it equivalent.
 7. Help/placeholder text must show the usable syntax with examples.
 8. The search implementation must work in the owner's corporate Microsoft 365 environment and must not reproduce runtime error 40040.
 9. The owner REV03 architecture is required: a real worksheet ActiveX `TxtBox_Search` with a listener-class `Change` event. `Application.OnKey` is permitted only for the `Ctrl+Shift+F` target-column shortcut; it must never capture normal typing.
 10. Clearing/resetting Live Filter must never merge populated ranges, damage data, or disturb unrelated table filters.
 11. Live Filter must survive refresh, close/reopen and table rebuilds without manual VBA repair.
 12. Real Excel simulation is mandatory; static VBA string-contract tests are not sufficient evidence.
+
+### Review Flag parser/mapping repair handoff
+
+A genuine `UNRECOGNIZED_LAYOUT` or equivalent extraction flag must not end in a dead audit choice.
+
+1. Selecting **NEEDS PARSER/MAPPING FIX** must preserve the affected source file, source sheet, flag code, project/document context and owner comment.
+2. **Request Parser / Mapping Fix** must write a stable human-readable request file under the local runtime support folder.
+3. The workbook must state clearly that the installed package does not rewrite its own parser executable automatically.
+4. Approved data and source `DATA/` must remain unchanged while the issue is unresolved.
+5. After corrected code/configuration is installed, **Retry After Fix** must run a Full Rescan so unchanged flagged sources are actually reprocessed.
+6. The flag is considered resolved only when the corrected extraction no longer reproduces it; saving a decision alone is not resolution.
 
 ## Gate I — User Custom Fields & Keyword Mappings
 
@@ -184,7 +195,7 @@ After all automated gates are green, the owner should:
 9. open **Pending Update** and confirm its source-selection section shows every source row with an include checkbox; uncheck one harmless test source, add an Owner Note, click **Save Selection & Restage**, and verify that source is omitted from the staged proposal without modifying the original workbook;
 10. re-check the same source, save/restage, and verify it returns to index scope;
 11. test **Check All** and cancel/confirm **Uncheck All** appropriately without approving the staged update;
-12. on Master Documents, test Live Filter in ALL COLUMNS mode with one term, two AND terms, one exclusion term and a quoted exact value; use Ctrl+Shift+F to target Document Title and clear the search afterward;
+12. on Master Documents, press Ctrl+Shift+F and select the Document Title table header; confirm the placeholder names Document Title; then type directly in `TxtBox_Search` using one partial term, two required terms (space/`+`), one `-EXCLUDE` term and a quoted exact value; use **RESET SEARCH** afterward;
 13. open **Custom Fields & Keywords**, add a temporary `Vessel Names` field searching `Document Title;Source File`, add at least two vessel keyword mappings, and apply them; confirm the new column is populated only where the configured keywords match;
 14. test both `FIRST` and `ALL UNIQUE`; test one `ALL TERMS` expression with `+`/space AND and `-EXCLUDE`; test wildcard mode only with a harmless sample rule where the expected result is obvious;
 15. run an update/refresh and return to Master Documents; confirm `Vessel Names` is restored/repopulated and the Live Filter remains usable without manual VBA repair;
