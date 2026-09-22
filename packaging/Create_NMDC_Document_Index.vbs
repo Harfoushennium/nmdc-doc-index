@@ -512,38 +512,89 @@ End Sub
 Sub SyncClassificationRulesFromConfig(ByVal wb, ByVal csvPath)
     Dim sourceBook, sourceSheet, sourceRange, targetSheet, table
     Dim rowCount, colCount
+    Dim savedNumber, savedDescription
 
     setupStage = "SyncClassificationRulesFromConfig"
     setupObject = csvPath
+    savedNumber = 0
+    savedDescription = ""
 
-    On Error GoTo Failed
+    ' Windows Script Host VBScript supports only:
+    '   On Error Resume Next
+    '   On Error GoTo 0
+    ' It does NOT support VBA-style "On Error GoTo <label>" handlers.
+    On Error Resume Next
+    Err.Clear
+
     Set sourceBook = excel.Workbooks.Open(csvPath, False, True)
-    Set sourceSheet = sourceBook.Worksheets(1)
-    Set sourceRange = sourceSheet.UsedRange
-    rowCount = sourceRange.Rows.Count
-    colCount = sourceRange.Columns.Count
-
-    If rowCount < 2 Or colCount < 1 Then
-        Err.Raise vbObjectError + 116, "NMDC Setup", "classification_rules.csv is empty or invalid."
+    If Err.Number <> 0 Then
+        savedNumber = Err.Number
+        savedDescription = Err.Description
+        Err.Clear
     End If
 
-    Set targetSheet = wb.Worksheets("Rules & Mappings")
-    Set table = targetSheet.ListObjects("ClassificationRules")
+    If savedNumber = 0 Then
+        Set sourceSheet = sourceBook.Worksheets(1)
+        If Err.Number <> 0 Then
+            savedNumber = Err.Number
+            savedDescription = Err.Description
+            Err.Clear
+        End If
+    End If
 
-    table.Resize targetSheet.Range(targetSheet.Cells(5, 1), targetSheet.Cells(4 + rowCount, colCount))
-    targetSheet.Range(targetSheet.Cells(5, 1), targetSheet.Cells(4 + rowCount, colCount)).Value = sourceRange.Value
+    If savedNumber = 0 Then
+        Set sourceRange = sourceSheet.UsedRange
+        rowCount = sourceRange.Rows.Count
+        colCount = sourceRange.Columns.Count
+        If Err.Number <> 0 Then
+            savedNumber = Err.Number
+            savedDescription = Err.Description
+            Err.Clear
+        End If
+    End If
 
-    sourceBook.Close False
-    Exit Sub
+    If savedNumber = 0 Then
+        If rowCount < 2 Or colCount < 1 Then
+            savedNumber = vbObjectError + 116
+            savedDescription = "classification_rules.csv is empty or invalid."
+        End If
+    End If
 
-Failed:
-    Dim savedNumber, savedDescription
-    savedNumber = Err.Number
-    savedDescription = Err.Description
-    On Error Resume Next
+    If savedNumber = 0 Then
+        Set targetSheet = wb.Worksheets("Rules & Mappings")
+        Set table = targetSheet.ListObjects("ClassificationRules")
+        If Err.Number <> 0 Then
+            savedNumber = Err.Number
+            savedDescription = Err.Description
+            Err.Clear
+        End If
+    End If
+
+    If savedNumber = 0 Then
+        table.Resize targetSheet.Range(targetSheet.Cells(5, 1), targetSheet.Cells(4 + rowCount, colCount))
+        If Err.Number <> 0 Then
+            savedNumber = Err.Number
+            savedDescription = Err.Description
+            Err.Clear
+        End If
+    End If
+
+    If savedNumber = 0 Then
+        targetSheet.Range(targetSheet.Cells(5, 1), targetSheet.Cells(4 + rowCount, colCount)).Value = sourceRange.Value
+        If Err.Number <> 0 Then
+            savedNumber = Err.Number
+            savedDescription = Err.Description
+            Err.Clear
+        End If
+    End If
+
     If IsObject(sourceBook) Then sourceBook.Close False
+    Err.Clear
     On Error GoTo 0
-    Err.Raise savedNumber, "NMDC Setup", savedDescription
+
+    If savedNumber <> 0 Then
+        Err.Raise savedNumber, "NMDC Setup", savedDescription
+    End If
 End Sub
 
 

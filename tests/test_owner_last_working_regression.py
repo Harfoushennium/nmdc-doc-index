@@ -243,6 +243,14 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         flag_block = layout.split("FLAG_FIELDS: List[str] = [", 1)[1].split("]", 1)[0]
         self.assertNotIn('"Source Sheet"', flag_block)
 
+    def test_vbs_installer_never_uses_vba_only_error_label_syntax(self):
+        import re
+        setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
+        illegal = re.findall(r"(?im)^\\s*On Error GoTo\\s+(?!0\\s*$)[A-Za-z_]\\w*\\s*$", setup)
+        self.assertEqual(illegal, [], f"VBA-only error handlers found in VBScript installer: {illegal}")
+        self.assertNotIn("Failed:\n", setup)
+        self.assertIn("Windows Script Host VBScript supports only", setup)
+
     def test_setup_keeps_fast_scan_and_last_working_recovery_controls_together(self):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
         self.assertIn('"NMDC_UpdateChangedFilesFast"', setup)
