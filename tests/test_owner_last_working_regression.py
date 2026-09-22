@@ -116,6 +116,24 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertIn("NMDC_LiveFilterSheetActivate Sh", activate_block)
         self.assertNotIn("NMDC_LiveFilterSelectionChange Sh, Target", activate_block)
 
+    def test_rev03_activex_creation_is_deferred_out_of_hidden_setup(self):
+        live = self._read("excel/vba/modNMDC_LiveFilter.bas")
+        setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
+        init = live.split("Public Sub NMDC_LiveFilterInitialize()", 1)[1].split(
+            "Private Sub NMDC_EnsureReferenceLiveFilterControls", 1
+        )[0]
+        self.assertIn("If Not Application.Visible Then Exit Sub", init)
+        self.assertNotIn("For Each item In sheetNames", init)
+        self.assertIn("NMDC_EnsureReferenceLiveFilterControls Sh", live)
+        self.assertIn("excel.Visible = False", setup)
+        self.assertIn("NMDC_LiveFilterInitialize", setup)
+
+    def test_sheet_activate_does_not_reactivate_same_sheet(self):
+        live = self._read("excel/vba/modNMDC_LiveFilter.bas")
+        block = live.split("Public Sub NMDC_LiveFilterSheetActivate", 1)[1].split("End Sub", 1)[0]
+        self.assertIn("NMDC_EnsureReferenceLiveFilterControls Sh", block)
+        self.assertNotIn("Sh.Activate", block)
+
     def test_setup_keeps_fast_scan_and_last_working_recovery_controls_together(self):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
         self.assertIn('"NMDC_UpdateChangedFilesFast"', setup)

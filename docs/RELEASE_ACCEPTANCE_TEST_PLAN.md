@@ -116,6 +116,7 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 7. Help/placeholder text must show the usable syntax with examples.
 8. The search implementation must work in the owner's corporate Microsoft 365 environment and must not reproduce runtime error 40040.
 8a. The generated XLSM must contain a valid **Microsoft Forms 2.0 Object Library (MSForms)** project reference before `Cls_LiveFilter_Listener` is compiled. A `User-defined type not defined` error on `MSForms.TextBox` is a release-blocking setup failure.
+8b. Production setup runs Excel invisibly under COM automation and must **not create worksheet ActiveX controls during setup**. REV03 `TxtBox_Search` controls are created lazily only when a supported worksheet is activated in normal visible Excel. Any setup-time COM/RPC failure while initializing Live Filter is release-blocking.
 9. The owner REV03 architecture is required: a real worksheet ActiveX `TxtBox_Search` with a listener-class `Change` event. `Application.OnKey` is permitted only for the `Ctrl+Shift+F` target-column shortcut; it must never capture normal typing.
 10. Clearing/resetting Live Filter must never merge populated ranges, damage data, or disturb unrelated table filters.
 11. Live Filter must survive refresh, close/reopen and table rebuilds without manual VBA repair.

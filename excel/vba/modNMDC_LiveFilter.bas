@@ -24,31 +24,21 @@ End Sub
 Public Sub NMDC_LiveFilterInitialize()
     On Error GoTo Handler
 
-    Dim sheetNames As Variant
-    Dim item As Variant
-    Dim ws As Worksheet
-
-    sheetNames = Array( _
-        "Master Documents", "Revisions", "Transactions", "Pending Update", _
-        "Review Flags", "User Decisions", "Update History", "Error Log")
-
-    For Each item In sheetNames
-        Set ws = Nothing
-        On Error Resume Next
-        Set ws = ThisWorkbook.Worksheets(CStr(item))
-        On Error GoTo Handler
-        If Not ws Is Nothing Then NMDC_EnsureReferenceLiveFilterControls ws
-    Next item
-
+    ' IMPORTANT:
+    ' The production VBS runs Excel invisibly under COM automation.
+    ' Creating worksheet ActiveX controls in that hidden session can terminate
+    ' or disconnect Excel (RPC/COM failure). Setup therefore installs code and
+    ' the MSForms reference only. The REV03 search box is created lazily the
+    ' first time a supported worksheet is activated in normal visible Excel.
     Call Enable_The_Shortcut_Safe
 
-    If Not ActiveSheet Is Nothing Then
-        If TypeName(ActiveSheet) = "Worksheet" Then
-            If Not NMDC_LiveFilterTableForSheet(ActiveSheet) Is Nothing Then
-                Call Wake_Up_The_Tool(False)
-            End If
-        End If
-    End If
+    If Not Application.Visible Then Exit Sub
+    If ActiveSheet Is Nothing Then Exit Sub
+    If TypeName(ActiveSheet) <> "Worksheet" Then Exit Sub
+    If NMDC_LiveFilterTableForSheet(ActiveSheet) Is Nothing Then Exit Sub
+
+    NMDC_EnsureReferenceLiveFilterControls ActiveSheet
+    Call Wake_Up_The_Tool(False)
     Exit Sub
 
 Handler:
@@ -438,14 +428,26 @@ Public Sub NMDC_LiveFilterWake()
 End Sub
 
 Public Sub NMDC_LiveFilterSheetActivate(ByVal Sh As Object)
-    On Error Resume Next
+    On Error GoTo Handler
     If Sh Is Nothing Then Exit Sub
     If TypeName(Sh) <> "Worksheet" Then Exit Sub
     If NMDC_LiveFilterTableForSheet(Sh) Is Nothing Then Exit Sub
+
+    ' SheetActivate already means Sh is the active visible sheet.
+    ' Do not Activate it again; that can re-enter Excel events.
     NMDC_EnsureReferenceLiveFilterControls Sh
-    Sh.Activate
     Call Wake_Up_The_Tool(False)
-    On Error GoTo 0
+    Exit Sub
+
+Handler:
+    NMDC_LogError "LIVE_FILTER_ACTIVATE_ERROR", _
+        "Excel could not prepare the REV03 Live Filter on " & Sh.Name & ".", _
+        Err.Number & " - " & Err.Description
+    MsgBox "The Live Filter could not be prepared on " & Sh.Name & "." & vbCrLf & vbCrLf & _
+           "Please close Excel, reopen the workbook, and try the sheet again. " & _
+           "If the problem repeats, use Report Requirement / Problem and include this error:" & vbCrLf & _
+           CStr(Err.Number) & " - " & Err.Description, _
+           vbExclamation, "NMDC Document Index"
 End Sub
 
 Public Sub NMDC_LiveFilterSheetChange(ByVal Sh As Object, ByVal Target As Range)
