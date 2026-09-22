@@ -234,6 +234,15 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertNotIn("(?:^|/)METHODS/2171-2172", config)
         self.assertNotIn("(?:^|/)TECH/3291", config)
 
+    def test_review_flag_worksheet_name_is_visible_with_backend_source_sheet_alias(self):
+        bridge = self._read("nmdc_profiler/excel_bridge.py")
+        layout = self._read("nmdc_profiler/ui_layout.py")
+        self.assertIn('"Worksheet Name": flag.get("source_sheet", "")', bridge)
+        self.assertIn('"Source Sheet": flag.get("source_sheet", "")', bridge)
+        self.assertIn('"Worksheet Name",', layout)
+        flag_block = layout.split("FLAG_FIELDS: List[str] = [", 1)[1].split("]", 1)[0]
+        self.assertNotIn('"Source Sheet"', flag_block)
+
     def test_setup_keeps_fast_scan_and_last_working_recovery_controls_together(self):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
         self.assertIn('"NMDC_UpdateChangedFilesFast"', setup)

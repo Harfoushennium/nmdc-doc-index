@@ -426,6 +426,10 @@ def build_flag_rows(stage: Mapping[str, Any]) -> List[Record]:
                 "Revision": flag.get("revision", ""),
                 "Source File": flag.get("source", ""),
                 "Worksheet Name": flag.get("source_sheet", ""),
+                # Backend compatibility alias only. FLAG_FIELDS deliberately
+                # excludes this key so the Excel Review Flags table shows one
+                # clear visible worksheet column named "Worksheet Name".
+                "Source Sheet": flag.get("source_sheet", ""),
                 "Source Row": flag.get("source_row", ""),
                 "Source Cell": flag.get("source_cell", ""),
                 "User Decision": flag.get("user_decision", ""),
