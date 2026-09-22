@@ -63,7 +63,7 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 6. Refresh must use manual calculation/events/screen-update suppression and batch typed conversions.
 7. Active filters and sort fields must be cleared before table resize/repopulation so stale hidden/sorted row state cannot mix refreshed data.
 8. Normal **Update Changed Files** must use the persistent local source cache and must not reread/reprocess unchanged OneDrive workbooks.
-9. Runtime/state/cache should live under `%LOCALAPPDATA%` when available rather than inside a synchronized package directory.
+9. Runtime/state/cache must use the package-local `runtime` folder. NMDC runtime/support data must not be configured under AppData or another unrelated user folder.
 10. Long scans must use the responsive/background VBA workflow and provide status feedback without a visible command window.
 
 ## Gate E — Excel UX and data presentation
@@ -112,7 +112,10 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 2. The owner can tick one or multiple exact parser/extraction issues and use **Report Selected Parser Fix**.
 3. **Select All** and **Clear Selection** must operate on the Review Flags selection column only.
 4. A failure to create Review Flags native checkboxes is release-blocking and must show a visible error; TRUE/FALSE text is not an accepted production substitute.
-5. Reporting selected flags must create `PARSER_FIX_REQUEST_LATEST.md` beside the XLSM and open Windows Explorer to that file.
+5. Review Flags must display **Source File** and a separate explicit **Worksheet Name** column.
+6. Reporting selected flags must create `PARSER_FIX_REPORTS` beside the XLSM, then allocate the next sequential subfolder (`0001`, `0002`, `0003`, ...).
+7. Each numbered request folder must contain only `PARSER_FIX_REQUEST.md` and `PARSER_FIX_REQUEST.json` for that request. No parser-report files may be written loose in the project root.
+8. Windows Explorer must open to the exact numbered request after creation; a later request must never overwrite or mix with an earlier request.
 
 ## Gate H — Dynamic Live Filter
 
@@ -135,8 +138,8 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 
 A genuine `UNRECOGNIZED_LAYOUT` or equivalent extraction flag must not end in a dead audit choice.
 
-1. Selecting **NEEDS PARSER/MAPPING FIX** must preserve the affected source file, source sheet, flag code, project/document context and owner comment.
-2. **Request Parser / Mapping Fix** must write a stable human-readable request file under the local runtime support folder.
+1. Selecting **NEEDS PARSER/MAPPING FIX** must preserve the affected source file, explicit Worksheet Name, flag code, project/document context and owner comment.
+2. **Request Parser / Mapping Fix** must write the request into its own sequential `PARSER_FIX_REPORTS\NNNN` folder beside the workbook package; it must not write loose report files in the project root or hide them under runtime/AppData.
 3. The workbook must state clearly that the installed package does not rewrite its own parser executable automatically.
 4. Approved data and source `DATA/` must remain unchanged while the issue is unresolved.
 5. After corrected code/configuration is installed, **Retry After Fix** must run a Full Rescan so unchanged flagged sources are actually reprocessed.
@@ -214,7 +217,7 @@ After all automated gates are green, the owner should:
 16. disable one keyword mapping using its checkbox and re-apply; confirm that disabled mapping no longer contributes to output;
 17. confirm a Custom Field named like a core field (for example `Document Title`) is rejected and the core data remains unchanged;
 18. apply a normal table filter/sort, refresh, and confirm the refreshed table resets cleanly without mixed rows;
-19. confirm Rules & Mappings simple view uses plain matching and is usable without REGEX or technical pattern editing;
+19. confirm Rules & Mappings is synchronized from the packaged current `classification_rules.csv`; specifically verify the 2171-2172 Methods rule and 3291 CLIENT exclusion use plain path qualifiers rather than legacy regex path text;
 20. test Reset All Records and rerun Full Rescan;
 21. **do not approve the staged update** until these checks are accepted.
 

@@ -63,17 +63,15 @@ The first column is **Select?**, implemented with the same native Microsoft 365 
 
 To report extraction that needs parser or mapping correction:
 
-1. Open the flagged **Source File** and **Source Sheet** and confirm normal data is being missed.
+1. Open the flagged **Source File** and **Worksheet Name** and confirm normal data is being missed.
 2. Tick **Select?** for one or more exact Review Flag rows.
 3. Click **Report Selected Parser Fix**.
 4. Add an explanation when useful; existing row comments are preserved.
 5. The selected rows are recorded as `NEEDS PARSER/MAPPING FIX` and remain `OPEN`.
-6. The workbook creates:
-   - `PARSER_FIX_REQUEST_LATEST.md`
-   - `PARSER_FIX_REQUEST_LATEST.json`
-   directly beside `NMDC_Document_Index.xlsm`.
-7. Timestamped copies are also retained beside the workbook.
-8. Windows Explorer opens with the latest Markdown report selected.
+6. The workbook creates a dedicated `PARSER_FIX_REPORTS` folder beside `NMDC_Document_Index.xlsm`.
+7. Every request uses the next sequential subfolder: `0001`, `0002`, `0003`, and so on.
+8. Each numbered folder contains only `PARSER_FIX_REQUEST.md` and `PARSER_FIX_REQUEST.json` for that request.
+9. Windows Explorer opens with that exact numbered request's Markdown report selected.
 9. Give that report plus the affected source workbook(s) to ChatGPT / the project maintainer.
 10. After a corrected parser/configuration is installed, click **Retry After Fix**.
 

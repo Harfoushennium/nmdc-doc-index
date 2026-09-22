@@ -88,7 +88,7 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         review = self._read("nmdc_profiler/review_decisions.py")
         self.assertIn("Public Sub NMDC_RequestParserMappingFix()", admin)
         self.assertIn("Public Sub NMDC_RetryAfterParserMappingFix()", admin)
-        self.assertIn("PARSER_FIX_REQUEST_LATEST.md", admin)
+        self.assertIn("PARSER_FIX_REPORTS", admin)
         self.assertIn("Public Sub NMDC_ReportSelectedParserFixes()", admin)
         self.assertIn('"Report Selected Parser Fix"', setup)
         self.assertIn('"Retry After Fix"', setup)
@@ -145,7 +145,7 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertIn('SetWorkbookConfig workbook, "Runtime Folder", "runtime"', setup)
         self.assertIn('SetWorkbookConfig workbook, "Parser Version", "cycle3-extractor-v2"', setup)
         self.assertIn('review.add_argument("--request-dir", type=Path, default=None)', engine)
-        self.assertIn('PARSER_FIX_REQUEST_LATEST.md', review)
+        self.assertIn('PARSER_FIX_REPORTS', review)
         self.assertIn('"Select?",', bridge)
 
     def test_review_flags_use_checkbox_selection_and_visible_parser_report(self):
@@ -157,7 +157,7 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertIn('table.ListColumns("Select?").DataBodyRange', refresh)
         self.assertIn("CellControl.SetCheckbox", refresh)
         self.assertIn("Public Sub NMDC_ReportSelectedParserFixes()", admin)
-        self.assertIn("PARSER_FIX_REQUEST_LATEST.md", admin)
+        self.assertIn("PARSER_FIX_REPORTS", admin)
         self.assertIn("NMDC_RevealFile requestPath", admin)
         self.assertIn('"Report Selected Parser Fix"', setup)
         self.assertIn('"Select All"', setup)
@@ -185,8 +185,8 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
     def test_packaged_readme_matches_package_local_storage_contract(self):
         readme = self._read("README.md")
         self.assertNotIn("%LOCALAPPDATA%", readme)
-        self.assertIn("PARSER_FIX_REQUEST_LATEST.md", readme)
-        self.assertIn("directly beside `NMDC_Document_Index.xlsm`", readme)
+        self.assertIn("PARSER_FIX_REPORTS", readme)
+        self.assertIn("PARSER_FIX_REPORTS", readme)
         self.assertIn("does not configure AppData", readme)
         self.assertIn("must not silently downgrade", readme)
 
@@ -197,8 +197,8 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertNotIn("%LOCALAPPDATA%", readme)
         self.assertIn("TxtBox_Search", readme)
         self.assertIn("Cls_LiveFilter_Listener", readme)
-        self.assertIn("PARSER_FIX_REQUEST_LATEST.md", readme)
-        self.assertIn("directly beside `NMDC_Document_Index.xlsm`", readme)
+        self.assertIn("PARSER_FIX_REPORTS", readme)
+        self.assertIn("PARSER_FIX_REPORTS", readme)
         self.assertIn("does not silently downgrade", readme)
         self.assertIn('Remove-Item "$package\\vba\\frmNMDC_LiveFilter.frm"', workflow)
         self.assertIn('Remove-Item "$package\\vba\\frmNMDC_LiveFilter.frx"', workflow)
@@ -210,6 +210,29 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertEqual(workflow.count("actions/upload-artifact@v4"), 1)
         self.assertNotIn("} | Copy-Item -Destination", workflow)
         self.assertEqual(workflow.count("Compress-Archive -Path"), 1)
+
+    def test_parser_reports_use_numbered_subfolders_and_explicit_worksheet_name(self):
+        review = self._read("nmdc_profiler/review_decisions.py")
+        bridge = self._read("nmdc_profiler/excel_bridge.py")
+        layout = self._read("nmdc_profiler/ui_layout.py")
+        admin = self._read("excel/vba/modNMDC_Admin.bas")
+        self.assertIn('"PARSER_FIX_REPORTS"', review)
+        self.assertIn('f"{sequence:04d}"', review)
+        self.assertIn('"PARSER_FIX_REQUEST.md"', review)
+        self.assertNotIn("PARSER_FIX_REQUEST_LATEST", review)
+        self.assertIn('"Worksheet Name"', bridge)
+        self.assertIn('"Worksheet Name"', layout)
+        self.assertIn("NMDC_LatestParserFixRequestPath", admin)
+
+    def test_setup_synchronizes_rules_table_from_packaged_config(self):
+        setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
+        config = self._read("config/classification_rules.csv")
+        self.assertIn("SyncClassificationRulesFromConfig workbook", setup)
+        self.assertIn("classification-rules-synchronized", setup)
+        self.assertIn("M002,YES,101,METHODS,WORKSHEET,EXACT,2171-2172", config)
+        self.assertIn("X017,YES,17,TECH,WORKSHEET,EXACT,CLIENT", config)
+        self.assertNotIn("(?:^|/)METHODS/2171-2172", config)
+        self.assertNotIn("(?:^|/)TECH/3291", config)
 
     def test_setup_keeps_fast_scan_and_last_working_recovery_controls_together(self):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
