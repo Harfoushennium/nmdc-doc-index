@@ -1,0 +1,151 @@
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class OwnerLiveFilterCustomFieldsTests(unittest.TestCase):
+    def _read(self, relative: str) -> str:
+        return (ROOT / relative).read_text(encoding="utf-8-sig")
+
+    def test_live_filter_matches_owner_rev03_activex_listener_pattern(self):
+        live = self._read("excel/vba/modNMDC_LiveFilter.bas")
+        listener = self._read("excel/vba/Cls_LiveFilter_Listener.cls")
+
+        self.assertIn('ClassType:="Forms.TextBox.1"', live)
+        self.assertIn('SEARCH_BOX_NAME As String = "TxtBox_Search"', live)
+        self.assertIn('Application.OnKey "^+F", "Ask_User_For_Target_Column"', live)
+        self.assertIn('ThisWorkbook.Names.Add Name:="LiveFilter_Anchor"', live)
+        self.assertIn('TheBox.Value = "Search " & ColName & "... (+AND / -EXCLUDE) (Ctrl+Shift+F: Change Column)"', live)
+        self.assertIn('resetButton.Caption = "RESET SEARCH"', live)
+
+        self.assertIn("Public WithEvents SearchBox As MSForms.TextBox", listener)
+        self.assertIn("Private Sub SearchBox_MouseDown", listener)
+        self.assertIn("Private Sub SearchBox_Change()", listener)
+        self.assertIn("Private Sub SearchBox_KeyDown", listener)
+        self.assertIn("Run_Live_Filter(SearchBox.Value)", listener)
+
+    def test_live_filter_requires_header_target_and_uses_reference_filter_semantics(self):
+        live = self._read("excel/vba/modNMDC_LiveFilter.bas")
+
+        self.assertIn('"Click the HEADER of the column to filter:"', live)
+        self.assertIn("Public Sub Setup_New_Target(TheHeader As Range)", live)
+        self.assertIn('tempStr = Replace(CleanText, "+", " ")', live)
+        self.assertIn('If Left(token, 1) = "-" And Len(token) > 1 Then', live)
+        self.assertIn("StrComp(Cell.Value, CleanText, vbBinaryCompare)", live)
+        self.assertIn('Criteria1:="=*" & posTerms(0) & "*"', live)
+
+        for sheet_name in (
+            "MASTER DOCUMENTS",
+            "REVISIONS",
+            "TRANSACTIONS",
+            "PENDING UPDATE",
+            "REVIEW FLAGS",
+            "USER DECISIONS",
+            "UPDATE HISTORY",
+            "ERROR LOG",
+        ):
+            self.assertIn(sheet_name, live)
+
+    def test_live_filter_reset_matches_reference_tool(self):
+        live = self._read("excel/vba/modNMDC_LiveFilter.bas")
+        self.assertIn("Public Sub Reset_Search_Click()", live)
+        self.assertIn("TargetTable.AutoFilter.ShowAllData", live)
+        self.assertIn("Call Fix_Placeholder_Text(TheListener.SearchBox)", live)
+        self.assertIn("Public Sub NMDC_LiveFilterClear()", live)
+
+    def test_custom_fields_workspace_and_keyword_dictionary_are_user_driven(self):
+        setup = self._read("excel/vba/modNMDC_CustomFieldsSetup.bas")
+        custom = self._read("excel/vba/modNMDC_CustomFields.bas")
+
+        self.assertIn('ws.Name = "Custom Fields"', setup)
+        self.assertIn('"CustomFields"', setup)
+        self.assertIn('"KeywordMappings"', setup)
+        self.assertIn(
+            'Array("Enabled?", "Field Name", "Search In", "Match Behavior", "Separator", "Notes")',
+            setup,
+        )
+        self.assertIn(
+            'Array("Enabled?", "Field Name", "Keyword / Pattern", "Result", "Match Type", "Priority", "Notes")',
+            setup,
+        )
+
+        self.assertIn("NMDC_AddCustomField", custom)
+        self.assertIn("NMDC_AddKeywordMapping", custom)
+        self.assertIn("NMDC_ApplyCustomFieldsToMaster", custom)
+        self.assertIn('"ALL UNIQUE"', custom)
+        self.assertIn('"FIRST"', custom)
+        self.assertIn('"CONTAINS,ALL TERMS,EXACT,WILDCARD"', custom)
+        self.assertIn('Case "ALL TERMS"', custom)
+        self.assertIn('Case "EXACT"', custom)
+        self.assertIn('Case "WILDCARD"', custom)
+        self.assertIn('Replace(Trim$(expressionText), "+", " ")', custom)
+        self.assertIn('If Left$(cleanToken, 1) = "-"', custom)
+        self.assertIn('starCount = Len(pattern) - Len(Replace(pattern, "*", ""))', custom)
+        self.assertIn('Replace(pattern, "?", "")', custom)
+
+    def test_custom_fields_use_modern_in_cell_checkboxes_only(self):
+        setup = self._read("excel/vba/modNMDC_CustomFieldsSetup.bas")
+        custom = self._read("excel/vba/modNMDC_CustomFields.bas")
+
+        self.assertIn("CellControl.SetCheckbox", setup)
+        self.assertIn("CellControl.SetCheckbox", custom)
+        self.assertNotIn("CheckBoxes.Add", custom)
+        self.assertNotIn("NMDC_LiveFilterEnsureHelper", custom)
+        self.assertIn("Public Sub NMDC_CustomCheckboxClicked()", custom)
+        self.assertIn("Compatibility stub", custom)
+
+    def test_custom_fields_protect_core_master_document_fields(self):
+        custom = self._read("excel/vba/modNMDC_CustomFields.bas")
+        protected = (
+            "FLAG LEVEL",
+            "PROJECT NO.",
+            "SOURCE FAMILY",
+            "DISCIPLINE",
+            "CATEGORY",
+            "SUBCATEGORY",
+            "DOCUMENT NO.",
+            "DOCUMENT TITLE",
+            "COMPANY DOCUMENT NO.",
+            "LATEST REVISION",
+            "LATEST EVENT DATE",
+            "LATEST EVENT STATUS",
+            "DOCUMENT LINK",
+            "SOURCE FILE",
+            "SOURCE SHEET",
+            "SOURCE ROW",
+            "SOURCE CELL",
+            "GLOBAL DOCUMENT KEY",
+        )
+        for field in protected:
+            self.assertIn(f'"{field}"', custom)
+        self.assertIn('Left$(UCase$(Trim$(fieldName)), 7) = "__NMDC_"', custom)
+
+    def test_custom_field_configuration_is_backed_up_outside_the_workbook(self):
+        custom = self._read("excel/vba/modNMDC_CustomFields.bas")
+        self.assertIn('NMDC_CUSTOM_FIELDS_FILE As String = "user_custom_fields.csv"', custom)
+        self.assertIn('NMDC_KEYWORD_MAPPINGS_FILE As String = "user_keyword_mappings.csv"', custom)
+        self.assertIn("NMDC_RuntimePath()", custom)
+        self.assertIn("NMDC_SaveCustomFieldConfiguration", custom)
+        self.assertIn("NMDC_LoadCustomFieldConfigurationIfEmpty", custom)
+
+    def test_custom_fields_restore_when_core_refresh_has_removed_derived_columns(self):
+        setup = self._read("excel/vba/modNMDC_CustomFieldsSetup.bas")
+        self.assertIn("NMDC_EnsureCustomFieldsCurrent", setup)
+        self.assertIn("Workbook_SheetSelectionChange", setup)
+        self.assertIn('Application.Run "NMDC_ApplyCustomFieldsToMaster", False', setup)
+
+    def test_source_checkbox_module_wakes_persisted_owner_enhancements(self):
+        checkboxes = self._read("excel/vba/modNMDC_Checkboxes.bas")
+        self.assertIn("NMDC_EnsureOwnerEnhancements", checkboxes)
+        self.assertIn('Application.Run "NMDC_LiveFilterWake"', checkboxes)
+        self.assertIn('Application.Run "NMDC_CustomFieldsInitialize"', checkboxes)
+
+    def test_production_workflow_packages_all_vba_standard_modules(self):
+        workflow = self._read(".github/workflows/production-package.yml")
+        self.assertIn('Copy-Item .\\excel\\vba\\*.bas "$package\\vba\\"', workflow)
+
+
+if __name__ == "__main__":
+    unittest.main()

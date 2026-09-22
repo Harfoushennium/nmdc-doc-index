@@ -34,23 +34,30 @@ The pipeline must preserve this folder classification as `Source Family`.
 10. Protected/encrypted workbooks must generate a warning and support password-assisted reprocessing without storing passwords in the public repository.
 11. Routine refreshes must be deterministic and must not require an LLM.
 
-## Planned output
+## Final product direction
 
-The final user-facing deliverable will be:
+The normal user experience is Excel only:
 
-- `NMDC_DOCUMENT_INDEX.xlsx`
-  - one visible worksheet: `INDEX`
-  - Excel Table and filters
-  - frozen header
-  - preserved document hyperlinks
-  - normalized classification columns
-  - PivotTable helper keys/flags
+```text
+NMDC_Document_Index.xlsm
+        -> silent packaged Windows engine
+        -> source registers + local runtime/cache/staging
+        -> owner-reviewed approved master index
+```
 
-A machine-reviewable companion output will also be generated:
+The workbook includes a Home dashboard plus Master Documents, Revisions, Transactions, Pending Update, Review Flags, User Decisions, Configuration, Rules & Mappings, **Custom Fields**, Update History, Error Log, Help, and a hidden System Data area. **Source selection is part of Pending Update rather than a separate owner-facing worksheet.** Updates are staged and never replace approved data without an explicit owner approval action.
 
-- `NMDC_DOCUMENT_INDEX.csv`
+Source scope is controlled through an owner-friendly same-sheet workflow inside **Pending Update**: every source workbook appears once in the source-selection section; checked means included in index scope and unchecked means intentionally excluded. Use the modern Microsoft 365 in-cell Checkbox control. Checkbox changes are collected locally and only applied when the owner presses **Save Source Choices & Restage**, so selecting several files does not launch a scan for every click. Check All / Uncheck All are available for bulk selection. Excluding a source never edits or deletes the source workbook and does not change the approved index until a later explicit approval.
 
-Validation/profiling reports will be generated so that no source is silently omitted.
+Table-heavy review sheets use the owner's **Dynamic Live Filter Tool REV03 architecture**: a real worksheet ActiveX textbox named `TxtBox_Search`, connected to `Cls_LiveFilter_Listener`. The user presses `Ctrl+Shift+F` only to choose the target table header, then types normally in the textbox; the `Change` event filters on every keystroke. The reference syntax is retained: spaces or `+` require multiple terms, `-word` excludes a term, quoted text requests the reference exact-match behavior, and `RESET SEARCH` clears the filter. Normal typing is not captured globally.
+
+The **Custom Fields & Keywords** layer lets the owner add derived columns to Master Documents without changing source files or canonical approved engine records. For example, an owner can create `Vessel Names`, choose `Document Title;Source File` as the search input, and maintain an editable keyword dictionary such as `SAFEEN 3000 -> SAFEEN-3000`. Supported mapping modes include normal `CONTAINS`, `ALL TERMS` with `+AND / -EXCLUDE`, `EXACT`, and an advanced wildcard mode adapting `?` fixed-width and `*` variable-width extraction. `FIRST` and `ALL UNIQUE` control whether one or several matched values are written. Core NMDC fields are protected from overwrite, while user definitions are backed up in the package-local `runtime` folder beside the workbook package so they can be restored in a freshly generated workbook.
+
+Native Microsoft 365 in-cell checkboxes are required for genuine binary choices, including source inclusion, Review Flags `Select?`, and Enabled? rows in Custom Fields/Keyword Mappings. The owner environment supports these controls, so the production workbook must not silently downgrade them to visible TRUE/FALSE text. Multi-option decisions such as Review Flag outcomes, resolution status, match behavior and match type remain dropdowns because they have several mutually exclusive meanings and are clearer that way.
+
+A parser/mapping issue is reported by ticking the affected `Review Flags -> Select?` checkbox rows and clicking **Report Selected Parser Fix**. Review Flags shows **Source File** and a separate **Worksheet Name** column. The workbook creates a dedicated `PARSER_FIX_REPORTS` folder beside `NMDC_Document_Index.xlsm`; each request is isolated in the next sequential subfolder (`0001`, `0002`, `0003`, ...), containing only `PARSER_FIX_REQUEST.md` and `PARSER_FIX_REQUEST.json`. Explorer opens to the exact numbered request. The report plus the affected source workbook(s) can be given to ChatGPT/the project maintainer for a tested parser or mapping correction. Once the corrected parser/configuration is installed, **Retry After Fix** runs a Full Rescan to re-extract the source without approving anything automatically or modifying source DATA.
+
+All NMDC-created runtime/cache/support data stays within the extracted workbook package: the workbook uses the relative `runtime` subfolder and does not configure AppData or another unrelated user folder.
 
 ## Normalized hierarchy
 
@@ -104,9 +111,9 @@ Validation gate
 
 ## Current project status
 
-**Status: planning/specification complete; implementation has not started.**
+**Status: Cycles 1–3 and the incremental staged-approval engine are merged. PR #8 is in owner-reported Excel stabilization. Antigravity must complete real Microsoft Excel simulation/debugging before another package is treated as release-ready.**
 
-The next implementation step is **Cycle 1: Source Profiler**. The profiler is read-only and must produce inventory, workbook profile, source-selection and classification-discovery reports before the final extractor is implemented.
+The candidate includes the real-data workbook, audited VBA actions, one-click Excel setup, a persistent local cache to reduce repeated OneDrive reads, responsive/background staging, checkbox-based source selection, Dynamic Live Filter, user-defined Custom Fields/Keyword Mappings, and a packaged Windows executable built and smoke-tested in CI. Microsoft Excel desktop performs the one-time `.xlsm` creation and button/event attachment because CI does not provide desktop Excel. The future document-folder/hyperlink scanner remains deferred until this core Excel/runtime path is accepted.
 
 See [PROJECT_SPEC.md](PROJECT_SPEC.md) for the full implementation specification and [AGENTS.md](AGENTS.md) for LLM/Hermes handoff rules.
 
@@ -115,8 +122,12 @@ See [PROJECT_SPEC.md](PROJECT_SPEC.md) for the full implementation specification
 Planned Collaboration ID: `NMDC-DOC-INDEX-001`
 
 - **User** — owner and final decision maker.
-- **ChatGPT** — planner/architect and independent reviewer.
-- **Hermes** — implementation agent, preferably using a low-cost model.
+- **ChatGPT / Hermes** — role-based planner, implementer, or reviewer as recorded in the active PR.
 - **GitHub PR** — source of truth and communication/audit bridge.
 
-Hermes must not approve its own work. No merge is allowed unless the user explicitly authorizes it.
+PR titles use `[SEQ][STATUS] Title`, important comments identify `Written by` and `Role`, and one `AGENT COLLABORATION — CURRENT STATUS` comment is updated in place. No merge is allowed unless the owner explicitly authorizes it.
+
+
+## Generated validation outputs
+
+The `outputs/` directory is intentionally **not tracked**. Profiler, sentinel, and full-extraction evidence is regenerated deterministically from the read-only `DATA/` sources by local validation and GitHub Actions. This keeps a fresh clone focused on source code, tests, configuration, the audited workbook base, and the real test DATA rather than carrying ~30 MB of stale generated CSV/JSON snapshots.

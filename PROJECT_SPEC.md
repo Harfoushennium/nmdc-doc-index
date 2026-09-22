@@ -1,5 +1,10 @@
 # NMDC Document Index — Project Specification
 
+**Revision:** 2.0 (Post-Stage 5 Stabilization & Real Excel Verification)  
+**Collaboration ID:** `NMDC-DOC-INDEX-001`  
+
+> **Current implementation note:** Cycles 1 through 4 are implemented. The consolidated, macro-enabled Excel application (`NMDC_Document_Index.xlsm`), standalone high-speed engine (`nmdc_index_engine.exe`), owner-reference REV03 ActiveX Live Filter (`TxtBox_Search` + `Cls_LiveFilter_Listener`), 15 ListObjects, and the real Microsoft Excel acceptance matrix govern the production system. Automated gates do not replace the remaining owner interaction/visual acceptance checks. Complete user and release requirements are codified in `USER_PRODUCT_REQUIREMENTS.md` and `docs/RELEASE_ACCEPTANCE_TEST_PLAN.md`.
+
 ## 1. Objective
 
 Build a deterministic system that reads the project deliverable Excel workbooks under `DATA/`, selects the correct current source files, extracts all relevant documents without losing merged-cell revision/event history, normalizes the records, and produces one consolidated Excel index plus a reviewable CSV.
@@ -376,17 +381,22 @@ Perform reconciliation between:
 
 No unexplained row loss is acceptable.
 
-### Cycle 4 — Final Excel index
+### Cycle 4 — Final Excel Application & Integration (COMPLETED)
 
-Generate the user-facing XLSX plus the canonical CSV and verify formatting, hyperlinks, keys and PivotTable helpers.
+Generate the user-facing macro-enabled workbook (`NMDC_Document_Index.xlsm`), standalone high-speed engine, and interactive VBA controls:
+- Consolidated 15 worksheets and 15 unique named ListObjects.
+- Owner-reference Dynamic Live Filter REV03 architecture: worksheet ActiveX `TxtBox_Search`, `Cls_LiveFilter_Listener` per-keystroke events, `Ctrl+Shift+F` target-header selection, `+AND / -EXCLUDE` syntax, quoted exact matching, and `RESET SEARCH`.
+- Formula-driven custom fields and keyword mappings.
+- In-cell source-selection checkboxes in `Pending Update`.
+- Fast responsive background staging with status bar progress.
+- 64-bit safe APIs (`PtrSafe Sleep`) and commercial OneDrive path resolution.
+- 23-case real Microsoft Excel simulation matrix (`test_real_excel_simulation.py`) records automated evidence and explicitly leaves human caret/typing/visual interactions for owner acceptance rather than falsely marking them PASS.
 
-### Cycle 5 — Routine automation
+### Cycle 5 — Routine Automation & Maintenance (IN PROGRESS)
 
-Add local Windows refresh convenience and GitHub automation.
-
-Planned local entry point may be an `UPDATE_INDEX.cmd` or equivalent wrapper.
-
-GitHub Actions should rebuild when relevant `DATA/**` inputs or configuration rules change, while avoiding output-trigger loops.
+- Local entry point: Double-click `NMDC_Document_Index.xlsm` or use `packaging/Create_NMDC_Document_Index.vbs` for clean installation.
+- Clean packaging via `tests/excel_e2e/assemble_package.py` and SHA-256 base chunk verification (`9225a417...`).
+- GitHub Actions CI builds and verifies package integrity without modifying source `DATA/`.
 
 ## 14. Acceptance principles
 
@@ -398,11 +408,12 @@ Acceptance requires evidence that:
 - superseded sources are excluded for the correct reason;
 - merged-cell revision/event history is preserved;
 - hyperlinks survive where technically available;
-- unknown inputs are visible;
+- unknown inputs are visible in Review Flags;
 - no source rows disappear without reconciliation;
 - output classifications are traceable to rule IDs;
 - runtime refresh requires no LLM;
-- source files remain untouched.
+- source files in `DATA/` remain 100% untouched and read-only;
+- real desktop Microsoft Excel executes all automated macros and actions cleanly.
 
 ## 15. Collaboration governance
 
@@ -410,9 +421,9 @@ Planned Collaboration ID: `NMDC-DOC-INDEX-001`.
 
 Roles:
 
-- User: owner/final decision maker.
-- ChatGPT: architect/planner and independent reviewer.
-- Hermes: implementer.
-- GitHub PR: source of truth and communication bridge.
+- User / Owner: Final authority and decision maker. Merge authority belongs exclusively to the owner.
+- ChatGPT: Architect, planner, and independent reviewer.
+- Hermes / Codex: Implementer and test engineer.
+- GitHub PR #8: Authoritative tracking and communication bridge.
 
-Hermes must not approve its own implementation. No merge is authorized unless the user explicitly approves it.
+No agent may self-merge. The PR remains in CHANGES until the owner authorizes merge.

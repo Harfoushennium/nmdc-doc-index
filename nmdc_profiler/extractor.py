@@ -112,7 +112,16 @@ def _formula_hyperlink_target(formula: str) -> str:
 
 def read_sheet_model(path: Path, root: Path, sheet_name: str) -> SheetModel:
     relative = path.resolve().relative_to(root.resolve()).as_posix()
-    family = relative.split("/", 2)[1].upper() if relative.startswith("DATA/") else "UNKNOWN"
+    parts = relative.split("/")
+    if parts and parts[0].upper() == "DATA" and len(parts) > 1:
+        family = parts[1].upper()
+    elif parts and parts[0].upper() in {"METHODS", "TECH"}:
+        # The packaged runtime receives the user-selected DATA directory as its
+        # root, while repository verification receives the repository root.
+        # Preserve the same source-family classification in both layouts.
+        family = parts[0].upper()
+    else:
+        family = "UNKNOWN"
     with zipfile.ZipFile(path) as z:
         core = parse_core_properties(z)
         shared = load_shared_strings(z)
