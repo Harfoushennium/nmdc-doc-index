@@ -192,6 +192,14 @@ SetWorkbookConfig workbook, "Source Exclusions File", "config\source_exclusions.
 SetWorkbookConfig workbook, "Parser Version", "cycle3-extractor-v2"
 TraceStep "configuration-paths-written"
 
+Err.Clear
+SyncClassificationRulesFromConfig workbook, fso.BuildPath(configFolder, "classification_rules.csv")
+If Err.Number <> 0 Then
+    ShowFailure "Excel could not synchronize Rules & Mappings from the packaged classification rules."
+    WScript.Quit 10
+End If
+TraceStep "classification-rules-synchronized"
+
 StyleHomeDashboard workbook
 AttachHomeButtons workbook
 ConfigureReviewFlags workbook
@@ -501,6 +509,44 @@ Sub ConfigureOwnerEvents(ByVal wb)
     If Len(eventCode) > 0 Then thisModule.AddFromString eventCode
 End Sub
 
+Sub SyncClassificationRulesFromConfig(ByVal wb, ByVal csvPath)
+    Dim sourceBook, sourceSheet, sourceRange, targetSheet, table
+    Dim rowCount, colCount
+
+    setupStage = "SyncClassificationRulesFromConfig"
+    setupObject = csvPath
+
+    On Error GoTo Failed
+    Set sourceBook = excel.Workbooks.Open(csvPath, False, True)
+    Set sourceSheet = sourceBook.Worksheets(1)
+    Set sourceRange = sourceSheet.UsedRange
+    rowCount = sourceRange.Rows.Count
+    colCount = sourceRange.Columns.Count
+
+    If rowCount < 2 Or colCount < 1 Then
+        Err.Raise vbObjectError + 116, "NMDC Setup", "classification_rules.csv is empty or invalid."
+    End If
+
+    Set targetSheet = wb.Worksheets("Rules & Mappings")
+    Set table = targetSheet.ListObjects("ClassificationRules")
+
+    table.Resize targetSheet.Range(targetSheet.Cells(5, 1), targetSheet.Cells(4 + rowCount, colCount))
+    targetSheet.Range(targetSheet.Cells(5, 1), targetSheet.Cells(4 + rowCount, colCount)).Value = sourceRange.Value
+
+    sourceBook.Close False
+    Exit Sub
+
+Failed:
+    Dim savedNumber, savedDescription
+    savedNumber = Err.Number
+    savedDescription = Err.Description
+    On Error Resume Next
+    If IsObject(sourceBook) Then sourceBook.Close False
+    On Error GoTo 0
+    Err.Raise savedNumber, "NMDC Setup", savedDescription
+End Sub
+
+
 Sub SetWorkbookConfig(ByVal wb, ByVal keyName, ByVal configValue)
     Dim ws, table, row, settingColumn, valueColumn, found
     Set ws = wb.Worksheets("Configuration")
@@ -667,7 +713,7 @@ Sub ConfigureReviewFlags(ByVal wb)
     ws.Range("A4:P4").Merge
     On Error GoTo 0
     With ws.Range("A4:P4")
-        .Value = "HOW TO REPORT A PARSER ISSUE: 1) Open Source File / Source Sheet and confirm normal data is being missed. 2) Tick Select? for the affected row(s). 3) Click Report Selected Parser Fix. 4) The report is saved beside this Excel file and Explorer opens to it. 5) Upload that report + affected source workbook(s) to ChatGPT/project maintainer. 6) After installing the corrected parser/config, click Retry After Fix."
+        .Value = "HOW TO REPORT A PARSER ISSUE: 1) Open Source File and the listed Worksheet Name and confirm normal data is being missed. 2) Tick Select? for the affected row(s). 3) Click Report Selected Parser Fix. 4) A dedicated PARSER_FIX_REPORTS\0001, 0002, ... folder is created; each request stays separate and Explorer opens to it. 5) Upload that report + affected source workbook(s) to ChatGPT/project maintainer. 6) After installing the corrected parser/config, click Retry After Fix."
         .Interior.Color = RGB(255, 247, 219)
         .Font.Color = RGB(122, 90, 0)
         .Font.Bold = True
@@ -678,8 +724,8 @@ Sub ConfigureReviewFlags(ByVal wb)
     ws.Columns("A").ColumnWidth = 9
     ws.Columns("B:C").ColumnWidth = 16
     ws.Columns("D:E").ColumnWidth = 48
-    ws.Columns("I").ColumnWidth = 52
-    ws.Columns("J").ColumnWidth = 28
+    ws.Columns("H").ColumnWidth = 52
+    ws.Columns("I").ColumnWidth = 28
     ws.Columns("M").ColumnWidth = 30
     ws.Columns("N").ColumnWidth = 42
     ws.Columns("O").ColumnWidth = 22

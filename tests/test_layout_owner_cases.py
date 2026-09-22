@@ -5,6 +5,7 @@ from pathlib import Path
 
 from nmdc_profiler.extractor import discover_layout, read_sheet_model
 from nmdc_profiler.layout_compat import _extended_document_header, install_layout_compatibility
+from nmdc_profiler.rules import apply_classification, load_rules
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +30,32 @@ class OwnerLayoutCasesTests(unittest.TestCase):
 
     def test_nmdc_energy_number_is_a_supported_engineering_header(self):
         self.assertTrue(_extended_document_header("NMDC\nENERGY NUMBER"))
+
+    def test_current_rules_classify_2171_methods_sheet_with_plain_path_qualifier(self):
+        rules = load_rules(ROOT / "config" / "classification_rules.csv")
+        result = apply_classification(
+            rules,
+            "METHODS",
+            {
+                "FILE": "METHODS/2171-2172 -Document Deliverables LATEST.xlsx",
+                "WORKSHEET": "2171-2172",
+            },
+        )
+        self.assertEqual(result["status"], "INCLUDE")
+        self.assertIn("M002", result["rule_ids"])
+
+    def test_current_rules_exclude_3291_client_duplicate_view(self):
+        rules = load_rules(ROOT / "config" / "classification_rules.csv")
+        result = apply_classification(
+            rules,
+            "TECH",
+            {
+                "FILE": "TECH/3291 DOCUMENT REGISTER Latest.xlsx",
+                "WORKSHEET": "CLIENT",
+            },
+        )
+        self.assertEqual(result["status"], "EXCLUDED")
+        self.assertIn("X017", result["rule_ids"])
 
     def test_layout_review_flag_explains_missing_header(self):
         from nmdc_profiler import runtime_engine

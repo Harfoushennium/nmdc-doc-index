@@ -156,21 +156,29 @@ class RuntimeEngineTests(unittest.TestCase):
             )
             decisions = Path(tmp) / "review_decisions.csv"
             decisions.write_text(
-                "Flag Code,Source File,Source Sheet,Event Key,Project No.,Document No.,Revision,User Decision,User Comment,Resolution Status\n"
+                "Flag Code,Source File,Worksheet Name,Event Key,Project No.,Document No.,Revision,User Decision,User Comment,Resolution Status\n"
                 "UNRECOGNIZED_LAYOUT,METHODS/register.xlsx,Deliverables,,2171,,,NEEDS PARSER/MAPPING FIX,"
                 "Document number is in column C and data starts at row 7,OPEN\n",
                 encoding="utf-8-sig",
             )
 
-            result = apply_review_decisions(state, decisions)
+            result = apply_review_decisions(state, decisions, request_dir=Path(tmp))
 
             self.assertEqual(result["parser_mapping_fix_requests"], 1)
-            handoff = state / "support" / "PARSER_FIX_REQUEST_LATEST.md"
+            self.assertEqual(result["request_sequence"], "0001")
+            handoff = Path(tmp) / "PARSER_FIX_REPORTS" / "0001" / "PARSER_FIX_REQUEST.md"
+            payload = Path(tmp) / "PARSER_FIX_REPORTS" / "0001" / "PARSER_FIX_REQUEST.json"
             self.assertTrue(handoff.exists())
+            self.assertTrue(payload.exists())
             content = handoff.read_text(encoding="utf-8")
+            self.assertIn("Worksheet Name", content)
             self.assertIn("METHODS/register.xlsx", content)
             self.assertIn("Deliverables", content)
             self.assertIn("Document number is in column C", content)
+
+            second = apply_review_decisions(state, decisions, request_dir=Path(tmp))
+            self.assertEqual(second["request_sequence"], "0002")
+            self.assertTrue((Path(tmp) / "PARSER_FIX_REPORTS" / "0002" / "PARSER_FIX_REQUEST.md").exists())
 
     def test_cli_exports_empty_excel_exchange(self):
         with tempfile.TemporaryDirectory() as tmp:
