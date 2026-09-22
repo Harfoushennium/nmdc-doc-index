@@ -662,12 +662,12 @@ Sub ConfigureReviewFlags(ByVal wb)
     Set table = ws.ListObjects("ReviewFlags")
 
     On Error Resume Next
-    ws.Range("A4:O4").UnMerge
-    ws.Range("A4:O4").ClearContents
-    ws.Range("A4:O4").Merge
+    ws.Range("A4:P4").UnMerge
+    ws.Range("A4:P4").ClearContents
+    ws.Range("A4:P4").Merge
     On Error GoTo 0
-    With ws.Range("A4:O4")
-        .Value = "HOW TO REVIEW: 1) Open the Source File hyperlink. 2) For extraction/layout problems, select the row and click Request Parser / Mapping Fix; describe the expected layout. 3) The workbook creates a fix-request file but never rewrites its own parser silently. 4) After a corrected parser/config is installed, click Retry After Fix. Other decisions can still be saved with Save Review Decisions."
+    With ws.Range("A4:P4")
+        .Value = "HOW TO REPORT A PARSER ISSUE: 1) Open Source File / Source Sheet and confirm normal data is being missed. 2) Tick Select? for the affected row(s). 3) Click Report Selected Parser Fix. 4) The report is saved beside this Excel file and Explorer opens to it. 5) Upload that report + affected source workbook(s) to ChatGPT/project maintainer. 6) After installing the corrected parser/config, click Retry After Fix."
         .Interior.Color = RGB(255, 247, 219)
         .Font.Color = RGB(122, 90, 0)
         .Font.Bold = True
@@ -675,22 +675,25 @@ Sub ConfigureReviewFlags(ByVal wb)
         .RowHeight = 42
     End With
 
-    ws.Columns("B").ColumnWidth = 28
-    ws.Columns("C:D").ColumnWidth = 48
-    ws.Columns("H").ColumnWidth = 52
-    ws.Columns("I").ColumnWidth = 28
-    ws.Columns("L").ColumnWidth = 30
-    ws.Columns("M").ColumnWidth = 42
-    ws.Columns("N").ColumnWidth = 22
+    ws.Columns("A").ColumnWidth = 9
+    ws.Columns("B:C").ColumnWidth = 16
+    ws.Columns("D:E").ColumnWidth = 48
+    ws.Columns("I").ColumnWidth = 52
+    ws.Columns("J").ColumnWidth = 28
+    ws.Columns("M").ColumnWidth = 30
+    ws.Columns("N").ColumnWidth = 42
+    ws.Columns("O").ColumnWidth = 22
 
     For Each shape In ws.Shapes
         If CStr(shape.Name) = "NMDC_Save_Review" Or _
            CStr(shape.Name) = "NMDC_Request_Review_Fix" Or _
-           CStr(shape.Name) = "NMDC_Retry_Review_Fix" Then shape.Delete
+           CStr(shape.Name) = "NMDC_Retry_Review_Fix" Or _
+           CStr(shape.Name) = "NMDC_Select_All_Review" Or _
+           CStr(shape.Name) = "NMDC_Clear_Review_Select" Then shape.Delete
     Next
-    ws.Columns("P:S").ColumnWidth = 14
+    ws.Columns("Q:T").ColumnWidth = 14
 
-    Set area = ws.Range("P4:S4")
+    Set area = ws.Range("Q4:T4")
     Set button = ws.Shapes.AddShape(msoShapeRoundedRectangle, area.Left, area.Top, area.Width, area.Height)
     button.Name = "NMDC_Save_Review"
     button.OnAction = "NMDC_SaveReviewDecisions"
@@ -704,11 +707,11 @@ Sub ConfigureReviewFlags(ByVal wb)
     button.TextFrame.Characters.Font.Bold = True
     button.TextFrame.Characters.Font.Color = RGB(255,255,255)
 
-    Set area = ws.Range("P5:S5")
+    Set area = ws.Range("Q5:T5")
     Set button = ws.Shapes.AddShape(msoShapeRoundedRectangle, area.Left, area.Top, area.Width, area.Height)
     button.Name = "NMDC_Request_Review_Fix"
-    button.OnAction = "NMDC_RequestParserMappingFix"
-    button.TextFrame.Characters.Text = "Request Parser / Mapping Fix"
+    button.OnAction = "NMDC_ReportSelectedParserFixes"
+    button.TextFrame.Characters.Text = "Report Selected Parser Fix"
     button.TextFrame.HorizontalAlignment = -4108
     button.TextFrame.VerticalAlignment = 3
     button.Fill.ForeColor.RGB = RGB(194, 139, 0)
@@ -718,7 +721,7 @@ Sub ConfigureReviewFlags(ByVal wb)
     button.TextFrame.Characters.Font.Bold = True
     button.TextFrame.Characters.Font.Color = RGB(255,255,255)
 
-    Set area = ws.Range("P6:S6")
+    Set area = ws.Range("Q7:T7")
     Set button = ws.Shapes.AddShape(msoShapeRoundedRectangle, area.Left, area.Top, area.Width, area.Height)
     button.Name = "NMDC_Retry_Review_Fix"
     button.OnAction = "NMDC_RetryAfterParserMappingFix"
@@ -727,6 +730,34 @@ Sub ConfigureReviewFlags(ByVal wb)
     button.TextFrame.VerticalAlignment = 3
     button.Fill.ForeColor.RGB = RGB(20, 108, 148)
     button.Line.ForeColor.RGB = RGB(20, 108, 148)
+    button.TextFrame.Characters.Font.Name = "Aptos"
+    button.TextFrame.Characters.Font.Size = 9
+    button.TextFrame.Characters.Font.Bold = True
+    button.TextFrame.Characters.Font.Color = RGB(255,255,255)
+
+    Set area = ws.Range("Q6:R6")
+    Set button = ws.Shapes.AddShape(msoShapeRoundedRectangle, area.Left, area.Top, area.Width, area.Height)
+    button.Name = "NMDC_Select_All_Review"
+    button.OnAction = "NMDC_SelectAllReviewFlags"
+    button.TextFrame.Characters.Text = "Select All"
+    button.TextFrame.HorizontalAlignment = -4108
+    button.TextFrame.VerticalAlignment = 3
+    button.Fill.ForeColor.RGB = RGB(96, 125, 139)
+    button.Line.ForeColor.RGB = RGB(96, 125, 139)
+    button.TextFrame.Characters.Font.Name = "Aptos"
+    button.TextFrame.Characters.Font.Size = 9
+    button.TextFrame.Characters.Font.Bold = True
+    button.TextFrame.Characters.Font.Color = RGB(255,255,255)
+
+    Set area = ws.Range("S6:T6")
+    Set button = ws.Shapes.AddShape(msoShapeRoundedRectangle, area.Left, area.Top, area.Width, area.Height)
+    button.Name = "NMDC_Clear_Review_Select"
+    button.OnAction = "NMDC_ClearReviewFlagSelection"
+    button.TextFrame.Characters.Text = "Clear Selection"
+    button.TextFrame.HorizontalAlignment = -4108
+    button.TextFrame.VerticalAlignment = 3
+    button.Fill.ForeColor.RGB = RGB(96, 125, 139)
+    button.Line.ForeColor.RGB = RGB(96, 125, 139)
     button.TextFrame.Characters.Font.Name = "Aptos"
     button.TextFrame.Characters.Font.Size = 9
     button.TextFrame.Characters.Font.Bold = True

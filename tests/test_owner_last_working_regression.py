@@ -147,6 +147,21 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertIn('PARSER_FIX_REQUEST_LATEST.md', review)
         self.assertIn('"Select?",', bridge)
 
+    def test_review_flags_use_checkbox_selection_and_visible_parser_report(self):
+        admin = self._read("excel/vba/modNMDC_Admin.bas")
+        setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
+        refresh = self._read("excel/vba/modNMDC_Refresh.bas")
+        layout = self._read("nmdc_profiler/ui_layout.py")
+        self.assertIn('"Select?",', layout)
+        self.assertIn('table.ListColumns("Select?").DataBodyRange', refresh)
+        self.assertIn("CellControl.SetCheckbox", refresh)
+        self.assertIn("Public Sub NMDC_ReportSelectedParserFixes()", admin)
+        self.assertIn("PARSER_FIX_REQUEST_LATEST.md", admin)
+        self.assertIn("NMDC_RevealFile requestPath", admin)
+        self.assertIn('"Report Selected Parser Fix"', setup)
+        self.assertIn('"Select All"', setup)
+        self.assertIn('"Clear Selection"', setup)
+
     def test_setup_keeps_fast_scan_and_last_working_recovery_controls_together(self):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
         self.assertIn('"NMDC_UpdateChangedFilesFast"', setup)

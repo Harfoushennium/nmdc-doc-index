@@ -73,6 +73,7 @@ PENDING_FIELDS: List[str] = [
 ]
 
 FLAG_FIELDS: List[str] = [
+    "Select?",
     "Flag Level",
     "Plain-English Problem",
     "Recommended User Action",
