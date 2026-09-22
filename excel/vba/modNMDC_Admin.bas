@@ -74,7 +74,7 @@ Public Sub NMDC_SaveReviewDecisions()
     stream.Type = 2
     stream.Charset = "utf-8"
     stream.Open
-    stream.WriteText "Flag Code,Source File,Source Sheet,Event Key,Project No.,Document No.,Revision,User Decision,User Comment,Resolution Status" & vbLf
+    stream.WriteText "Flag Code,Source File,Worksheet Name,Event Key,Project No.,Document No.,Revision,User Decision,User Comment,Resolution Status" & vbLf
 
     For Each row In table.ListRows
         decision = Trim$(CStr(NMDC_AdminTableValue(table, row, "User Decision")))
@@ -87,7 +87,7 @@ Public Sub NMDC_SaveReviewDecisions()
             stream.WriteText _
                 NMDC_AdminCsvField(CStr(NMDC_AdminTableValue(table, row, "Flag Code"))) & "," & _
                 NMDC_AdminCsvField(CStr(NMDC_AdminTableValue(table, row, "Source File"))) & "," & _
-                NMDC_AdminCsvField(CStr(NMDC_AdminTableValue(table, row, "Source Sheet"))) & "," & _
+                NMDC_AdminCsvField(CStr(NMDC_AdminTableValue(table, row, "Worksheet Name"))) & "," & _
                 NMDC_AdminCsvField(CStr(NMDC_AdminTableValue(table, row, "Event Key"))) & "," & _
                 NMDC_AdminCsvField(CStr(NMDC_AdminTableValue(table, row, "Project No."))) & "," & _
                 NMDC_AdminCsvField(CStr(NMDC_AdminTableValue(table, row, "Document No."))) & "," & _
@@ -120,9 +120,9 @@ Public Sub NMDC_SaveReviewDecisions()
     If NMDC_RunEngine("export-excel") = 0 Then NMDC_RefreshExchangeData
 
     If fixRows > 0 Then
-        requestPath = NMDC_WorkbookFolder() & "\PARSER_FIX_REQUEST_LATEST.md"
+        requestPath = NMDC_LatestParserFixRequestPath()
         MsgBox CStr(savedRows) & " Review Flag decision(s) were saved." & vbCrLf & vbCrLf & _
-               CStr(fixRows) & " parser/mapping fix request(s) were prepared BESIDE THIS EXCEL FILE:" & vbCrLf & _
+               CStr(fixRows) & " parser/mapping fix request(s) were prepared in a dedicated numbered folder:" & vbCrLf & _
                requestPath & vbCrLf & vbCrLf & _
                "Upload this report together with the affected source workbook(s) to ChatGPT / the project maintainer. " & _
                "After the corrected parser or mapping is installed, click Retry After Fix.", _
@@ -195,7 +195,7 @@ Public Sub NMDC_ReportSelectedParserFixes()
     stream.Type = 2
     stream.Charset = "utf-8"
     stream.Open
-    stream.WriteText "Flag Code,Source File,Source Sheet,Event Key,Project No.,Document No.,Revision,User Decision,User Comment,Resolution Status" & vbLf
+    stream.WriteText "Flag Code,Source File,Worksheet Name,Event Key,Project No.,Document No.,Revision,User Decision,User Comment,Resolution Status" & vbLf
 
     For Each row In table.ListRows
         If NMDC_AdminCheckedValue(NMDC_AdminTableValue(table, row, "Select?")) Then
@@ -211,7 +211,7 @@ Public Sub NMDC_ReportSelectedParserFixes()
             stream.WriteText _
                 NMDC_AdminCsvField(CStr(NMDC_AdminTableValue(table, row, "Flag Code"))) & "," & _
                 NMDC_AdminCsvField(CStr(NMDC_AdminTableValue(table, row, "Source File"))) & "," & _
-                NMDC_AdminCsvField(CStr(NMDC_AdminTableValue(table, row, "Source Sheet"))) & "," & _
+                NMDC_AdminCsvField(CStr(NMDC_AdminTableValue(table, row, "Worksheet Name"))) & "," & _
                 NMDC_AdminCsvField(CStr(NMDC_AdminTableValue(table, row, "Event Key"))) & "," & _
                 NMDC_AdminCsvField(CStr(NMDC_AdminTableValue(table, row, "Project No."))) & "," & _
                 NMDC_AdminCsvField(CStr(NMDC_AdminTableValue(table, row, "Document No."))) & "," & _
@@ -234,12 +234,12 @@ Public Sub NMDC_ReportSelectedParserFixes()
         Exit Sub
     End If
 
-    requestPath = NMDC_WorkbookFolder() & "\PARSER_FIX_REQUEST_LATEST.md"
+    requestPath = NMDC_LatestParserFixRequestPath()
 
     If NMDC_RunEngine("export-excel") = 0 Then NMDC_RefreshExchangeData
 
     MsgBox CStr(selectedCount) & " selected parser/mapping issue(s) were reported." & vbCrLf & vbCrLf & _
-           "The report is saved BESIDE THIS EXCEL FILE:" & vbCrLf & _
+           "The report is saved in its own numbered folder under PARSER_FIX_REPORTS:" & vbCrLf & _
            requestPath & vbCrLf & vbCrLf & _
            "Next: upload this report and the affected source workbook(s) to ChatGPT / the project maintainer. " & _
            "After a corrected parser/configuration is installed, click Retry After Fix.", _
@@ -319,6 +319,38 @@ Private Function NMDC_AdminCheckedValue(ByVal value As Variant) As Boolean
         Case Else
             NMDC_AdminCheckedValue = False
     End Select
+End Function
+
+Private Function NMDC_LatestParserFixRequestPath() As String
+    On Error GoTo Missing
+
+    Dim fso As Object
+    Dim reportRoot As String
+    Dim folder As Object
+    Dim folderName As String
+    Dim seq As Long
+    Dim maxSeq As Long
+    Dim candidate As String
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    reportRoot = NMDC_WorkbookFolder() & "\PARSER_FIX_REPORTS"
+    If Not fso.FolderExists(reportRoot) Then Exit Function
+
+    For Each folder In fso.GetFolder(reportRoot).SubFolders
+        folderName = CStr(folder.Name)
+        If Len(folderName) >= 4 And IsNumeric(folderName) Then
+            seq = CLng(folderName)
+            If seq > maxSeq Then maxSeq = seq
+        End If
+    Next folder
+
+    If maxSeq <= 0 Then Exit Function
+    candidate = reportRoot & "\" & Format$(maxSeq, "0000") & "\PARSER_FIX_REQUEST.md"
+    If fso.FileExists(candidate) Then NMDC_LatestParserFixRequestPath = candidate
+    Exit Function
+
+Missing:
+    NMDC_LatestParserFixRequestPath = ""
 End Function
 
 Private Sub NMDC_RevealFile(ByVal filePath As String)

@@ -554,9 +554,9 @@ Private Sub NMDC_EnhanceReviewFlagGuidance(ByVal table As ListObject)
                 "The parser could not identify a safe document-number/data-row layout automatically. " & _
                 "This does not necessarily mean the workbook is badly formatted."
             row.Range.Cells(1, actionCol).Value = _
-                "Open the Source File and named Source Sheet. If it is empty, choose NO ACTION REQUIRED. " & _
+                "Open the Source File and named Worksheet Name. If it is empty, choose NO ACTION REQUIRED. " & _
                 "If it contains normal register data, tick Select? for the affected row(s), then click Report Selected Parser Fix. " & _
-                "The workbook writes the fix report beside this Excel file and opens its location. " & _
+                "The workbook writes the fix report to a dedicated numbered PARSER_FIX_REPORTS folder and opens its location. " & _
                 "After a corrected parser/config is installed, click Retry After Fix."
         End If
     Next row
