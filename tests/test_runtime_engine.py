@@ -165,7 +165,7 @@ class RuntimeEngineTests(unittest.TestCase):
             result = apply_review_decisions(state, decisions)
 
             self.assertEqual(result["parser_mapping_fix_requests"], 1)
-            handoff = state / "support" / "LATEST_PARSER_MAPPING_FIX_REQUEST.md"
+            handoff = state / "support" / "PARSER_FIX_REQUEST_LATEST.md"
             self.assertTrue(handoff.exists())
             content = handoff.read_text(encoding="utf-8")
             self.assertIn("METHODS/register.xlsx", content)

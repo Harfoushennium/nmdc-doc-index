@@ -88,8 +88,9 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         review = self._read("nmdc_profiler/review_decisions.py")
         self.assertIn("Public Sub NMDC_RequestParserMappingFix()", admin)
         self.assertIn("Public Sub NMDC_RetryAfterParserMappingFix()", admin)
-        self.assertIn("LATEST_PARSER_MAPPING_FIX_REQUEST.md", admin)
-        self.assertIn('"Request Parser / Mapping Fix"', setup)
+        self.assertIn("PARSER_FIX_REQUEST_LATEST.md", admin)
+        self.assertIn("Public Sub NMDC_ReportSelectedParserFixes()", admin)
+        self.assertIn('"Report Selected Parser Fix"', setup)
         self.assertIn('"Retry After Fix"', setup)
         self.assertIn("parser_mapping_fix_requests", review)
 

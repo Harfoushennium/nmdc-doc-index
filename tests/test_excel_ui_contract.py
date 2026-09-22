@@ -246,10 +246,12 @@ class ExcelUIContractTests(unittest.TestCase):
             "modNMDC_Checkboxes.bas",
         ]:
             self.assertIn(required, text)
-        self.assertIn('SetWorkbookConfig workbook, "Engine Executable Path", enginePath', text)
-        self.assertIn('SetWorkbookConfig workbook, "Runtime Folder", runtimeFolder', text)
-        self.assertIn('SetWorkbookConfig workbook, "Configuration Folder", configFolder', text)
-        self.assertIn("%LOCALAPPDATA%", text)
+        self.assertIn('SetWorkbookConfig workbook, "Engine Executable Path", "engine\\nmdc_index_engine.exe"', text)
+        self.assertIn('SetWorkbookConfig workbook, "Runtime Folder", "runtime"', text)
+        self.assertIn('SetWorkbookConfig workbook, "Configuration Folder", "config"', text)
+        self.assertIn('SetWorkbookConfig workbook, "Parser Version", "cycle3-extractor-v2"', text)
+        self.assertNotIn("%LOCALAPPDATA%", text)
+        self.assertIn('runtimeFolder = fso.BuildPath(packageRoot, "runtime")', text)
         self.assertIn("EnsureFolderTree runtimeFolder", text)
         self.assertIn("EnsureNamedTables workbook", text)
         expected_tables = [

@@ -183,8 +183,8 @@ class Owner0916UsabilityPerformanceTests(unittest.TestCase):
         self.assertEqual(["Project No.", "Document No.", "Revision", "Event Type"], EVENT_FIELDS[:4])
         self.assertEqual(["Change Type", "Project No.", "Document No."], PENDING_FIELDS[:3])
         self.assertEqual(
-            ["Flag Level", "Plain-English Problem", "Recommended User Action", "User Decision"],
-            FLAG_FIELDS[:4],
+            ["Select?", "Flag Level", "Plain-English Problem", "Recommended User Action", "User Decision"],
+            FLAG_FIELDS[:5],
         )
         self.assertEqual("Record Identity", PENDING_FIELDS[-1])
         self.assertEqual("Event Key", FLAG_FIELDS[-1])
@@ -204,7 +204,8 @@ class Owner0916UsabilityPerformanceTests(unittest.TestCase):
         )
         engine = (ROOT / "nmdc_index_engine.py").read_text(encoding="utf-8")
 
-        self.assertIn("%LOCALAPPDATA%", setup)
+        self.assertNotIn("%LOCALAPPDATA%", setup)
+        self.assertIn('runtimeFolder = fso.BuildPath(packageRoot, "runtime")', setup)
         self.assertIn("modNMDC_Performance.bas", setup)
         self.assertIn("modNMDC_OwnerUX.bas", setup)
         self.assertIn("modNMDC_Checkboxes.bas", setup)
