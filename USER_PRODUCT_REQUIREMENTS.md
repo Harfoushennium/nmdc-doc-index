@@ -72,9 +72,9 @@ The production workbook (`NMDC_Document_Index.xlsm`) consists of exactly **15 wo
 
 ## 5. Staged Review & Admin Controls
 
-- **Source Scope Controls:** Checkboxes inside `Pending Update` allow including or excluding entire source workbooks in a single **Save Selection & Restage** operation without repeatedly re-scanning.
+- **Source Scope Controls:** Native Microsoft 365 in-cell checkboxes inside `Pending Update` allow including or excluding entire source workbooks in a single **Save Selection & Restage** operation without repeatedly re-scanning. The owner environment supports native in-cell checkboxes; the production UX must not silently downgrade these controls to visible TRUE/FALSE text.
 - **Non-Coder Rules Editor:** Plain-text match types (`CONTAINS`, `EXACT`, `STARTS_WITH`, `ENDS_WITH`). No complex regular expressions required for routine rules.
-- **Actionable parser/mapping exception workflow:** When a genuine extraction/layout Review Flag is marked `NEEDS PARSER/MAPPING FIX`, the workbook must prepare a stable fix-request handoff containing the source file/sheet and owner comment. It must explain that the installed executable cannot safely rewrite its own parser code. After a corrected parser/configuration is installed, **Retry After Fix** must reprocess the source through Full Rescan without modifying source DATA or approving the staged proposal automatically.
+- **Actionable parser/mapping exception workflow:** `Review Flags` uses a native Microsoft 365 **Select?** checkbox column so the owner can mark one or more exact flagged rows. When selected rows are reported for `NEEDS PARSER/MAPPING FIX`, the workbook must prepare a stable fix-request handoff containing the source file/sheet and owner comment. It must explain that the installed executable cannot safely rewrite its own parser code. After a corrected parser/configuration is installed, **Retry After Fix** must reprocess the source through Full Rescan without modifying source DATA or approving the staged proposal automatically.
 - **Safe Recovery Actions:**
   - **Reset All Records:** Deletes runtime cache and index records without touching source `DATA/` or configuration files.
   - **Undo Last Approval:** Restores the previous approved index version from audit history.

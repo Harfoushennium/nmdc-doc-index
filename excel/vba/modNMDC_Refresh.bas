@@ -587,16 +587,27 @@ Private Sub NMDC_ApplyReviewFlagValidation(ByVal table As ListObject)
         If Len(Trim$(CStr(cell.Value))) = 0 Then cell.Value = False
     Next cell
     On Error Resume Next
+    Err.Clear
     selectRange.CellControl.SetCheckbox
     If Err.Number <> 0 Then
-        NMDC_LogError "REVIEW_CHECKBOX_UNAVAILABLE", _
-            "Excel could not display Review Flags selection checkboxes. TRUE/FALSE selection values remain usable.", _
-            Err.Number & " - " & Err.Description
+        Dim checkboxErr As Long
+        Dim checkboxDescription As String
+        checkboxErr = Err.Number
+        checkboxDescription = Err.Description
         Err.Clear
-    Else
-        selectRange.HorizontalAlignment = xlCenter
+        On Error GoTo Handler
+        NMDC_LogError "REVIEW_CHECKBOX_REQUIRED", _
+            "Excel could not create the required Microsoft 365 Review Flags selection checkboxes.", _
+            checkboxErr & " - " & checkboxDescription
+        MsgBox "The required Microsoft 365 Review Flags checkboxes could not be created." & vbCrLf & vbCrLf & _
+               "This production build does not fall back to TRUE/FALSE text." & vbCrLf & _
+               "Please close Excel, reopen the workbook, and open Review Flags again." & vbCrLf & vbCrLf & _
+               "Technical detail: " & CStr(checkboxErr) & " - " & checkboxDescription, _
+               vbExclamation, "NMDC Document Index"
+        Exit Sub
     End If
     On Error GoTo Handler
+    selectRange.HorizontalAlignment = xlCenter
 
     decisionRange.Validation.Delete
     decisionRange.Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Operator:=xlBetween, _

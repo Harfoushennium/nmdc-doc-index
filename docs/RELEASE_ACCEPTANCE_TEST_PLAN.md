@@ -104,6 +104,15 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 10. Checkbox controls must remain associated with the correct source after refresh/sort because their row is resolved at click time rather than through fragile fixed linked-cell addresses.
 11. Multi-choice fields such as Review Flag decisions, Resolution Status and rule match choices remain dropdowns rather than being represented by ambiguous groups of checkboxes.
 12. Automated regression tests must cover checked/unchecked export, batch persistence, restore, Check All/Uncheck All contract and packaging of the checkbox module.
+13. The owner environment is Microsoft 365 with native in-cell checkbox support. Failure to create the source-selection checkboxes is a release-blocking UI error; the production workbook must not silently fall back to visible TRUE/FALSE text.
+
+## Gate G2 — Review Flags selection checkbox workflow
+
+1. `Review Flags` must begin with a native Microsoft 365 **Select?** checkbox column.
+2. The owner can tick one or multiple exact parser/extraction issues and use **Report Selected Parser Fix**.
+3. **Select All** and **Clear Selection** must operate on the Review Flags selection column only.
+4. A failure to create Review Flags native checkboxes is release-blocking and must show a visible error; TRUE/FALSE text is not an accepted production substitute.
+5. Reporting selected flags must create `PARSER_FIX_REQUEST_LATEST.md` beside the XLSM and open Windows Explorer to that file.
 
 ## Gate H — Dynamic Live Filter
 

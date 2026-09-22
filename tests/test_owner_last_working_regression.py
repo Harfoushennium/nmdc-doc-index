@@ -163,6 +163,25 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertIn('"Select All"', setup)
         self.assertIn('"Clear Selection"', setup)
 
+    def test_native_m365_checkboxes_are_required_not_silent_fallbacks(self):
+        source = self._read("excel/vba/modNMDC_Checkboxes.bas")
+        refresh = self._read("excel/vba/modNMDC_Refresh.bas")
+        requirements = self._read("USER_PRODUCT_REQUIREMENTS.md")
+        acceptance = self._read("docs/RELEASE_ACCEPTANCE_TEST_PLAN.md")
+
+        self.assertIn("CellControl.SetCheckbox", source)
+        self.assertIn("NATIVE_CHECKBOX_REQUIRED", source)
+        self.assertIn("does not fall back to TRUE/FALSE text", source)
+        self.assertNotIn("TRUE/FALSE source choices remain usable", source)
+
+        self.assertIn("CellControl.SetCheckbox", refresh)
+        self.assertIn("REVIEW_CHECKBOX_REQUIRED", refresh)
+        self.assertIn("does not fall back to TRUE/FALSE text", refresh)
+        self.assertNotIn("TRUE/FALSE selection values remain usable", refresh)
+
+        self.assertIn("must not silently downgrade", requirements)
+        self.assertIn("release-blocking UI error", acceptance)
+
     def test_setup_keeps_fast_scan_and_last_working_recovery_controls_together(self):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
         self.assertIn('"NMDC_UpdateChangedFilesFast"', setup)

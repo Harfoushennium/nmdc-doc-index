@@ -278,7 +278,7 @@ Private Sub NMDC_FormatSourceButton(ByVal button As Shape, ByVal fillColor As Lo
 End Sub
 
 Private Sub NMDC_ApplyNativeSourceCheckboxes(ByVal table As ListObject)
-    On Error GoTo Fallback
+    On Error GoTo CheckboxRequiredFailed
 
     Dim includeColumn As ListColumn
     Dim sourceColumn As ListColumn
@@ -286,10 +286,8 @@ Private Sub NMDC_ApplyNativeSourceCheckboxes(ByVal table As ListObject)
     Dim sourceFile As String
     Dim targetCell As Range
     Dim anySource As Boolean
-    Dim excelVersion As Double
-    Dim excelBuild As Long
-    Dim checkboxErr As Long
-    Dim checkboxDescription As String
+    Dim errNumber As Long
+    Dim errDescription As String
 
     Set includeColumn = table.ListColumns("Include in Index?")
     Set sourceColumn = table.ListColumns("Source File")
@@ -307,42 +305,27 @@ Private Sub NMDC_ApplyNativeSourceCheckboxes(ByVal table As ListObject)
     Next rowIndex
 
     If anySource Then
-        ' CellControl is a runtime capability: keep the Boolean values usable
-        ' when an older Excel build does not expose SetCheckbox.
-        On Error Resume Next
-        excelVersion = CDbl(Application.Version)
-        excelBuild = CLng(Application.Build)
-        Err.Clear
-        On Error GoTo Fallback
-        If excelVersion < 16# Or excelBuild <= 0 Then
-            NMDC_LogError "NATIVE_CHECKBOX_UNAVAILABLE", _
-                "This Excel build does not advertise the modern in-cell checkbox capability. TRUE/FALSE source choices remain usable.", _
-                "Version=" & CStr(excelVersion) & "; Build=" & CStr(excelBuild)
-            Exit Sub
-        End If
-        On Error Resume Next
-        Err.Clear
+        ' Owner environment is Microsoft 365 with native in-cell checkboxes.
+        ' Native checkbox rendering is therefore a production requirement,
+        ' not an optional TRUE/FALSE fallback.
         includeColumn.DataBodyRange.CellControl.SetCheckbox
-        checkboxErr = Err.Number
-        checkboxDescription = Err.Description
-        On Error GoTo Fallback
-        If checkboxErr <> 0 Then
-            NMDC_LogError "NATIVE_CHECKBOX_UNAVAILABLE", _
-                "Excel could not display the modern in-cell source checkboxes. TRUE/FALSE source choices remain usable.", _
-                checkboxErr & " - " & checkboxDescription
-        Else
-            includeColumn.DataBodyRange.HorizontalAlignment = xlCenter
-        End If
+        includeColumn.DataBodyRange.HorizontalAlignment = xlCenter
     End If
     Exit Sub
 
-Fallback:
-    ' Native checkbox is available in the owner's current Microsoft 365 build.
-    ' If an older Excel version opens the file, preserve the Boolean choices
-    ' rather than breaking scanning or workbook setup.
-    NMDC_LogError "NATIVE_CHECKBOX_UNAVAILABLE", _
-        "Excel could not display the modern in-cell source checkboxes. TRUE/FALSE source choices remain usable.", _
-        Err.Number & " - " & Err.Description
+CheckboxRequiredFailed:
+    errNumber = Err.Number
+    errDescription = Err.Description
+    On Error Resume Next
+    NMDC_LogError "NATIVE_CHECKBOX_REQUIRED", _
+        "Excel could not create the required Microsoft 365 source-selection checkboxes.", _
+        errNumber & " - " & errDescription
+    MsgBox "The required Microsoft 365 source-selection checkboxes could not be created." & vbCrLf & vbCrLf & _
+           "This production build does not fall back to TRUE/FALSE text." & vbCrLf & _
+           "Please close Excel, reopen the workbook, and try Pending Update again." & vbCrLf & vbCrLf & _
+           "Technical detail: " & CStr(errNumber) & " - " & errDescription, _
+           vbExclamation, "NMDC Document Index"
+    On Error GoTo 0
 End Sub
 
 Public Sub NMDC_SaveSourceSelections()
