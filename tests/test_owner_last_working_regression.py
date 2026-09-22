@@ -200,8 +200,8 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertIn("PARSER_FIX_REQUEST_LATEST.md", readme)
         self.assertIn("directly beside `NMDC_Document_Index.xlsm`", readme)
         self.assertIn("does not silently downgrade", readme)
-        self.assertIn("frmNMDC_LiveFilter", workflow)
-        self.assertIn("-notmatch", workflow)
+        self.assertIn('Remove-Item "$package\\vba\\frmNMDC_LiveFilter.frm"', workflow)
+        self.assertIn('Remove-Item "$package\\vba\\frmNMDC_LiveFilter.frx"', workflow)
         self.assertIn('frmnmdc_livefilter.frm', assembler)
         self.assertIn('frmnmdc_livefilter.frx', assembler)
 
