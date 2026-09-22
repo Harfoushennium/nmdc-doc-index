@@ -73,8 +73,9 @@ def _write_parser_mapping_fix_request(
     state_dir: Path,
     run_id: str,
     flags: Iterable[Mapping[str, Any]],
+    request_dir: Path | None = None,
 ) -> Path:
-    support_dir = Path(state_dir) / "support"
+    support_dir = Path(request_dir) if request_dir is not None else Path(state_dir) / "support"
     support_dir.mkdir(parents=True, exist_ok=True)
     rows = [dict(flag) for flag in flags]
     payload = {
@@ -88,8 +89,11 @@ def _write_parser_mapping_fix_request(
         ),
         "flags": rows,
     }
-    json_path = support_dir / "LATEST_PARSER_MAPPING_FIX_REQUEST.json"
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    json_path = support_dir / f"PARSER_FIX_REQUEST_{stamp}.json"
+    latest_json_path = support_dir / "PARSER_FIX_REQUEST_LATEST.json"
     _write_json(json_path, payload)
+    _write_json(latest_json_path, payload)
 
     lines = [
         "# NMDC Document Index — Parser / Mapping Fix Request",
@@ -137,12 +141,19 @@ def _write_parser_mapping_fix_request(
             "- Re-run extraction and confirm the Review Flag no longer appears.",
         ]
     )
-    md_path = support_dir / "LATEST_PARSER_MAPPING_FIX_REQUEST.md"
-    md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return md_path
+    md_text = "\n".join(lines) + "\n"
+    md_path = support_dir / f"PARSER_FIX_REQUEST_{stamp}.md"
+    latest_md_path = support_dir / "PARSER_FIX_REQUEST_LATEST.md"
+    md_path.write_text(md_text, encoding="utf-8")
+    latest_md_path.write_text(md_text, encoding="utf-8")
+    return latest_md_path
 
 
-def apply_review_decisions(state_dir: Path, decisions_file: Path) -> Dict[str, Any]:
+def apply_review_decisions(
+    state_dir: Path,
+    decisions_file: Path,
+    request_dir: Path | None = None,
+) -> Dict[str, Any]:
     state_dir = Path(state_dir)
     decisions_file = Path(decisions_file)
     if not decisions_file.exists():
@@ -210,6 +221,7 @@ def apply_review_decisions(state_dir: Path, decisions_file: Path) -> Dict[str, A
                 state_dir,
                 run_id,
                 unique_fix_flags.values(),
+                request_dir=request_dir,
             )
         )
 

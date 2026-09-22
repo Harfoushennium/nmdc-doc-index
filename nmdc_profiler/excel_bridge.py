@@ -98,6 +98,7 @@ PENDING_FIELDS = [
 ]
 
 FLAG_FIELDS = [
+    "Select?",
     "Flag Level",
     "Flag Code",
     "Plain-English Problem",
@@ -415,6 +416,7 @@ def build_flag_rows(stage: Mapping[str, Any]) -> List[Record]:
     for flag in stage.get("flags", []) or []:
         rows.append(
             {
+                "Select?": False,
                 "Flag Level": flag.get("level", ""),
                 "Flag Code": flag.get("code", ""),
                 "Plain-English Problem": flag.get("message", ""),

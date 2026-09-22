@@ -555,8 +555,8 @@ Private Sub NMDC_EnhanceReviewFlagGuidance(ByVal table As ListObject)
                 "This does not necessarily mean the workbook is badly formatted."
             row.Range.Cells(1, actionCol).Value = _
                 "Open the Source File and named Source Sheet. If it is empty, choose NO ACTION REQUIRED. " & _
-                "If it contains normal register data, select the row and click Request Parser / Mapping Fix. " & _
-                "Describe the expected layout in User Comment; the workbook will create a fix-request handoff file. " & _
+                "If it contains normal register data, tick Select? for the affected row(s), then click Report Selected Parser Fix. " & _
+                "The workbook writes the fix report beside this Excel file and opens its location. " & _
                 "After a corrected parser/config is installed, click Retry After Fix."
         End If
     Next row
@@ -572,13 +572,31 @@ Private Sub NMDC_ApplyReviewFlagValidation(ByVal table As ListObject)
     If StrComp(table.Name, "ReviewFlags", vbTextCompare) <> 0 Then Exit Sub
     If table.DataBodyRange Is Nothing Then Exit Sub
 
+    Dim selectRange As Range
     Dim decisionRange As Range
     Dim statusRange As Range
     Dim commentRange As Range
+    Dim cell As Range
 
+    Set selectRange = table.ListColumns("Select?").DataBodyRange
     Set decisionRange = table.ListColumns("User Decision").DataBodyRange
     Set commentRange = table.ListColumns("User Comment").DataBodyRange
     Set statusRange = table.ListColumns("Resolution Status").DataBodyRange
+
+    For Each cell In selectRange.Cells
+        If Len(Trim$(CStr(cell.Value))) = 0 Then cell.Value = False
+    Next cell
+    On Error Resume Next
+    selectRange.CellControl.SetCheckbox
+    If Err.Number <> 0 Then
+        NMDC_LogError "REVIEW_CHECKBOX_UNAVAILABLE", _
+            "Excel could not display Review Flags selection checkboxes. TRUE/FALSE selection values remain usable.", _
+            Err.Number & " - " & Err.Description
+        Err.Clear
+    Else
+        selectRange.HorizontalAlignment = xlCenter
+    End If
+    On Error GoTo Handler
 
     decisionRange.Validation.Delete
     decisionRange.Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Operator:=xlBetween, _
@@ -598,6 +616,7 @@ Private Sub NMDC_ApplyReviewFlagValidation(ByVal table As ListObject)
     statusRange.Validation.InputTitle = "Review status"
     statusRange.Validation.InputMessage = "OPEN = unresolved; ACKNOWLEDGED = reviewed; RESOLVED = closed; DEFERRED = postponed."
 
+    selectRange.Interior.Pattern = xlNone
     decisionRange.Interior.Pattern = xlNone
     commentRange.Interior.Pattern = xlNone
     statusRange.Interior.Pattern = xlNone

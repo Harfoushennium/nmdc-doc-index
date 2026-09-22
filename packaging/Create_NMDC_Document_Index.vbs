@@ -11,7 +11,7 @@ Const xlBetween = 1
 Const msoShapeRoundedRectangle = 5
 
 Dim fso, shell, packageRoot, sourceWorkbook, outputWorkbook, excel, workbook
-Dim modulesFolder, enginePath, runtimeFolder, configFolder, response, localAppData, appDataRoot
+Dim modulesFolder, enginePath, runtimeFolder, configFolder, response
 Dim setupStage, setupObject
 setupStage = "startup"
 setupObject = ""
@@ -25,13 +25,9 @@ modulesFolder = fso.BuildPath(packageRoot, "vba")
 enginePath = fso.BuildPath(packageRoot, "engine\nmdc_index_engine.exe")
 configFolder = fso.BuildPath(packageRoot, "config")
 
-' Keep runtime/state/cache out of the extracted package so normal scans do not
-' create thousands of sync events when the package itself sits under OneDrive.
-localAppData = shell.ExpandEnvironmentStrings("%LOCALAPPDATA%")
-If Len(localAppData) = 0 Or InStr(localAppData, "%LOCALAPPDATA%") > 0 Then localAppData = packageRoot
-appDataRoot = fso.BuildPath(localAppData, "NMDC Document Index")
-runtimeFolder = fso.BuildPath(appDataRoot, "runtime")
-EnsureFolderTree appDataRoot
+' Keep every NMDC-created runtime/cache/support file with the workbook package.
+' Do not write application state to AppData or any unrelated user folder.
+runtimeFolder = fso.BuildPath(packageRoot, "runtime")
 EnsureFolderTree runtimeFolder
 
 If Not fso.FileExists(sourceWorkbook) Then
@@ -187,12 +183,13 @@ If Err.Number <> 0 Then
 End If
 TraceStep "owner-events-configured"
 
-SetWorkbookConfig workbook, "Engine Executable Path", enginePath
-SetWorkbookConfig workbook, "Runtime Folder", runtimeFolder
-SetWorkbookConfig workbook, "Configuration Folder", configFolder
-SetWorkbookConfig workbook, "Classification Rules File", fso.BuildPath(configFolder, "classification_rules.csv")
-SetWorkbookConfig workbook, "Project Identity Overrides File", fso.BuildPath(configFolder, "project_identity_overrides.csv")
-SetWorkbookConfig workbook, "Source Exclusions File", fso.BuildPath(configFolder, "source_exclusions.csv")
+SetWorkbookConfig workbook, "Engine Executable Path", "engine\nmdc_index_engine.exe"
+SetWorkbookConfig workbook, "Runtime Folder", "runtime"
+SetWorkbookConfig workbook, "Configuration Folder", "config"
+SetWorkbookConfig workbook, "Classification Rules File", "config\classification_rules.csv"
+SetWorkbookConfig workbook, "Project Identity Overrides File", "config\project_identity_overrides.csv"
+SetWorkbookConfig workbook, "Source Exclusions File", "config\source_exclusions.csv"
+SetWorkbookConfig workbook, "Parser Version", "cycle3-extractor-v2"
 TraceStep "configuration-paths-written"
 
 StyleHomeDashboard workbook
@@ -241,6 +238,7 @@ excel.Quit
 On Error GoTo 0
 
 MsgBox "NMDC_Document_Index.xlsm was created successfully." & vbCrLf & vbCrLf & _
+       "All NMDC-created runtime, cache and support files stay inside this Excel package folder." & vbCrLf & _
        "Runtime/cache: " & runtimeFolder & vbCrLf & vbCrLf & _
        "Open the workbook, enable macros, select the DATA folder, and use Update Changed Files for normal work. Full Rescan is intended only for deliberate rebuilds.", _
        vbInformation, "NMDC Document Index Setup"

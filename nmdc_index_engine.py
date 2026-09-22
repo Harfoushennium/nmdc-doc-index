@@ -57,6 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
     review = subparsers.add_parser("save-review-decisions", help="Persist Review Flags user decisions for the latest staged run")
     _common(review)
     review.add_argument("--decisions-file", type=Path, required=True)
+    review.add_argument("--request-dir", type=Path, default=None)
 
     source_selection = subparsers.add_parser(
         "set-source-selection",
@@ -149,7 +150,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         elif args.command == "undo":
             result = undo_last_approval(args.state_dir)
         elif args.command == "save-review-decisions":
-            result = apply_review_decisions(args.state_dir, args.decisions_file)
+            result = apply_review_decisions(
+                args.state_dir,
+                args.decisions_file,
+                request_dir=args.request_dir,
+            )
         elif args.command == "set-source-selection":
             result = set_source_selection(
                 args.config_dir,

@@ -134,6 +134,19 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertIn("NMDC_EnsureReferenceLiveFilterControls Sh", block)
         self.assertNotIn("Sh.Activate", block)
 
+    def test_runtime_and_parser_reports_are_package_local(self):
+        setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
+        engine = self._read("nmdc_index_engine.py")
+        review = self._read("nmdc_profiler/review_decisions.py")
+        bridge = self._read("nmdc_profiler/excel_bridge.py")
+        self.assertIn('runtimeFolder = fso.BuildPath(packageRoot, "runtime")', setup)
+        self.assertNotIn("%LOCALAPPDATA%", setup)
+        self.assertIn('SetWorkbookConfig workbook, "Runtime Folder", "runtime"', setup)
+        self.assertIn('SetWorkbookConfig workbook, "Parser Version", "cycle3-extractor-v2"', setup)
+        self.assertIn('review.add_argument("--request-dir", type=Path, default=None)', engine)
+        self.assertIn('PARSER_FIX_REQUEST_LATEST.md', review)
+        self.assertIn('"Select?",', bridge)
+
     def test_setup_keeps_fast_scan_and_last_working_recovery_controls_together(self):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
         self.assertIn('"NMDC_UpdateChangedFilesFast"', setup)
