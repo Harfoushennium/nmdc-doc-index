@@ -43,9 +43,11 @@ def assemble_package():
     for cls in (root / "excel" / "vba").glob("*.cls"):
         shutil.copy2(cls, package / "vba" / cls.name)
     for frm in (root / "excel" / "vba").glob("*.frm"):
-        shutil.copy2(frm, package / "vba" / frm.name)
+        if frm.name.lower() != "frmnmdc_livefilter.frm":
+            shutil.copy2(frm, package / "vba" / frm.name)
     for frx in (root / "excel" / "vba").glob("*.frx"):
-        shutil.copy2(frx, package / "vba" / frx.name)
+        if frx.name.lower() != "frmnmdc_livefilter.frx":
+            shutil.copy2(frx, package / "vba" / frx.name)
         
     # Copy scripts
     shutil.copy2(root / "packaging" / "Create_NMDC_Document_Index.vbs", package / "Create_NMDC_Document_Index.vbs")

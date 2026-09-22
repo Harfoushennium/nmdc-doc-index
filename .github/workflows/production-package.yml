@@ -81,7 +81,19 @@ jobs:
           Copy-Item .\config\classification_rules.csv, .\config\project_identity_overrides.csv, .\config\source_exclusions.csv "$package\config\"
           Copy-Item .\excel\vba\*.bas "$package\vba\"
           Copy-Item .\excel\vba\*.cls "$package\vba\"
-          Copy-Item .\excel\vba\*.frm, .\excel\vba\*.frx "$package\vba\"
+          # REV03 Live Filter uses Cls_LiveFilter_Listener + modNMDC_LiveFilter.
+          # Do not ship the superseded frmNMDC_LiveFilter UserForm resources.
+          Get-ChildItem .\excel\vba\*.frm, .\excel\vba\*.frx | Where-Object {
+            $_.Name -notmatch '^frmNMDC_LiveFilter\.(frm|frx)
+          Copy-Item .\packaging\Create_NMDC_Document_Index.vbs, .\packaging\README.md "$package\"
+          Compress-Archive -Path "$package\*" -DestinationPath NMDC_Document_Index_Production_Windows.zip -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NMDC-Document-Index-Production-Windows
+          path: NMDC_Document_Index_Production_Windows.zip
+          if-no-files-found: error
+
+          } | Copy-Item -Destination "$package\vba\"
           Copy-Item .\packaging\Create_NMDC_Document_Index.vbs, .\packaging\README.md "$package\"
           Compress-Archive -Path "$package\*" -DestinationPath NMDC_Document_Index_Production_Windows.zip -Force
       - uses: actions/upload-artifact@v4

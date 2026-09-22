@@ -190,6 +190,21 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertIn("does not configure AppData", readme)
         self.assertIn("must not silently downgrade", readme)
 
+    def test_production_package_readme_and_payload_match_rev03_contract(self):
+        readme = self._read("packaging/README.md")
+        workflow = self._read(".github/workflows/production-package.yml")
+        assembler = self._read("tests/excel_e2e/assemble_package.py")
+        self.assertNotIn("%LOCALAPPDATA%", readme)
+        self.assertIn("TxtBox_Search", readme)
+        self.assertIn("Cls_LiveFilter_Listener", readme)
+        self.assertIn("PARSER_FIX_REQUEST_LATEST.md", readme)
+        self.assertIn("directly beside `NMDC_Document_Index.xlsm`", readme)
+        self.assertIn("does not silently downgrade", readme)
+        self.assertIn("frmNMDC_LiveFilter", workflow)
+        self.assertIn("-notmatch", workflow)
+        self.assertIn('frmnmdc_livefilter.frm', assembler)
+        self.assertIn('frmnmdc_livefilter.frx', assembler)
+
     def test_setup_keeps_fast_scan_and_last_working_recovery_controls_together(self):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
         self.assertIn('"NMDC_UpdateChangedFilesFast"', setup)
