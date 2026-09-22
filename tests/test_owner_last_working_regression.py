@@ -205,6 +205,12 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertIn('frmnmdc_livefilter.frm', assembler)
         self.assertIn('frmnmdc_livefilter.frx', assembler)
 
+    def test_production_workflow_has_one_clean_artifact_upload(self):
+        workflow = self._read(".github/workflows/production-package.yml")
+        self.assertEqual(workflow.count("actions/upload-artifact@v4"), 1)
+        self.assertNotIn("} | Copy-Item -Destination", workflow)
+        self.assertEqual(workflow.count("Compress-Archive -Path"), 1)
+
     def test_setup_keeps_fast_scan_and_last_working_recovery_controls_together(self):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
         self.assertIn('"NMDC_UpdateChangedFilesFast"', setup)

@@ -93,12 +93,3 @@ jobs:
           name: NMDC-Document-Index-Production-Windows
           path: NMDC_Document_Index_Production_Windows.zip
           if-no-files-found: error
-
-          } | Copy-Item -Destination "$package\vba\"
-          Copy-Item .\packaging\Create_NMDC_Document_Index.vbs, .\packaging\README.md "$package\"
-          Compress-Archive -Path "$package\*" -DestinationPath NMDC_Document_Index_Production_Windows.zip -Force
-      - uses: actions/upload-artifact@v4
-        with:
-          name: NMDC-Document-Index-Production-Windows
-          path: NMDC_Document_Index_Production_Windows.zip
-          if-no-files-found: error
