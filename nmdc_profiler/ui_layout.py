@@ -81,7 +81,7 @@ FLAG_FIELDS: List[str] = [
     "User Comment",
     "Resolution Status",
     "Source File",
-    "Source Sheet",
+    "Worksheet Name",
     "Project No.",
     "Document No.",
     "Revision",

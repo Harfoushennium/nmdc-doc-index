@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Tuple
@@ -57,7 +58,7 @@ def _key_from_row(row: Mapping[str, str]) -> Tuple[str, ...]:
     return (
         str(row.get("Flag Code", "")).strip(),
         str(row.get("Source File", "")).strip(),
-        str(row.get("Source Sheet", "")).strip(),
+        str(row.get("Worksheet Name", "") or row.get("Source Sheet", "")).strip(),
         str(row.get("Event Key", "")).strip(),
         str(row.get("Project No.", "")).strip(),
         str(row.get("Document No.", "")).strip(),
@@ -69,17 +70,36 @@ def _clean_md(value: Any) -> str:
     return str(value or "").replace("\r", " ").replace("\n", " ").replace("|", "\\|").strip()
 
 
+def _next_parser_report_folder(base_dir: Path) -> tuple[int, Path]:
+    report_root = Path(base_dir) / "PARSER_FIX_REPORTS"
+    report_root.mkdir(parents=True, exist_ok=True)
+    existing = []
+    for item in report_root.iterdir():
+        if item.is_dir() and re.fullmatch(r"\d{4,}", item.name):
+            existing.append(int(item.name))
+    sequence = max(existing, default=0) + 1
+    while True:
+        request_folder = report_root / f"{sequence:04d}"
+        try:
+            request_folder.mkdir(exist_ok=False)
+            return sequence, request_folder
+        except FileExistsError:
+            sequence += 1
+
+
 def _write_parser_mapping_fix_request(
     state_dir: Path,
     run_id: str,
     flags: Iterable[Mapping[str, Any]],
     request_dir: Path | None = None,
 ) -> Path:
-    support_dir = Path(request_dir) if request_dir is not None else Path(state_dir) / "support"
-    support_dir.mkdir(parents=True, exist_ok=True)
+    base_dir = Path(request_dir) if request_dir is not None else Path(state_dir).parent
+    request_sequence, request_folder = _next_parser_report_folder(base_dir)
     rows = [dict(flag) for flag in flags]
     payload = {
         "request_type": "PARSER_MAPPING_FIX",
+        "request_sequence": f"{request_sequence:04d}",
+        "request_folder": request_folder.name,
         "run_id": run_id,
         "created_at": _utc_now(),
         "instructions": (
@@ -89,15 +109,13 @@ def _write_parser_mapping_fix_request(
         ),
         "flags": rows,
     }
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    json_path = support_dir / f"PARSER_FIX_REQUEST_{stamp}.json"
-    latest_json_path = support_dir / "PARSER_FIX_REQUEST_LATEST.json"
+    json_path = request_folder / "PARSER_FIX_REQUEST.json"
     _write_json(json_path, payload)
-    _write_json(latest_json_path, payload)
 
     lines = [
         "# NMDC Document Index — Parser / Mapping Fix Request",
         "",
+        f"- Request sequence: `{request_sequence:04d}`",
         f"- Staged run: `{run_id}`",
         f"- Created: `{payload['created_at']}`",
         f"- Affected review flags: **{len(rows)}**",
@@ -113,7 +131,7 @@ def _write_parser_mapping_fix_request(
         "",
         "## Affected items",
         "",
-        "| Source File | Source Sheet | Project No. | Document No. | Revision | Flag Code | Owner Comment |",
+        "| Source File | Worksheet Name | Project No. | Document No. | Revision | Flag Code | Owner Comment |",
         "| --- | --- | --- | --- | --- | --- | --- |",
     ]
     for flag in rows:
@@ -135,19 +153,15 @@ def _write_parser_mapping_fix_request(
             "",
             "## Maintainer acceptance",
             "",
-            "- Reproduce against the exact source workbook/sheet.",
+            "- Reproduce against the exact source workbook and Worksheet Name listed above.",
             "- Fix parser/configuration only; never modify source DATA.",
             "- Add regression coverage for the reproduced layout/mapping.",
             "- Re-run extraction and confirm the Review Flag no longer appears.",
         ]
     )
-    md_text = "\n".join(lines) + "\n"
-    md_path = support_dir / f"PARSER_FIX_REQUEST_{stamp}.md"
-    latest_md_path = support_dir / "PARSER_FIX_REQUEST_LATEST.md"
-    md_path.write_text(md_text, encoding="utf-8")
-    latest_md_path.write_text(md_text, encoding="utf-8")
-    return latest_md_path
-
+    md_path = request_folder / "PARSER_FIX_REQUEST.md"
+    md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return md_path
 
 def apply_review_decisions(
     state_dir: Path,
@@ -215,6 +229,8 @@ def apply_review_decisions(
     for flag in fix_request_flags:
         unique_fix_flags[_key_from_flag(flag)] = flag
     fix_request_file = ""
+    fix_request_folder = ""
+    request_sequence = ""
     if unique_fix_flags:
         fix_request_file = str(
             _write_parser_mapping_fix_request(
@@ -224,6 +240,8 @@ def apply_review_decisions(
                 request_dir=request_dir,
             )
         )
+        fix_request_folder = str(Path(fix_request_file).parent)
+        request_sequence = Path(fix_request_folder).name
 
     result = {
         "run_id": run_id,
@@ -231,6 +249,8 @@ def apply_review_decisions(
         "unmatched_decisions": len(unmatched),
         "parser_mapping_fix_requests": len(unique_fix_flags),
         "fix_request_file": fix_request_file,
+        "fix_request_folder": fix_request_folder,
+        "request_sequence": request_sequence,
         "saved_at": _utc_now(),
     }
     _append_history(state_dir, {"event": "REVIEW_DECISIONS_SAVED", **result})
