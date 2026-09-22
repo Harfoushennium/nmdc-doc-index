@@ -182,6 +182,14 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertIn("must not silently downgrade", requirements)
         self.assertIn("release-blocking UI error", acceptance)
 
+    def test_packaged_readme_matches_package_local_storage_contract(self):
+        readme = self._read("README.md")
+        self.assertNotIn("%LOCALAPPDATA%", readme)
+        self.assertIn("PARSER_FIX_REQUEST_LATEST.md", readme)
+        self.assertIn("directly beside `NMDC_Document_Index.xlsm`", readme)
+        self.assertIn("does not configure AppData", readme)
+        self.assertIn("must not silently downgrade", readme)
+
     def test_setup_keeps_fast_scan_and_last_working_recovery_controls_together(self):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
         self.assertIn('"NMDC_UpdateChangedFilesFast"', setup)
