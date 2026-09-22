@@ -197,7 +197,7 @@ class ExcelBridgeTests(unittest.TestCase):
             conflict = next(row for row in flags if row["Flag Level"] == "CONFLICT")
             self.assertEqual(conflict["Project No."], "2705")
             self.assertEqual(conflict["Document No."], "2705-PP-001")
-            self.assertEqual(conflict["Source Sheet"], "Documents")
+            self.assertEqual(conflict["Worksheet Name"], "Documents")
             self.assertEqual(conflict["Source Row"], "17")
             self.assertEqual(conflict["Source Cell"], "B17")
             self.assertEqual(conflict["Event Key"], "EVT-1")
