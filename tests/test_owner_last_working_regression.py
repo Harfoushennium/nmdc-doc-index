@@ -224,6 +224,18 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
         self.assertIn('"Worksheet Name"', layout)
         self.assertIn("NMDC_LatestParserFixRequestPath", admin)
 
+    def test_classification_rules_can_recover_missing_named_table(self):
+        rules = self._read("excel/vba/modNMDC_Rules.bas")
+        startup = self._read("excel/vba/modNMDC_Startup.bas")
+        owner = self._read("excel/vba/modNMDC_OwnerUX.bas")
+        self.assertIn("Public Function NMDC_EnsureClassificationRulesTable() As Boolean", rules)
+        self.assertIn("ws.ListObjects.Add(xlSrcRange, targetRange, , xlYes)", rules)
+        self.assertIn("ws.Cells(lastRuleRow, 18)", rules)
+        self.assertIn("No rule data was changed.", rules)
+        self.assertIn("If Not NMDC_EnsureClassificationRulesTable() Then", startup)
+        self.assertIn("If Not NMDC_EnsureClassificationRulesTable() Then", owner)
+        self.assertIn("If Not NMDC_EnsureClassificationRulesTable() Then", rules)
+
     def test_setup_synchronizes_rules_table_from_packaged_config(self):
         setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
         config = self._read("config/classification_rules.csv")
