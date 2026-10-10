@@ -42,6 +42,121 @@ class BlockedEvidence(RuntimeError):
     """Expected environment/UI limitation, distinct from a product failure."""
 
 
+UNDO_MACRO = "NMDC_UndoLastApproval"
+UNDO_TITLE = "Undo Last Approval"
+UNDO_REFUSAL_TITLE = "NMDC Document Index"
+UNDO_REFUSAL_TEXT = (
+    "There is no previous approved version to restore, or Undo could not be completed. "
+    "Please review the Error Log for details."
+)
+UNDO_PROMPT_TEXT = (
+    "Undo the last approved update and restore the previous approved version? "
+    "No source workbook will be changed or deleted. Previous approved versions are retained for audit."
+)
+
+
+def _configuration_value(workbook, wanted_key: str) -> str:
+    table = workbook.Worksheets("Configuration").ListObjects("Configuration")
+    for index in range(1, table.ListRows.Count + 1):
+        row = table.ListRows(index).Range
+        key = str(row.Cells(1, 1).Value or "").strip().casefold()
+        if key == wanted_key.casefold():
+            return str(row.Cells(1, 2).Value or "").strip()
+    raise BlockedEvidence(f"Configuration is missing {wanted_key}")
+
+
+def _undo_negative_state_guard(workbook, allowed_roots=None) -> tuple[bool, str]:
+    """Require a disposable harness workbook and an empty local approval state."""
+    workbook_path = Path(str(workbook.FullName)).resolve()
+    roots = allowed_roots or (REPORT_DIR / "scratch_package", _local_clean_root())
+    if not any(workbook_path.is_relative_to(Path(root).resolve()) for root in roots):
+        return False, f"workbook is outside disposable harness locations: {workbook_path}"
+    package = workbook_path.parent
+    configured_runtime = _configuration_value(workbook, "Runtime Folder")
+    runtime = Path(configured_runtime or "runtime")
+    if not runtime.is_absolute():
+        runtime = package / runtime
+    runtime = runtime.resolve()
+    if not runtime.is_relative_to(package.resolve()):
+        return False, f"Runtime Folder is not package-local: {runtime}"
+    approved = runtime / "approved"
+    if (approved / "current.json").exists():
+        return False, "approved/current.json exists"
+    versions = approved / "versions"
+    if versions.exists() and any(path.is_file() for path in versions.rglob("*")):
+        return False, "approved/versions contains prior approval data"
+    return True, "disposable runtime has no approved current pointer or versions"
+
+
+def _undo_prompt_is_confirmable(
+    macro_name: str, negative_state_verified: bool, intended_pid: int,
+    dialog_pid: int | None, title: str, text: str,
+) -> bool:
+    normalize = lambda value: " ".join(value.split())
+    return (
+        macro_name == UNDO_MACRO
+        and negative_state_verified
+        and dialog_pid == intended_pid
+        and title.strip() == UNDO_TITLE
+        and normalize(text) == UNDO_PROMPT_TEXT
+    )
+
+
+def _confirm_undo_prompt(
+    hwnd: int, macro_name: str, negative_state_verified: bool,
+    intended_pid: int, dialog_pid: int | None, title: str, text: str,
+    post_message, wm_command: int,
+) -> bool:
+    if not _undo_prompt_is_confirmable(
+        macro_name, negative_state_verified, intended_pid, dialog_pid, title, text
+    ):
+        return False
+    post_message(hwnd, wm_command, 6, 0)  # IDYES; deliberately no WM_CLOSE.
+    return True
+
+
+def _undo_refusal_is_expected(
+    macro_name: str, negative_state_verified: bool, intended_pid: int,
+    dialog_pid: int | None, title: str, text: str,
+) -> bool:
+    normalize = lambda value: " ".join(value.split())
+    return (
+        macro_name == UNDO_MACRO
+        and negative_state_verified
+        and dialog_pid == intended_pid
+        and title.strip() == UNDO_REFUSAL_TITLE
+        and normalize(text) == UNDO_REFUSAL_TEXT
+    )
+
+
+def _acknowledge_undo_refusal(
+    hwnd: int, macro_name: str, negative_state_verified: bool,
+    intended_pid: int, dialog_pid: int | None, title: str, text: str,
+    post_message, wm_command: int,
+) -> bool:
+    if not _undo_refusal_is_expected(
+        macro_name, negative_state_verified, intended_pid, dialog_pid, title, text
+    ):
+        return False
+    post_message(hwnd, wm_command, 1, 0)  # IDOK; deliberately no WM_CLOSE.
+    return True
+
+
+def _dialog_message_text(hwnd, win32gui) -> str:
+    """Read only nonempty Static controls, excluding MsgBox buttons/icons."""
+    body: list[str] = []
+
+    def visit(child, _arg):
+        if win32gui.GetClassName(child).casefold() == "static":
+            text = win32gui.GetWindowText(child).strip()
+            if text:
+                body.append(text)
+        return True
+
+    win32gui.EnumChildWindows(hwnd, visit, None)
+    return " ".join(body)
+
+
 def _local_clean_root() -> Path:
     local = os.environ.get("LOCALAPPDATA")
     if not local:
@@ -316,6 +431,15 @@ class ExcelSimulation:
         self._set_config_on_book(self.workbook, "Data Folder", str((ROOT / "DATA").resolve()))
 
     def _run_macro_on_book(self, wb, name: str) -> str:
+        negative_undo_state = False
+        intended_excel_pid = None
+        if name == UNDO_MACRO:
+            negative_undo_state, guard_detail = _undo_negative_state_guard(wb)
+            if not negative_undo_state:
+                raise BlockedEvidence(f"Undo confirmation was not authorized: {guard_detail}")
+            import win32process
+            intended_excel_pid = win32process.GetWindowThreadProcessId(int(self.excel.Hwnd))[1]
+        undo_events: list[str] = []
         stop_event = threading.Event()
 
         def dismisser():
@@ -341,6 +465,25 @@ class ExcelSimulation:
                         def win_cb(h, _):
                             if win32gui.GetClassName(h) == "#32770":
                                 title = win32gui.GetWindowText(h)
+                                if name == UNDO_MACRO:
+                                    try:
+                                        _, dialog_pid = win32process.GetWindowThreadProcessId(h)
+                                        prompt_text = _dialog_message_text(h, win32gui)
+                                    except Exception:
+                                        return True
+                                    if _confirm_undo_prompt(
+                                        h, name, negative_undo_state, intended_excel_pid,
+                                        dialog_pid, title, prompt_text,
+                                        win32gui.PostMessage, win32con.WM_COMMAND,
+                                    ):
+                                        undo_events.append("confirmation observed and Yes sent")
+                                    elif _acknowledge_undo_refusal(
+                                        h, name, negative_undo_state, intended_excel_pid,
+                                        dialog_pid, title, prompt_text,
+                                        win32gui.PostMessage, win32con.WM_COMMAND,
+                                    ):
+                                        undo_events.append("expected no-prior refusal observed and OK sent")
+                                    return True
                                 if any(k in title for k in ["NMDC Document Index", "Reset All Records", "Final Reset Confirmation", "Microsoft Excel", "Select the folder"]):
                                     win32gui.PostMessage(h, win32con.WM_COMMAND, 6, 0)
                                     win32gui.PostMessage(h, win32con.WM_COMMAND, 1, 0)
@@ -358,10 +501,28 @@ class ExcelSimulation:
         finally:
             stop_event.set()
             t.join(timeout=1.0)
-        return f"COM invoked {name}; COM cannot verify owner-visible progress or interaction semantics"
+        detail = f"COM invoked {name}; COM cannot verify owner-visible progress or interaction semantics"
+        if undo_events:
+            detail += "; " + "; ".join(undo_events)
+        return detail
 
     def _macro(self, name: str) -> str:
         return self._run_macro_on_book(self.workbook, name)
+
+    def _undo_test(self) -> str:
+        detail = self._macro(UNDO_MACRO)
+        dialogs = self._observe_dialogs()
+        if dialogs:
+            raise AssertionError(f"Undo left an unexpected dialog: {dialogs}")
+        refusal = (
+            "expected no-prior refusal dialog was observed and acknowledged; "
+            if "expected no-prior refusal observed" in detail else
+            "expected no-prior refusal dialog was not observed; "
+        )
+        raise BlockedEvidence(
+            f"{detail}; {refusal}the UI observation does not independently establish "
+            "the engine cause, and positive Undo restoration requires a controlled prior approval"
+        )
 
     def _structure(self) -> str:
         required = {"Home", "Master Documents", "Revisions", "Transactions", "Pending Update", "Review Flags", "Configuration", "Rules & Mappings", "Custom Fields", "Update History", "Error Log", "System Data"}
@@ -409,7 +570,7 @@ class ExcelSimulation:
                 self._record(7, "Pending Update layout", lambda: self._table_count("Pending Update", "PendingUpdate"))
                 self._record(8, "Native source checkboxes", lambda: self._macro("NMDC_RebuildPendingSourcePanel"))
                 self._record(12, "Reset", lambda: self._macro("NMDC_ResetAllRecords"))
-                self._record(13, "Undo", lambda: self._macro("NMDC_UndoLastApproval"))
+                self._record(13, "Undo", self._undo_test)
                 self._record(15, "Filter/sort refresh safety", lambda: self._macro("NMDC_RefreshDashboard"))
                 self._record(16, "Hyperlink audit", lambda: self._table_count("Master Documents", "MasterDocuments"))
                 self._record(17, "Rules & Mappings", lambda: self._macro("NMDC_OpenRulesMappings"))
