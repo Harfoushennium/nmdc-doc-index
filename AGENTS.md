@@ -304,3 +304,11 @@ If you are a fresh LLM/agent arriving at this repository:
 ## 15. Repository cleanliness
 
 Generated validation outputs are not repository source. The `outputs/` directory is ignored and must be regenerated from `DATA/` when tests require it. Do not commit profiler/sentinel/full-extraction CSV, JSON, or report snapshots. Keep source code, configuration, tests, documentation, workbook base chunks, and read-only `DATA/` in the repository.
+
+## 16. Agent skills
+
+The complete published Matt Pocock collection is vendored in `.agents/skills/` for repository-based skill discovery. Read `docs/agents/matt-pocock-skills.md` for the catalog and browser usage. Engineering workflow configuration is in `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md` and `docs/agents/domain.md`.
+
+When the user explicitly selects a skill by name, or supplies `/name`, `$name` or `@name` as text, load the matching `.agents/skills/<name>/SKILL.md` in full and follow its applicable supporting references. Natural-language selection such as `Use the grill-me skill` works when a browser intercepts command syntax. Preserve the upstream invocation policies; do not silently substitute an approximate workflow.
+
+Existing repository rules and the user's authorized scope govern all skill actions. Skills do not grant merge permission, waive owner acceptance, authorize future product phases or allow changes to DATA. Use available tools honestly; report unavailable capabilities rather than inventing execution, test results, reviews or subagents.

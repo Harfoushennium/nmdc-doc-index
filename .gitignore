@@ -38,8 +38,10 @@ __pycache__/
 # Local backup folders created by Antigravity session management
 /_backup_*/
 
-# Antigravity collaboration skill (local only; not NMDC project source)
-/.agents/
+# Local agent state stays ignored; published repository skills are source.
+/.agents/*
+!/.agents/skills/
+!/.agents/mattpocock/
 
 # Local archive for scratch/build/intermediate files
 /_ARCHIVE/
