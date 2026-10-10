@@ -14,7 +14,7 @@ import subprocess
 import threading
 import time
 from dataclasses import dataclass, asdict
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Callable, Optional
 
 import sys
@@ -185,16 +185,47 @@ def _run_setup(package: Path, timeout: int = 90) -> tuple[str, str]:
     return ("PASS", detail or "setup completed") if completed.returncode == 0 else ("FAIL", detail or f"exit {completed.returncode}")
 
 
+def _dialog_process_basename(process_path: str) -> str:
+    """Parse a process image path using Windows semantics on every host."""
+    return PureWindowsPath(process_path).name.lower()
+
+
 def _dialog_hwnds() -> list[int]:
+    """Return Excel/setup dialogs; unknown owners remain unexpected evidence."""
     import win32gui
     found: list[int] = []
     seen = set()
+    target_processes = {"excel.exe", "cscript.exe", "wscript.exe"}
+
+    def belongs_to_target(hwnd) -> bool:
+        h_proc = None
+        try:
+            import win32process
+            import win32api
+
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            h_proc = win32api.OpenProcess(0x0400 | 0x0010, False, pid)
+            process_path = win32process.GetModuleFileNameEx(h_proc, 0)
+            if not process_path:
+                return True
+        except Exception:
+            # If the owner cannot be identified, keep the dialog visible to the
+            # setup failure path rather than silently treating it as unrelated.
+            return True
+        finally:
+            if h_proc is not None:
+                try:
+                    win32api.CloseHandle(h_proc)
+                except Exception:
+                    pass
+        return _dialog_process_basename(process_path) in target_processes
 
     def visit(hwnd, _):
         if win32gui.IsWindowVisible(hwnd) and win32gui.GetClassName(hwnd) == "#32770":
             if hwnd not in seen:
                 seen.add(hwnd)
-                found.append(hwnd)
+                if belongs_to_target(hwnd):
+                    found.append(hwnd)
         return True
 
     try:
