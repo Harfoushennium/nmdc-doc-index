@@ -280,6 +280,7 @@ Private Sub NMDC_ApplyPlainRulesExperience()
     Dim target As Range
     Dim guide As Shape
 
+    If Not NMDC_EnsureClassificationRulesTable() Then Exit Sub
     Set ws = ThisWorkbook.Worksheets("Rules & Mappings")
     Set table = ws.ListObjects("ClassificationRules")
 

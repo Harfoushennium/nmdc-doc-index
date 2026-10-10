@@ -3,6 +3,117 @@ Option Explicit
 
 Private Const RULES_FILENAME As String = "classification_rules.csv"
 
+' The classification rules live in an Excel ListObject, not just cells.
+' A workbook may retain all rule values yet lose the ListObject metadata.
+' Recover only the table container around existing data; never replace a rule
+' with packaged defaults, clear cells, or silently change a user decision.
+Public Function NMDC_EnsureClassificationRulesTable() As Boolean
+    On Error GoTo Handler
+
+    Dim ws As Worksheet
+    Dim table As ListObject
+    Dim candidate As ListObject
+    Dim targetRange As Range
+    Dim requiredHeaders As Variant
+    Dim idx As Long
+    Dim lastRuleRow As Long
+    Dim recovered As Boolean
+    Dim errCode As Long
+    Dim errText As String
+
+    Set ws = ThisWorkbook.Worksheets("Rules & Mappings")
+    requiredHeaders = Array("Rule_ID", "Enabled", "Priority", "Source_Family", _
+        "Match_Scope", "Match_Type", "Match_Words", "Exclude_Words", _
+        "Path_Qualifier", "Requires_Discipline", "Requires_Category", _
+        "Discipline", "Category", "Subcategory", "Include", _
+        "Min_Confidence", "Stop_On_Match", "Notes")
+
+    ' Refuse to alter or reinterpret a malformed sheet. This protects all
+    ' existing classifications if someone changes the underlying schema.
+    For idx = LBound(requiredHeaders) To UBound(requiredHeaders)
+        If StrComp(Trim$(CStr(ws.Cells(5, idx + 1).Value2)), _
+                   CStr(requiredHeaders(idx)), vbTextCompare) <> 0 Then
+            Err.Raise vbObjectError + 1121, "NMDC Rules", _
+                "Cannot restore ClassificationRules: unexpected heading in " & _
+                ws.Cells(5, idx + 1).Address(False, False) & _
+                " (expected " & CStr(requiredHeaders(idx)) & "). No rule data was changed."
+        End If
+    Next idx
+
+    Set table = Nothing
+    On Error Resume Next
+    Set table = ws.ListObjects("ClassificationRules")
+    Err.Clear
+    On Error GoTo Handler
+
+    If Not table Is Nothing Then
+        If table.HeaderRowRange.Row <> 5 Or table.Range.Column <> 1 Or _
+           table.ListColumns.Count <> 18 Then
+            Err.Raise vbObjectError + 1122, "NMDC Rules", _
+                "ClassificationRules exists but has the wrong table boundary. " & _
+                "No rule data was changed."
+        End If
+        NMDC_EnsureClassificationRulesTable = True
+        Exit Function
+    End If
+
+    If ws.ProtectContents Then
+        Err.Raise vbObjectError + 1123, "NMDC Rules", _
+            "Rules & Mappings is protected; cannot restore the named table."
+    End If
+
+    ' Include every populated rule, not just the original packaged rows.
+    lastRuleRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    If lastRuleRow < 6 Then lastRuleRow = 6
+    Set targetRange = ws.Range(ws.Cells(5, 1), ws.Cells(lastRuleRow, 18))
+
+    ' If a table at the right location was accidentally renamed, restore its
+    ' name rather than trying to create a second, overlapping ListObject.
+    For Each candidate In ws.ListObjects
+        If Not Application.Intersect(candidate.Range, targetRange) Is Nothing Then
+            If candidate.HeaderRowRange.Row = 5 And candidate.Range.Column = 1 And _
+               candidate.ListColumns.Count = 18 Then
+                candidate.Name = "ClassificationRules"
+                Set table = candidate
+                recovered = True
+                Exit For
+            End If
+            Err.Raise vbObjectError + 1124, "NMDC Rules", _
+                "Another Excel table overlaps the classification rules. " & _
+                "No rule data was changed."
+        End If
+    Next candidate
+
+    If table Is Nothing Then
+        Set table = ws.ListObjects.Add(xlSrcRange, targetRange, , xlYes)
+        table.Name = "ClassificationRules"
+        recovered = True
+    End If
+    table.TableStyle = "TableStyleMedium2"
+    table.ShowAutoFilter = True
+    NMDC_EnsureClassificationRulesTable = True
+
+    If recovered Then
+        MsgBox "The ClassificationRules table was missing or renamed." & _
+               vbCrLf & vbCrLf & _
+               "Excel restored the named table around " & _
+               CStr(lastRuleRow - 5) & " existing rule row(s)." & vbCrLf & _
+               "No classification rule values were replaced." & vbCrLf & _
+               "Save the workbook to retain the repaired table.", _
+               vbInformation, "NMDC Document Index"
+    End If
+    Exit Function
+
+Handler:
+    errCode = Err.Number
+    errText = Err.Description
+    NMDC_LogError "CLASSIFICATION_TABLE_REPAIR_ERROR", _
+        "Excel could not restore the named Rules & Mappings table.", _
+        CStr(errCode) & " - " & errText
+    NMDC_EnsureClassificationRulesTable = False
+End Function
+
+
 Public Function NMDC_PrepareRulesForStage() As Boolean
     On Error GoTo Handler
 
@@ -11,6 +122,12 @@ Public Function NMDC_PrepareRulesForStage() As Boolean
     Dim csvText As String
     Dim targetPath As String
     Dim existingText As String
+
+    If Not NMDC_EnsureClassificationRulesTable() Then
+        Err.Raise vbObjectError + 1125, "NMDC Rules", _
+            "The ClassificationRules table is missing and could not be restored. " & _
+            "Rule data was preserved; no scan was staged."
+    End If
 
     Set ws = ThisWorkbook.Worksheets("Rules & Mappings")
     Set table = ws.ListObjects("ClassificationRules")

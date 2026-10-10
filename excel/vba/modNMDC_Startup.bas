@@ -48,6 +48,14 @@ Public Sub NMDC_ApplyWorkbookGuidance()
     NMDC_SetSheetBanner "Error Log", _
         "DIAGNOSTIC OUTPUT - READ ONLY. Plain-English error and recommended action come first; Technical Detail is for troubleshooting/support."
 
+    ' Repair the named rule-table container before any rules UX or named
+    ' table guidance is applied. Existing user rule values are never replaced.
+    If Not NMDC_EnsureClassificationRulesTable() Then
+        NMDC_LogError "RULES_TABLE_MISSING", _
+            "Rules & Mappings needs a table repair before it can be edited or saved.", _
+            "The ClassificationRules table could not be restored safely."
+    End If
+
     NMDC_ApplyNamedTableGuidance "Master Documents", "MasterDocuments"
     NMDC_ApplyNamedTableGuidance "Revisions", "RevisionRegister"
     NMDC_ApplyNamedTableGuidance "Transactions", "EventRegister"
@@ -287,6 +295,7 @@ Public Sub NMDC_ConfigureRulesUserExperience()
 
     Dim ws As Worksheet
     Dim table As ListObject
+    If Not NMDC_EnsureClassificationRulesTable() Then Exit Sub
     Set ws = ThisWorkbook.Worksheets("Rules & Mappings")
     Set table = ws.ListObjects("ClassificationRules")
 
@@ -428,6 +437,7 @@ Public Sub NMDC_ToggleRulesAdvancedColumns()
 
     Dim table As ListObject
     Dim currentlyHidden As Boolean
+    If Not NMDC_EnsureClassificationRulesTable() Then Exit Sub
     Set table = ThisWorkbook.Worksheets("Rules & Mappings").ListObjects("ClassificationRules")
 
     currentlyHidden = table.ListColumns("Rule_ID").Range.EntireColumn.Hidden
@@ -447,6 +457,7 @@ Public Sub NMDC_AddSimpleRule()
     Dim newId As String
     Dim newPriority As Long
 
+    If Not NMDC_EnsureClassificationRulesTable() Then Exit Sub
     Set ws = ThisWorkbook.Worksheets("Rules & Mappings")
     Set table = ws.ListObjects("ClassificationRules")
     Set newRow = table.ListRows.Add
