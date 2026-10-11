@@ -8,6 +8,8 @@ Public Function NMDC_RefreshExchangeData() As Boolean
     Dim previousCalculation As XlCalculation
     Dim previousScreenUpdating As Boolean
     Dim previousEnableEvents As Boolean
+    Dim pendingSheet As Worksheet
+    Dim sourceSelectionTable As ListObject
 
     refreshOk = True
     previousCalculation = Application.Calculation
@@ -43,6 +45,20 @@ Public Function NMDC_RefreshExchangeData() As Boolean
     If Not NMDC_LoadDashboard(NMDC_ExchangePath() & "\dashboard.csv") Then refreshOk = False
 
     NMDC_ApplyWorkbookGuidance
+    NMDC_ApplyOwnerUX
+    NMDC_RebuildPendingSourcePanel
+
+    Set pendingSheet = ThisWorkbook.Worksheets("Pending Update")
+    Set sourceSelectionTable = Nothing
+    On Error Resume Next
+    Set sourceSelectionTable = pendingSheet.ListObjects("SourceSelection")
+    On Error GoTo Handler
+    If sourceSelectionTable Is Nothing Then
+        refreshOk = False
+        NMDC_LogError "SOURCE_SELECTION_REFRESH_ERROR", _
+            "Excel refreshed the exchange data but could not prepare source choices on Pending Update.", _
+            "The SourceSelection table was missing after NMDC_RebuildPendingSourcePanel completed."
+    End If
 
 CleanExit:
     Application.Calculation = previousCalculation
