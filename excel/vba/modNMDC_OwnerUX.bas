@@ -49,6 +49,7 @@ Public Sub NMDC_GoToSourceChoices()
     Set sourceTable = ws.ListObjects("SourceSelection")
     If sourceTable Is Nothing Then Err.Raise vbObjectError + 974, "NMDC Source Selection", "Source choices table is unavailable."
     Application.Goto Reference:=sourceTable.HeaderRowRange, Scroll:=True
+    ActiveWindow.ScrollRow = Application.Max(1, sourceTable.HeaderRowRange.Row - 2)
     Exit Sub
 
 Handler:

@@ -46,8 +46,10 @@ class OwnerSourceChoicesNavigationTests(unittest.TestCase):
         rebuild_at = action.index("NMDC_RebuildPendingSourcePanel")
         acquire_at = action.index('Set sourceTable = ws.ListObjects("SourceSelection")', rebuild_at + 1)
         goto_at = action.index("Application.Goto Reference:=sourceTable.HeaderRowRange, Scroll:=True")
+        viewport_at = action.index("ActiveWindow.ScrollRow = Application.Max(1, sourceTable.HeaderRowRange.Row - 2)")
         self.assertLess(rebuild_at, acquire_at)
         self.assertLess(acquire_at, goto_at)
+        self.assertLess(goto_at, viewport_at)
         self.assertNotIn("40503", action)
 
         legacy_open = self.owner_ux.split("Public Sub NMDC_OpenSourceSelection()", 1)[1].split("End Sub", 1)[0]
@@ -100,6 +102,7 @@ class OwnerSourceChoicesNavigationTests(unittest.TestCase):
             self.assertIn('Set anchor = ws.Range("A2")', deployed)
             self.assertIn('ws.Range("A2:I2").UnMerge', deployed)
             self.assertIn("Application.Goto Reference:=sourceTable.HeaderRowRange, Scroll:=True", deployed)
+            self.assertIn("ActiveWindow.ScrollRow = Application.Max(1, sourceTable.HeaderRowRange.Row - 2)", deployed)
             self.assertFalse((deployed_vba / "frmNMDC_LiveFilter.frm").exists())
             self.assertFalse((deployed_vba / "frmNMDC_LiveFilter.frx").exists())
 
