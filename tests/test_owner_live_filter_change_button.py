@@ -20,20 +20,26 @@ class OwnerLiveFilterChangeButtonTests(unittest.TestCase):
         setup = live.split(
             "Private Sub NMDC_EnsureReferenceLiveFilterControls", 1
         )[1].split("End Sub", 1)[0]
-        search_at = setup.index('Set area = ws.Range("B3:H3")')
-        choose_at = setup.index('Set area = ws.Range("I3:J3")')
-        reset_at = setup.index('Set area = ws.Range("K3:L3")')
-        self.assertLess(search_at, choose_at)
-        self.assertLess(choose_at, reset_at)
+        self.assertIn('Set area = ws.Range("B3")', setup)
+        self.assertIn("SEARCH_BOX_WIDTH_POINTS As Double = 320", self.live)
+        self.assertIn("CHOOSE_BUTTON_WIDTH_POINTS As Double = 120", self.live)
+        self.assertIn("RESET_BUTTON_WIDTH_POINTS As Double = 100", self.live)
+        self.assertIn("CONTROL_GAP_POINTS As Double = 8", self.live)
+        self.assertIn("controlsLeft = area.Left + 1", setup)
+        self.assertIn("controlsTop = area.Top + 1", setup)
+        self.assertIn("controlsLeft + SEARCH_BOX_WIDTH_POINTS + CONTROL_GAP_POINTS", setup)
+        self.assertIn("CHOOSE_BUTTON_WIDTH_POINTS + CONTROL_GAP_POINTS", setup)
         self.assertIn('Private Const CHOOSE_BUTTON_NAME As String = "Btn_Choose_Search"', live)
         self.assertIn("Set chooseButton = ws.Buttons(CHOOSE_BUTTON_NAME)", setup)
         self.assertIn("If chooseButton Is Nothing Then", setup)
         self.assertIn("Set chooseButton = ws.Buttons.Add(", setup)
         self.assertIn("chooseButton.Name = CHOOSE_BUTTON_NAME", setup)
         for geometry in ("Left", "Top", "Width", "Height"):
-            self.assertIn(f"chooseButton.{geometry} = area.{geometry}", setup)
+            self.assertIn(f"chooseButton.{geometry} =", setup)
         self.assertIn('chooseButton.Caption = "CHANGE COLUMN"', setup)
-        self.assertIn("chooseButton.Placement = xlMoveAndSize", setup)
+        self.assertIn("TheOle.Placement = xlFreeFloating", setup)
+        self.assertIn("chooseButton.Placement = xlFreeFloating", setup)
+        self.assertIn("resetButton.Placement = xlFreeFloating", setup)
 
     def test_button_and_shortcut_share_header_chooser_and_keep_cancel_validation(self):
         live = self.live

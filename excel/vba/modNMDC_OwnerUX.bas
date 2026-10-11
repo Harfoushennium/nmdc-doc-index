@@ -27,10 +27,33 @@ Public Sub NMDC_OpenSourceSelection()
     End If
     NMDC_GoToSheet "Pending Update"
     NMDC_RebuildPendingSourcePanel
+    NMDC_GoToSourceChoices
     Exit Sub
 Handler:
     NMDC_LogError "SOURCE_SELECTION_OPEN_ERROR", _
         "Excel could not open source selection on Pending Update.", Err.Number & " - " & Err.Description
+End Sub
+
+Public Sub NMDC_GoToSourceChoices()
+    On Error GoTo Handler
+
+    Dim ws As Worksheet
+    Dim sourceTable As ListObject
+
+    Set ws = ThisWorkbook.Worksheets("Pending Update")
+    Set sourceTable = Nothing
+    On Error Resume Next
+    Set sourceTable = ws.ListObjects("SourceSelection")
+    On Error GoTo Handler
+    If sourceTable Is Nothing Then NMDC_RebuildPendingSourcePanel
+    Set sourceTable = ws.ListObjects("SourceSelection")
+    If sourceTable Is Nothing Then Err.Raise vbObjectError + 974, "NMDC Source Selection", "Source choices table is unavailable."
+    Application.Goto Reference:=sourceTable.HeaderRowRange, Scroll:=True
+    Exit Sub
+
+Handler:
+    NMDC_LogError "SOURCE_SELECTION_OPEN_ERROR", _
+        "Excel could not navigate to source choices on Pending Update.", Err.Number & " - " & Err.Description
 End Sub
 
 Public Sub NMDC_OpenRulesMappingsOwner()
@@ -251,11 +274,63 @@ End Sub
 
 Private Sub NMDC_ApplyPendingUpdateDecisionGuide()
     Dim ws As Worksheet
+    Dim sourceButton As Shape
+    Dim guide As Shape
+    Dim anchor As Range
+    Const SOURCE_BUTTON_WIDTH As Double = 150
+    Const GUIDE_GAP As Double = 8
+    Const GUIDE_WIDTH As Double = 600
     Set ws = ThisWorkbook.Worksheets("Pending Update")
+
+    On Error Resume Next
+    If CStr(ws.Range("A2").Value2) = "No staged update is included in this review-only baseline. Use the macro-enabled package to create a fresh staged comparison." Then
+        ws.Range("A2:I2").UnMerge
+        ws.Range("A2:I2").ClearContents
+    End If
+    ws.Shapes("NMDC_Pending_SourceNavigation").Delete
+    ws.Shapes("NMDC_Pending_SourceGuide").Delete
+    On Error GoTo 0
+
+    Set anchor = ws.Range("A2")
+    Set sourceButton = ws.Shapes.AddShape(5, anchor.Left, anchor.Top, SOURCE_BUTTON_WIDTH, 26)
+    sourceButton.Name = "NMDC_Pending_SourceNavigation"
+    sourceButton.OnAction = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!NMDC_GoToSourceChoices"
+    sourceButton.TextFrame.Characters.Text = "SOURCE CHOICES"
+    sourceButton.AlternativeText = "Jump to source choices below the staged changes table on this sheet."
+    With sourceButton
+        .TextFrame.HorizontalAlignment = xlCenter
+        .TextFrame.VerticalAlignment = 3
+        .Fill.ForeColor.RGB = RGB(20, 108, 148)
+        .Line.ForeColor.RGB = RGB(20, 108, 148)
+        .TextFrame.Characters.Font.Name = "Aptos"
+        .TextFrame.Characters.Font.Size = 8.5
+        .TextFrame.Characters.Font.Bold = True
+        .TextFrame.Characters.Font.Color = RGB(255, 255, 255)
+        .Placement = xlFreeFloating
+    End With
+
+    Set guide = ws.Shapes.AddShape(1, anchor.Left + SOURCE_BUTTON_WIDTH + GUIDE_GAP, anchor.Top, GUIDE_WIDTH, 26)
+    guide.Name = "NMDC_Pending_SourceGuide"
+    guide.TextFrame.Characters.Text = _
+        "Open the source checkbox panel. Select sources, then use Save Source Choices & Restage once to update the proposal."
+    With guide
+        .Fill.ForeColor.RGB = RGB(255, 247, 219)
+        .Line.ForeColor.RGB = RGB(255, 247, 219)
+        .TextFrame.HorizontalAlignment = xlLeft
+        .TextFrame.VerticalAlignment = 3
+        .TextFrame.MarginLeft = 7
+        .TextFrame.MarginRight = 7
+        .TextFrame.MarginTop = 2
+        .TextFrame.MarginBottom = 2
+        .TextFrame.Characters.Font.Name = "Aptos"
+        .TextFrame.Characters.Font.Size = 9
+        .TextFrame.Characters.Font.Bold = True
+        .TextFrame.Characters.Font.Color = RGB(96, 72, 0)
+        .Placement = xlFreeFloating
+    End With
 
     NMDC_SafeMergeAndSet ws, "A4:I4", _
         "REVIEW WORKFLOW. The first table shows proposed record changes. The source-selection section below it contains one native Excel checkbox per source workbook. Checked = include; unchecked = exclude. Save Source Choices & Restage after changes. Approve/Hold/Reject applies to the remaining whole proposal."
-
     With ws.Range("A4:I4")
         .Interior.Color = RGB(255, 247, 219)
         .Font.Name = "Aptos"

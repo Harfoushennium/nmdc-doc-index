@@ -11,6 +11,10 @@ Public TheListener As Cls_LiveFilter_Listener
 Private Const SEARCH_BOX_NAME As String = "TxtBox_Search"
 Private Const CHOOSE_BUTTON_NAME As String = "Btn_Choose_Search"
 Private Const RESET_BUTTON_NAME As String = "Btn_Reset_Search"
+Private Const SEARCH_BOX_WIDTH_POINTS As Double = 320
+Private Const CHOOSE_BUTTON_WIDTH_POINTS As Double = 120
+Private Const RESET_BUTTON_WIDTH_POINTS As Double = 100
+Private Const CONTROL_GAP_POINTS As Double = 8
 
 Private Sub Auto_Open()
     Call NMDC_LiveFilterInitialize
@@ -56,6 +60,9 @@ Private Sub NMDC_EnsureReferenceLiveFilterControls(ByVal ws As Worksheet)
     Dim area As Range
     Dim chooseButton As Button
     Dim resetButton As Button
+    Dim controlsLeft As Double
+    Dim controlsTop As Double
+    Dim controlsHeight As Double
 
     If NMDC_LiveFilterTableForSheet(ws) Is Nothing Then Exit Sub
 
@@ -76,26 +83,29 @@ Private Sub NMDC_EnsureReferenceLiveFilterControls(ByVal ws As Worksheet)
     Set TheOle = ws.OLEObjects(SEARCH_BOX_NAME)
     On Error GoTo Handler
 
-    Set area = ws.Range("B3:H3")
+    Set area = ws.Range("B3")
+    controlsLeft = area.Left + 1
+    controlsTop = area.Top + 1
+    controlsHeight = area.Height - 2
 
     If TheOle Is Nothing Then
         Set TheOle = ws.OLEObjects.Add( _
             ClassType:="Forms.TextBox.1", _
             Link:=False, _
             DisplayAsIcon:=False, _
-            Left:=area.Left + 1, _
-            Top:=area.Top + 1, _
-            Width:=area.Width - 2, _
-            Height:=area.Height - 2)
+            Left:=controlsLeft, _
+            Top:=controlsTop, _
+            Width:=SEARCH_BOX_WIDTH_POINTS, _
+            Height:=controlsHeight)
         TheOle.Name = SEARCH_BOX_NAME
     Else
-        TheOle.Left = area.Left + 1
-        TheOle.Top = area.Top + 1
-        TheOle.Width = area.Width - 2
-        TheOle.Height = area.Height - 2
+        TheOle.Left = controlsLeft
+        TheOle.Top = controlsTop
+        TheOle.Width = SEARCH_BOX_WIDTH_POINTS
+        TheOle.Height = controlsHeight
     End If
 
-    TheOle.Placement = xlMoveAndSize
+    TheOle.Placement = xlFreeFloating
     Set TheBox = TheOle.Object
     On Error Resume Next
     TheBox.MultiLine = False
@@ -113,20 +123,21 @@ Private Sub NMDC_EnsureReferenceLiveFilterControls(ByVal ws As Worksheet)
     Set chooseButton = ws.Buttons(CHOOSE_BUTTON_NAME)
     On Error GoTo Handler
 
-    Set area = ws.Range("I3:J3")
     If chooseButton Is Nothing Then
-        Set chooseButton = ws.Buttons.Add(area.Left + 1, area.Top + 1, area.Width - 2, area.Height - 2)
+        Set chooseButton = ws.Buttons.Add( _
+            controlsLeft + SEARCH_BOX_WIDTH_POINTS + CONTROL_GAP_POINTS, _
+            controlsTop, CHOOSE_BUTTON_WIDTH_POINTS, controlsHeight)
         chooseButton.Name = CHOOSE_BUTTON_NAME
     Else
-        chooseButton.Left = area.Left + 1
-        chooseButton.Top = area.Top + 1
-        chooseButton.Width = area.Width - 2
-        chooseButton.Height = area.Height - 2
+        chooseButton.Left = controlsLeft + SEARCH_BOX_WIDTH_POINTS + CONTROL_GAP_POINTS
+        chooseButton.Top = controlsTop
+        chooseButton.Width = CHOOSE_BUTTON_WIDTH_POINTS
+        chooseButton.Height = controlsHeight
     End If
 
     chooseButton.Caption = "CHANGE COLUMN"
     chooseButton.OnAction = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!NMDC_LiveFilterChooseColumn"
-    chooseButton.Placement = xlMoveAndSize
+    chooseButton.Placement = xlFreeFloating
     On Error Resume Next
     chooseButton.Font.Name = "Calibri"
     chooseButton.Font.Size = 10
@@ -138,20 +149,23 @@ Private Sub NMDC_EnsureReferenceLiveFilterControls(ByVal ws As Worksheet)
     Set resetButton = ws.Buttons(RESET_BUTTON_NAME)
     On Error GoTo Handler
 
-    Set area = ws.Range("K3:L3")
     If resetButton Is Nothing Then
-        Set resetButton = ws.Buttons.Add(area.Left + 1, area.Top + 1, area.Width - 2, area.Height - 2)
+        Set resetButton = ws.Buttons.Add( _
+            controlsLeft + SEARCH_BOX_WIDTH_POINTS + CONTROL_GAP_POINTS + _
+                CHOOSE_BUTTON_WIDTH_POINTS + CONTROL_GAP_POINTS, _
+            controlsTop, RESET_BUTTON_WIDTH_POINTS, controlsHeight)
         resetButton.Name = RESET_BUTTON_NAME
     Else
-        resetButton.Left = area.Left + 1
-        resetButton.Top = area.Top + 1
-        resetButton.Width = area.Width - 2
-        resetButton.Height = area.Height - 2
+        resetButton.Left = controlsLeft + SEARCH_BOX_WIDTH_POINTS + CONTROL_GAP_POINTS + _
+            CHOOSE_BUTTON_WIDTH_POINTS + CONTROL_GAP_POINTS
+        resetButton.Top = controlsTop
+        resetButton.Width = RESET_BUTTON_WIDTH_POINTS
+        resetButton.Height = controlsHeight
     End If
 
     resetButton.Caption = "RESET SEARCH"
     resetButton.OnAction = "Reset_Search_Click"
-    resetButton.Placement = xlMoveAndSize
+    resetButton.Placement = xlFreeFloating
     On Error Resume Next
     resetButton.Font.Name = "Calibri"
     resetButton.Font.Size = 10
