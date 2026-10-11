@@ -58,6 +58,7 @@ The production workbook (`NMDC_Document_Index.xlsm`) consists of exactly **15 wo
   - Placeholder/help text follows the reference tool: `Search <Column>... (+AND / -EXCLUDE) (Ctrl+Shift+F: Change Column)`.
   - Spaces or `+` mean required/AND terms; `-word` excludes rows containing that term; surrounding quotes invoke the reference exact-match behavior.
   - A visible **RESET SEARCH** button clears the table filter, clears the textbox, restores the placeholder, and returns focus to the search box.
+  - A visible **CHANGE COLUMN** button opens the same table-header chooser as `Ctrl+Shift+F`.
   - The same control pattern is installed on Master Documents, Revisions, Transactions, Pending Update, Review Flags, User Decisions, Update History, and Error Log.
 - **Visual Presentation Standards:**
   - Font: Clean Aptos 10 typography across all data cells.

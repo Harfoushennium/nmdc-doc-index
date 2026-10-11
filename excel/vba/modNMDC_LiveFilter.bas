@@ -9,6 +9,7 @@ Option Explicit
 Public TheListener As Cls_LiveFilter_Listener
 
 Private Const SEARCH_BOX_NAME As String = "TxtBox_Search"
+Private Const CHOOSE_BUTTON_NAME As String = "Btn_Choose_Search"
 Private Const RESET_BUTTON_NAME As String = "Btn_Reset_Search"
 
 Private Sub Auto_Open()
@@ -53,6 +54,7 @@ Private Sub NMDC_EnsureReferenceLiveFilterControls(ByVal ws As Worksheet)
     Dim TheOle As OLEObject
     Dim TheBox As Object
     Dim area As Range
+    Dim chooseButton As Button
     Dim resetButton As Button
 
     If NMDC_LiveFilterTableForSheet(ws) Is Nothing Then Exit Sub
@@ -63,7 +65,7 @@ Private Sub NMDC_EnsureReferenceLiveFilterControls(ByVal ws As Worksheet)
     On Error GoTo Handler
 
     ' Remove the superseded cell-based/filter-form surface so the visible UI
-    ' is the owner REV03 search box + RESET SEARCH control only.
+    ' is the owner REV03 search box + CHANGE COLUMN + RESET SEARCH controls.
     On Error Resume Next
     ws.Range("A3:L3").UnMerge
     ws.Range("A3:L3").ClearContents
@@ -74,7 +76,7 @@ Private Sub NMDC_EnsureReferenceLiveFilterControls(ByVal ws As Worksheet)
     Set TheOle = ws.OLEObjects(SEARCH_BOX_NAME)
     On Error GoTo Handler
 
-    Set area = ws.Range("B3:J3")
+    Set area = ws.Range("B3:H3")
 
     If TheOle Is Nothing Then
         Set TheOle = ws.OLEObjects.Add( _
@@ -104,6 +106,31 @@ Private Sub NMDC_EnsureReferenceLiveFilterControls(ByVal ws As Worksheet)
     TheBox.BackColor = RGB(255, 255, 255)
     TheBox.Font.Name = "Calibri"
     TheBox.Font.Size = 11
+    On Error GoTo Handler
+
+    Set chooseButton = Nothing
+    On Error Resume Next
+    Set chooseButton = ws.Buttons(CHOOSE_BUTTON_NAME)
+    On Error GoTo Handler
+
+    Set area = ws.Range("I3:J3")
+    If chooseButton Is Nothing Then
+        Set chooseButton = ws.Buttons.Add(area.Left + 1, area.Top + 1, area.Width - 2, area.Height - 2)
+        chooseButton.Name = CHOOSE_BUTTON_NAME
+    Else
+        chooseButton.Left = area.Left + 1
+        chooseButton.Top = area.Top + 1
+        chooseButton.Width = area.Width - 2
+        chooseButton.Height = area.Height - 2
+    End If
+
+    chooseButton.Caption = "CHANGE COLUMN"
+    chooseButton.OnAction = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!NMDC_LiveFilterChooseColumn"
+    chooseButton.Placement = xlMoveAndSize
+    On Error Resume Next
+    chooseButton.Font.Name = "Calibri"
+    chooseButton.Font.Size = 10
+    chooseButton.Font.Bold = True
     On Error GoTo Handler
 
     Set resetButton = Nothing
