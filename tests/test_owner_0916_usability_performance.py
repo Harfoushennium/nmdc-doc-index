@@ -27,6 +27,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class Owner0916UsabilityPerformanceTests(unittest.TestCase):
+    def test_dashboard_refresh_binds_a_new_run_only_after_loading_its_tables(self):
+        performance = (ROOT / "excel/vba/modNMDC_Performance.bas").read_text(encoding="utf-8")
+        dashboard_refresh = performance.split("Public Function NMDC_RefreshDashboardOnlyFast", 1)[1].split("End Function", 1)[0]
+        self.assertIn('"Pending Run ID"', dashboard_refresh)
+        self.assertIn("NMDC_DisplayedPendingRunId()", dashboard_refresh)
+        self.assertIn("NMDC_RefreshExchangeData()", dashboard_refresh)
+        self.assertLess(dashboard_refresh.index("NMDC_RefreshExchangeData()"), dashboard_refresh.index("NMDC_LoadDashboard("))
+
     def test_shipped_rules_are_plain_text_only(self):
         with (ROOT / "config" / "classification_rules.csv").open(
             newline="", encoding="utf-8-sig"

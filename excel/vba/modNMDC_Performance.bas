@@ -251,6 +251,27 @@ Public Function NMDC_RefreshDashboardOnlyFast() As Boolean
     On Error GoTo Handler
     If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then GoTo Handler
     Dim ok As Boolean
+    Dim headers As Variant, data As Variant
+    Dim dataCount As Long, columnCount As Long
+    Dim exchangeRunId As String
+    Dim columnIndex As Long, runColumn As Long
+
+    ' H7 binds the displayed review inputs to a proposal. A dashboard-only
+    ' refresh must never attach old/base tables to a different proposal.
+    ' Capture above journals existing edits before export/replacement; the
+    ' full refresh restores only drafts belonging to the newly loaded run.
+    If Not NMDC_ParseCsvFile(NMDC_ExchangePath() & "\dashboard.csv", headers, data, dataCount, columnCount) Then
+        Err.Raise vbObjectError + 241, , "Dashboard baseline is unavailable."
+    End If
+    For columnIndex = 1 To columnCount
+        If StrComp(CStr(headers(1, columnIndex)), "Pending Run ID", vbTextCompare) = 0 Then runColumn = columnIndex: Exit For
+    Next columnIndex
+    If runColumn = 0 Or dataCount <> 1 Then Err.Raise vbObjectError + 242, , "Dashboard proposal identity is unavailable."
+    exchangeRunId = CStr(data(1, runColumn))
+    If StrComp(NMDC_DisplayedPendingRunId(), exchangeRunId, vbBinaryCompare) <> 0 Then
+        NMDC_RefreshDashboardOnlyFast = NMDC_RefreshExchangeData()
+        Exit Function
+    End If
     ok = True
     Application.StatusBar = "NMDC Document Index: refreshing dashboard..."
     If Not NMDC_LoadErrorCsvPreserveLocal(NMDC_ExchangePath() & "\errors.csv") Then ok = False

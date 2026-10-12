@@ -114,9 +114,14 @@ End Function
         write_csv(exchange / "flags.csv", FLAG_FIELDS, flag_rows)
         write_csv(exchange / "pending_update.csv", PENDING_FIELDS, pending_rows[:3])
         book.Worksheets("Home").Range("H7").Value = ""
-        record("fixture full refresh", excel.Run(prefix + "NMDC_RefreshExchangeData"))
+        record("unbound workbook dashboard refresh", excel.Run(prefix + "NMDC_RefreshDashboardOnlyFast"))
         pending = book.Worksheets("Pending Update")
         flags = book.Worksheets("Review Flags").ListObjects("ReviewFlags")
+        record("dashboard binds only refreshed proposal tables",
+               str(book.Worksheets("Home").Range("H7").Value) == run_a and
+               pending.ListObjects("PendingUpdate").ListRows.Count == 3 and
+               flags.ListRows.Count == 2 and
+               str(flags.ListColumns("Event Key").DataBodyRange.Cells(1, 1).Value) == "fixture-event-0")
 
         def source_cell(field, index=1):
             return pending.ListObjects("SourceSelection").ListColumns(field).DataBodyRange.Cells(index, 1)
@@ -184,7 +189,7 @@ End Function
         run_b = "owner-draft-fixture-B"
         dashboard[0]["Pending Run ID"] = run_b
         write_csv(exchange / "dashboard.csv", headers, dashboard)
-        record("replacement proposal refresh", excel.Run(prefix + "NMDC_RefreshReviewDataFast"))
+        record("replacement proposal dashboard refresh", excel.Run(prefix + "NMDC_RefreshDashboardOnlyFast"))
         record("old drafts retained without cross-run application", not source_cell("Owner Note", 2).Value and not flag_cell("User Comment", 2).Value and "retained" in str(pending.Range("A4").Value).casefold())
         draft_path = runtime / "owner_review_drafts.csv"
         draft_headers, drafts = read_csv(draft_path)
