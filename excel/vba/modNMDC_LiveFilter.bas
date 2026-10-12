@@ -318,7 +318,7 @@ End Sub
 
 Public Sub Run_Live_Filter(ByVal UserText As String)
     Dim TheTable As ListObject, TargetRange As Range
-    Dim VisibleRows As Range, Cell As Range, RowsToHide As Range
+    Dim VisibleRows As Range, Cell As Range
     Dim ColumnNumber As Long
     Dim CleanText As String
     Dim rawTokens() As String
@@ -350,10 +350,9 @@ Public Sub Run_Live_Filter(ByVal UserText As String)
         If Not VisibleRows Is Nothing Then
             For Each Cell In VisibleRows
                 If StrComp(Cell.Value, CleanText, vbBinaryCompare) <> 0 Then
-                    If RowsToHide Is Nothing Then Set RowsToHide = Cell Else Set RowsToHide = Union(RowsToHide, Cell)
+                    Cell.EntireRow.Hidden = True
                 End If
             Next Cell
-            If Not RowsToHide Is Nothing Then RowsToHide.EntireRow.Hidden = True
         End If
         Application.ScreenUpdating = True
         Exit Sub
@@ -421,11 +420,9 @@ Public Sub Run_Live_Filter(ByVal UserText As String)
                 End If
 
                 If MatchFailed Then
-                    If RowsToHide Is Nothing Then Set RowsToHide = Cell Else Set RowsToHide = Union(RowsToHide, Cell)
+                    Cell.EntireRow.Hidden = True
                 End If
             Next Cell
-
-            If Not RowsToHide Is Nothing Then RowsToHide.EntireRow.Hidden = True
         End If
     End If
 

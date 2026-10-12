@@ -15,6 +15,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class OwnerFollowupTests(unittest.TestCase):
+    def test_live_filter_hides_rejected_rows_without_expanding_a_union(self):
+        text = (ROOT / "excel" / "vba" / "modNMDC_LiveFilter.bas").read_text(encoding="utf-8")
+        self.assertNotIn("Union(RowsToHide, Cell)", text)
+        self.assertNotIn("RowsToHide.EntireRow.Hidden", text)
+        self.assertEqual(2, text.count("Cell.EntireRow.Hidden = True"))
+
     def test_refresh_no_longer_creates_or_deletes_temporary_worksheets(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
         self.assertIn("NMDC_ParseCsvFile", text)
