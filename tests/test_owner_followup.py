@@ -19,7 +19,10 @@ class OwnerFollowupTests(unittest.TestCase):
         text = (ROOT / "excel" / "vba" / "modNMDC_LiveFilter.bas").read_text(encoding="utf-8")
         self.assertNotIn("Union(RowsToHide, Cell)", text)
         self.assertNotIn("RowsToHide.EntireRow.Hidden", text)
-        self.assertEqual(2, text.count("Cell.EntireRow.Hidden = True"))
+        self.assertEqual(7, text.count("NMDC_HideRejectedBlock"))
+        self.assertIn("Cell.Row = HideEndRow + 1", text)
+        self.assertIn('sheet.Range(addressText).EntireRow.Hidden = True', text)
+        self.assertIn("Len(addressText) >= 180", text)
 
     def test_refresh_no_longer_creates_or_deletes_temporary_worksheets(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")

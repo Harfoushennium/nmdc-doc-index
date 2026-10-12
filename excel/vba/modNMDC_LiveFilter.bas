@@ -327,6 +327,8 @@ Public Sub Run_Live_Filter(ByVal UserText As String)
     Dim token As String, tempStr As String
     Dim i As Long
     Dim MatchFailed As Boolean
+    Dim HideStartRow As Long, HideEndRow As Long
+    Dim HideAddress As String
 
     If InStr(1, UserText, "(Ctrl+Shift+F)") > 0 Then Exit Sub
 
@@ -350,9 +352,23 @@ Public Sub Run_Live_Filter(ByVal UserText As String)
         If Not VisibleRows Is Nothing Then
             For Each Cell In VisibleRows
                 If StrComp(Cell.Value, CleanText, vbBinaryCompare) <> 0 Then
-                    Cell.EntireRow.Hidden = True
+                    If HideStartRow = 0 Then
+                        HideStartRow = Cell.Row
+                        HideEndRow = Cell.Row
+                    ElseIf Cell.Row = HideEndRow + 1 Then
+                        HideEndRow = Cell.Row
+                    Else
+                        NMDC_HideRejectedBlock TargetRange.Worksheet, HideStartRow, HideEndRow, HideAddress
+                        HideStartRow = Cell.Row
+                        HideEndRow = Cell.Row
+                    End If
+                ElseIf HideStartRow > 0 Then
+                    NMDC_HideRejectedBlock TargetRange.Worksheet, HideStartRow, HideEndRow, HideAddress
+                    HideStartRow = 0
                 End If
             Next Cell
+            If HideStartRow > 0 Then NMDC_HideRejectedBlock TargetRange.Worksheet, HideStartRow, HideEndRow, HideAddress
+            NMDC_FlushRejectedBlocks TargetRange.Worksheet, HideAddress
         End If
         Application.ScreenUpdating = True
         Exit Sub
@@ -420,13 +436,40 @@ Public Sub Run_Live_Filter(ByVal UserText As String)
                 End If
 
                 If MatchFailed Then
-                    Cell.EntireRow.Hidden = True
+                    If HideStartRow = 0 Then
+                        HideStartRow = Cell.Row
+                        HideEndRow = Cell.Row
+                    ElseIf Cell.Row = HideEndRow + 1 Then
+                        HideEndRow = Cell.Row
+                    Else
+                        NMDC_HideRejectedBlock TargetRange.Worksheet, HideStartRow, HideEndRow, HideAddress
+                        HideStartRow = Cell.Row
+                        HideEndRow = Cell.Row
+                    End If
+                ElseIf HideStartRow > 0 Then
+                    NMDC_HideRejectedBlock TargetRange.Worksheet, HideStartRow, HideEndRow, HideAddress
+                    HideStartRow = 0
                 End If
             Next Cell
+            If HideStartRow > 0 Then NMDC_HideRejectedBlock TargetRange.Worksheet, HideStartRow, HideEndRow, HideAddress
+            NMDC_FlushRejectedBlocks TargetRange.Worksheet, HideAddress
         End If
     End If
 
     Application.ScreenUpdating = True
+End Sub
+
+Private Sub NMDC_HideRejectedBlock(ByVal sheet As Worksheet, ByVal firstRow As Long, ByVal lastRow As Long, ByRef addressText As String)
+    If firstRow < 1 Or lastRow < firstRow Then Exit Sub
+    If Len(addressText) > 0 Then addressText = addressText & ","
+    addressText = addressText & CStr(firstRow) & ":" & CStr(lastRow)
+    If Len(addressText) >= 180 Then NMDC_FlushRejectedBlocks sheet, addressText
+End Sub
+
+Private Sub NMDC_FlushRejectedBlocks(ByVal sheet As Worksheet, ByRef addressText As String)
+    If Len(addressText) = 0 Then Exit Sub
+    sheet.Range(addressText).EntireRow.Hidden = True
+    addressText = ""
 End Sub
 
 Public Sub Fix_Placeholder_Text(TheBox As Object, Optional ColName As String = "")
