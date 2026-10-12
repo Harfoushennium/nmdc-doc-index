@@ -5,6 +5,7 @@ Public Sub Auto_Open()
     On Error GoTo Handler
 
     Application.StatusBar = "NMDC Document Index: refreshing dashboard..."
+    If NMDC_ReviewDraftStoreHealthy() Then NMDC_ReviewDraftCaptureCurrentTables
     If NMDC_RunEngine("export-excel") = 0 Then
         If Not NMDC_RefreshExchangeData() Then
             NMDC_LogError "STARTUP_EXCHANGE_ERROR", _

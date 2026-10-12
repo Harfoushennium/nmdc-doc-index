@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Sequence, Set
 
 
-FIELDS = ["Relative_Path", "Enabled", "Reason"]
+FIELDS = ["Relative_Path", "Enabled", "Reason", "Owner_Note"]
 
 
 def _normalize(value: str) -> str:
@@ -33,7 +33,38 @@ def read_source_exclusions(path: Path) -> Dict[str, Dict[str, str]]:
                 "Relative_Path": rel,
                 "Enabled": "YES",
                 "Reason": str(raw.get("Reason", "") or "Owner excluded source from Pending Update").strip(),
+                "Owner_Note": str(raw.get("Owner_Note", "") or "").strip(),
             }
+    return rows
+
+
+def read_source_selection_notes(path: Path) -> Dict[str, str]:
+    """Read owner notes independently of include/exclude state.
+
+    Older configuration files used ``Reason`` as the only note field for an
+    excluded source, so retain that value as a compatibility fallback.
+    """
+    return {
+        key: row["Owner_Note"]
+        for key, row in _read_source_selection_note_rows(path).items()
+        if row["Owner_Note"]
+    }
+
+
+def _read_source_selection_note_rows(path: Path) -> Dict[str, Dict[str, str]]:
+    path = Path(path)
+    if not path.exists():
+        return {}
+    rows: Dict[str, Dict[str, str]] = {}
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        for raw in csv.DictReader(handle):
+            rel = str(raw.get("Relative_Path", "") or "").replace("\\", "/").lstrip("/")
+            if not rel:
+                continue
+            note = raw.get("Owner_Note")
+            if note is None:
+                note = raw.get("Reason", "")
+            rows[_normalize(rel)] = {"Relative_Path": rel, "Owner_Note": str(note or "").strip()}
     return rows
 
 
@@ -67,14 +98,37 @@ def _write_rows(path: Path, rows: Iterable[Mapping[str, str]]) -> None:
     os.replace(temp, path)
 
 
+def _write_selection_state(
+    path: Path,
+    exclusions: Mapping[str, Mapping[str, str]],
+    notes: Mapping[str, str],
+    note_paths: Mapping[str, str],
+) -> None:
+    keys = set(exclusions) | {key for key, note in notes.items() if note}
+    rows = []
+    for key in sorted(keys):
+        exclusion = exclusions.get(key, {})
+        rows.append({
+            "Relative_Path": str(exclusion.get("Relative_Path", note_paths.get(key, key))).replace("\\", "/"),
+            "Enabled": "YES" if exclusion else "NO",
+            "Reason": str(exclusion.get("Reason", "")),
+            "Owner_Note": str(notes.get(key, "")),
+        })
+    _write_rows(path, rows)
+
+
 def set_source_selection(config_dir: Path, source_file: str, *, include: bool, reason: str = "") -> Dict[str, Any]:
     config_dir = Path(config_dir)
     path = config_dir / "source_exclusions.csv"
     current = read_source_exclusions(path)
+    note_rows = _read_source_selection_note_rows(path)
+    notes = {key: row["Owner_Note"] for key, row in note_rows.items() if row["Owner_Note"]}
+    note_paths = {key: row["Relative_Path"] for key, row in note_rows.items()}
     normalized = _normalize(source_file)
     clean_source = str(source_file or "").replace("\\", "/").lstrip("/")
     if not clean_source:
         raise ValueError("A source file must be selected.")
+    note_paths[normalized] = clean_source
 
     if include:
         current.pop(normalized, None)
@@ -85,14 +139,17 @@ def set_source_selection(config_dir: Path, source_file: str, *, include: bool, r
             "Enabled": "YES",
             "Reason": str(reason or "Owner excluded source from Pending Update").strip(),
         }
+        if reason:
+            notes[normalized] = str(reason).strip()
         decision = "EXCLUDE"
 
-    ordered = [current[key] for key in sorted(current)]
-    _write_rows(path, ordered)
+    if normalized not in notes and reason:
+        notes[normalized] = str(reason).strip()
+    _write_selection_state(path, current, notes, note_paths)
     return {
         "decision": decision,
         "source_file": clean_source,
-        "excluded_sources": len(ordered),
+        "excluded_sources": len(current),
         "config_file": str(path),
     }
 
@@ -112,6 +169,9 @@ def set_source_selections_from_file(config_dir: Path, selections_file: Path) -> 
     config_dir = Path(config_dir)
     target = config_dir / "source_exclusions.csv"
     current = read_source_exclusions(target)
+    note_rows = _read_source_selection_note_rows(target)
+    notes = {key: row["Owner_Note"] for key, row in note_rows.items() if row["Owner_Note"]}
+    note_paths = {key: row["Relative_Path"] for key, row in note_rows.items()}
     processed = 0
     included = 0
     excluded = 0
@@ -128,11 +188,13 @@ def set_source_selections_from_file(config_dir: Path, selections_file: Path) -> 
             if not clean_source:
                 continue
             normalized = _normalize(clean_source)
+            note_paths[normalized] = clean_source
+            notes[normalized] = str(raw.get("Owner Note", "") or "").strip()
             if _as_checked(raw.get("Include in Index?", "")):
                 current.pop(normalized, None)
                 included += 1
             else:
-                note = str(raw.get("Owner Note", "") or "").strip()
+                note = notes[normalized]
                 current[normalized] = {
                     "Relative_Path": clean_source,
                     "Enabled": "YES",
@@ -141,13 +203,12 @@ def set_source_selections_from_file(config_dir: Path, selections_file: Path) -> 
                 excluded += 1
             processed += 1
 
-    ordered = [current[key] for key in sorted(current)]
-    _write_rows(target, ordered)
+    _write_selection_state(target, current, notes, note_paths)
     return {
         "decision": "BATCH_SOURCE_SELECTION_SAVED",
         "processed_sources": processed,
         "checked_included": included,
         "unchecked_excluded": excluded,
-        "excluded_sources": len(ordered),
+        "excluded_sources": len(current),
         "config_file": str(target),
     }

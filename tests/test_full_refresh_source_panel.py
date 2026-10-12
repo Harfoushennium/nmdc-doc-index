@@ -23,7 +23,6 @@ class FullRefreshSourcePanelTests(unittest.TestCase):
             'NMDC_LoadCsvToTable(NMDC_ExchangePath() & "\\flags.csv"',
             'NMDC_LoadCsvToTable(NMDC_ExchangePath() & "\\history.csv"',
             'NMDC_LoadErrorCsvPreserveLocal(NMDC_ExchangePath() & "\\errors.csv")',
-            'NMDC_LoadDashboard(NMDC_ExchangePath() & "\\dashboard.csv")',
         )
         positions = [procedure.index(call) for call in imports]
         self.assertEqual(positions, sorted(positions))
@@ -34,10 +33,11 @@ class FullRefreshSourcePanelTests(unittest.TestCase):
         lookup = procedure.index('Set sourceSelectionTable = pendingSheet.ListObjects("SourceSelection")')
         missing_guard = procedure.index("If sourceSelectionTable Is Nothing Then")
         clean_exit = procedure.index("CleanExit:")
-        self.assertLess(positions[-1], guidance)
         self.assertLess(guidance, owner_ui)
         self.assertLess(owner_ui, rebuild)
-        self.assertLess(rebuild, lookup)
+        dashboard = procedure.index('NMDC_LoadDashboard(NMDC_ExchangePath() & "\\dashboard.csv")')
+        self.assertLess(rebuild, dashboard)
+        self.assertLess(dashboard, lookup)
         self.assertLess(lookup, missing_guard)
         self.assertLess(missing_guard, clean_exit)
 

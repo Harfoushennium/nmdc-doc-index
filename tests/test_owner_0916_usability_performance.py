@@ -9,6 +9,7 @@ from nmdc_profiler.rules import apply_classification, load_rules
 from nmdc_profiler.source_cache import prepare_local_source_cache
 from nmdc_profiler.source_selection import (
     read_source_exclusions,
+    read_source_selection_notes,
     set_source_selection,
     set_source_selections_from_file,
 )
@@ -94,6 +95,10 @@ class Owner0916UsabilityPerformanceTests(unittest.TestCase):
             restored = set_source_selection(config, source, include=True)
             self.assertEqual("INCLUDE", restored["decision"])
             self.assertEqual({}, read_source_exclusions(config / "source_exclusions.csv"))
+            self.assertEqual("Duplicate register", read_source_selection_notes(config / "source_exclusions.csv")[source.casefold()])
+            with (config / "source_exclusions.csv").open(newline="", encoding="utf-8-sig") as handle:
+                saved_path = next(csv.DictReader(handle))["Relative_Path"]
+            self.assertEqual(source, saved_path)
 
     def test_batch_checkbox_source_selection_is_atomic_and_owner_friendly(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -130,6 +135,28 @@ class Owner0916UsabilityPerformanceTests(unittest.TestCase):
             self.assertIn("tech/4000 document register.xlsx", exclusions)
             self.assertNotIn("methods/5000 deliverables.xlsx", exclusions)
             self.assertEqual("Duplicate register", exclusions["tech/4000 document register.xlsx"]["Reason"])
+            self.assertEqual(
+                "",
+                read_source_selection_notes(config / "source_exclusions.csv").get(
+                    "methods/5000 deliverables.xlsx", ""
+                ),
+            )
+
+            later_decisions = root / "later_source_selection_decisions.csv"
+            with later_decisions.open("w", newline="", encoding="utf-8-sig") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=["Source File", "Include in Index?", "Owner Note"],
+                )
+                writer.writeheader()
+                writer.writerow({
+                    "Source File": "METHODS/6000 New.xlsx",
+                    "Include in Index?": "TRUE",
+                    "Owner Note": "New scope",
+                })
+            set_source_selections_from_file(config, later_decisions)
+            notes = read_source_selection_notes(config / "source_exclusions.csv")
+            self.assertEqual("Duplicate register", notes["tech/4000 document register.xlsx"])
 
     def test_source_selection_view_is_checkbox_friendly(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -176,6 +203,47 @@ class Owner0916UsabilityPerformanceTests(unittest.TestCase):
             self.assertEqual("TECH/4000 DOCUMENT REGISTER.xlsx", rows[0]["Source File"])
             self.assertEqual("Owner scope decision", rows[0]["Owner Note"])
             self.assertEqual("Only confirmed source", rows[0]["Selection Reason"])
+
+    def test_included_source_owner_note_survives_save_and_refresh_export(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = root / "config"
+            config.mkdir()
+            decisions = root / "source_selection_decisions.csv"
+            with decisions.open("w", newline="", encoding="utf-8-sig") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=["Source File", "Include in Index?", "Owner Note"],
+                )
+                writer.writeheader()
+                writer.writerow({
+                    "Source File": "TECH/4000 Register.xlsx",
+                    "Include in Index?": "TRUE",
+                    "Owner Note": "Verify the revised transmittal list",
+                })
+            set_source_selections_from_file(config, decisions)
+
+            state = root / "runtime"
+            stage = state / "staging" / "RUN-1"
+            stage.mkdir(parents=True)
+            (state / "staging" / "latest.json").write_text(
+                json.dumps({"run_id": "RUN-1"}), encoding="utf-8"
+            )
+            (stage / "manifest.json").write_text(
+                json.dumps({"files": [{"relative_path": "TECH/4000 Register.xlsx", "selection_status": "SELECTED"}]}),
+                encoding="utf-8",
+            )
+            (stage / "records.jsonl").write_text("", encoding="utf-8")
+            (stage / "summary.json").write_text("{}", encoding="utf-8")
+            (stage / "flags.json").write_text("[]", encoding="utf-8")
+            (stage / "record_changes.json").write_text("{}", encoding="utf-8")
+            exchange = root / "exchange"
+
+            exported = export_source_selection(state, exchange, config)
+            with exported.open(newline="", encoding="utf-8-sig") as handle:
+                rows = list(csv.DictReader(handle))
+
+            self.assertEqual("Verify the revised transmittal list", rows[0]["Owner Note"])
 
     def test_review_first_column_orders_put_business_fields_before_technical_keys(self):
         self.assertEqual(["Project No.", "Document No.", "Document Title"], DOCUMENT_FIELDS[:3])

@@ -5,6 +5,12 @@ Public Sub NMDC_ResetAllRecords()
     Dim answer As VbMsgBoxResult
     Dim exitCode As Long
 
+    If NMDC_AsyncIsBusy() Then
+        MsgBox "Wait for the background update to finish before resetting indexed records.", vbExclamation, "NMDC Document Index"
+        Exit Sub
+    End If
+    If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then Exit Sub
+
     answer = MsgBox("Reset the NMDC Document Index and delete all indexed/staged runtime records?" & vbCrLf & vbCrLf & _
                     "This does NOT delete or modify source DATA workbooks or configuration files." & vbCrLf & _
                     "Audit history is preserved. You will need to run Full Rescan to rebuild the index.", _
@@ -31,6 +37,12 @@ End Sub
 Public Sub NMDC_UndoLastApproval()
     Dim answer As VbMsgBoxResult
     Dim exitCode As Long
+
+    If NMDC_AsyncIsBusy() Then
+        MsgBox "Wait for the background update to finish before undoing approval.", vbExclamation, "NMDC Document Index"
+        Exit Sub
+    End If
+    If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then Exit Sub
 
     answer = MsgBox("Undo the last approved update and restore the previous approved version?" & vbCrLf & vbCrLf & _
                     "No source workbook will be changed or deleted. Previous approved versions are retained for audit.", _
@@ -64,7 +76,21 @@ Public Sub NMDC_SaveReviewDecisions()
     Dim fixRows As Long
     Dim exitCode As Long
     Dim requestPath As String
+    Dim runId As String
+    Dim flagIdentity As String
+    Dim decisionDirty As Boolean
+    Dim commentDirty As Boolean
+    Dim statusDirty As Boolean
+    Dim draftValue As String
+    Dim drafts As Object
 
+    If NMDC_AsyncIsBusy() Then
+        MsgBox "Wait for the background update to finish before saving review decisions.", vbExclamation, "NMDC Document Index"
+        Exit Sub
+    End If
+    runId = NMDC_DisplayedPendingRunId()
+    If Len(runId) = 0 Or Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then Exit Sub
+    Set drafts = NMDC_ReviewDraftsSnapshot()
     Set ws = ThisWorkbook.Worksheets("Review Flags")
     Set table = ws.ListObjects("ReviewFlags")
     filePath = NMDC_ExchangePath() & "\review_decisions.csv"
@@ -74,16 +100,21 @@ Public Sub NMDC_SaveReviewDecisions()
     stream.Type = 2
     stream.Charset = "utf-8"
     stream.Open
-    stream.WriteText "Flag Code,Source File,Worksheet Name,Event Key,Project No.,Document No.,Revision,User Decision,User Comment,Resolution Status" & vbLf
+    stream.WriteText "Flag Code,Source File,Worksheet Name,Event Key,Project No.,Document No.,Revision,User Decision,User Comment,Resolution Status,Clear User Decision,Clear User Comment,Clear Resolution Status" & vbLf
 
     For Each row In table.ListRows
+        flagIdentity = NMDC_ReviewDraftFlagIdentity(table, row.Index)
+        decisionDirty = NMDC_ReviewDraftSnapshotIsDirty(drafts, runId, "FLAGS", flagIdentity, "User Decision", draftValue)
+        commentDirty = NMDC_ReviewDraftSnapshotIsDirty(drafts, runId, "FLAGS", flagIdentity, "User Comment", draftValue)
+        statusDirty = NMDC_ReviewDraftSnapshotIsDirty(drafts, runId, "FLAGS", flagIdentity, "Resolution Status", draftValue)
+        If Not (decisionDirty Or commentDirty Or statusDirty) Then GoTo NextReviewRow
         decision = Trim$(CStr(NMDC_AdminTableValue(table, row, "User Decision")))
-        comment = Trim$(CStr(NMDC_AdminTableValue(table, row, "User Comment")))
+        comment = CStr(NMDC_AdminTableValue(table, row, "User Comment"))
         status = UCase$(Trim$(CStr(NMDC_AdminTableValue(table, row, "Resolution Status"))))
 
         If UCase$(decision) = "NEEDS PARSER/MAPPING FIX" Then fixRows = fixRows + 1
 
-        If Len(decision) > 0 Or Len(comment) > 0 Or (Len(status) > 0 And status <> "OPEN") Then
+        If decisionDirty Or commentDirty Or statusDirty Then
             stream.WriteText _
                 NMDC_AdminCsvField(CStr(NMDC_AdminTableValue(table, row, "Flag Code"))) & "," & _
                 NMDC_AdminCsvField(CStr(NMDC_AdminTableValue(table, row, "Source File"))) & "," & _
@@ -94,16 +125,20 @@ Public Sub NMDC_SaveReviewDecisions()
                 NMDC_AdminCsvField(CStr(NMDC_AdminTableValue(table, row, "Revision"))) & "," & _
                 NMDC_AdminCsvField(decision) & "," & _
                 NMDC_AdminCsvField(comment) & "," & _
-                NMDC_AdminCsvField(status) & vbLf
+                NMDC_AdminCsvField(status) & "," & _
+                NMDC_AdminCsvField(IIf(decisionDirty And Len(decision) = 0, "TRUE", "")) & "," & _
+                NMDC_AdminCsvField(IIf(commentDirty And Len(comment) = 0, "TRUE", "")) & "," & _
+                NMDC_AdminCsvField(IIf(statusDirty And Len(status) = 0, "TRUE", "")) & vbLf
             savedRows = savedRows + 1
         End If
+NextReviewRow:
     Next row
 
     stream.SaveToFile filePath, 2
     stream.Close
 
     If savedRows = 0 Then
-        MsgBox "No Review Flag decision/comment changes were found to save." & vbCrLf & vbCrLf & _
+        MsgBox "No unsaved Review Flag decision/comment/status changes were found to save." & vbCrLf & vbCrLf & _
                "Use the User Decision dropdown and/or enter a User Comment first.", _
                vbInformation, "NMDC Document Index"
         Exit Sub
@@ -111,13 +146,16 @@ Public Sub NMDC_SaveReviewDecisions()
 
     exitCode = NMDC_RunEngine("save-review-decisions", _
         "--decisions-file " & NMDC_Quote(filePath) & _
-        " --request-dir " & NMDC_Quote(NMDC_WorkbookFolder()))
+        " --request-dir " & NMDC_Quote(NMDC_WorkbookFolder()) & _
+        " --run-id " & NMDC_Quote(runId))
     If exitCode <> 0 Then
         MsgBox "Review decisions could not be saved. Please review the Error Log.", vbExclamation, "NMDC Document Index"
         Exit Sub
     End If
 
-    If NMDC_RunEngine("export-excel") = 0 Then NMDC_RefreshExchangeData
+    If NMDC_RunEngine("export-excel") = 0 Then
+        If NMDC_RefreshExchangeData() Then NMDC_ReviewDraftCaptureCurrentTables
+    End If
 
     If fixRows > 0 Then
         requestPath = NMDC_LatestParserFixRequestPath()
@@ -157,6 +195,15 @@ Public Sub NMDC_ReportSelectedParserFixes()
     Dim exitCode As Long
     Dim userNote As String
     Dim rowComment As String
+    Dim runId As String
+
+    If NMDC_AsyncIsBusy() Then
+        MsgBox "Wait for the background update to finish before reporting parser fixes.", vbExclamation, "NMDC Document Index"
+        Exit Sub
+    End If
+    runId = NMDC_DisplayedPendingRunId()
+    If Len(runId) = 0 Then Exit Sub
+    If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then Exit Sub
 
     Set ws = ThisWorkbook.Worksheets("Review Flags")
     Set table = ws.ListObjects("ReviewFlags")
@@ -227,7 +274,8 @@ Public Sub NMDC_ReportSelectedParserFixes()
 
     exitCode = NMDC_RunEngine("save-review-decisions", _
         "--decisions-file " & NMDC_Quote(filePath) & _
-        " --request-dir " & NMDC_Quote(NMDC_WorkbookFolder()))
+        " --request-dir " & NMDC_Quote(NMDC_WorkbookFolder()) & _
+        " --run-id " & NMDC_Quote(runId))
     If exitCode <> 0 Then
         MsgBox "The selected parser-fix report could not be created. Please review Error Log.", _
                vbExclamation, "NMDC Document Index"

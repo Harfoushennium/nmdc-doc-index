@@ -94,7 +94,12 @@ Public Function NMDC_EnsureClassificationRulesTable() As Boolean
     NMDC_EnsureClassificationRulesTable = True
 
     If recovered Then
-        MsgBox "The ClassificationRules table was missing or renamed." & _
+        NMDC_LogError "CLASSIFICATION_TABLE_RESTORED", _
+            "Excel restored the named classification table without replacing rule values.", _
+            CStr(lastRuleRow - 5) & " existing rule row(s) retained."
+        ' Setup owns a hidden Excel instance. An informational dialog there
+        ' would block the setup transaction; normal visible Excel still reports it.
+        If Application.Visible Then MsgBox "The ClassificationRules table was missing or renamed." & _
                vbCrLf & vbCrLf & _
                "Excel restored the named table around " & _
                CStr(lastRuleRow - 5) & " existing rule row(s)." & vbCrLf & _

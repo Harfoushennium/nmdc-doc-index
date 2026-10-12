@@ -280,6 +280,7 @@ class ExcelUIContractTests(unittest.TestCase):
 
     def test_source_selection_uses_native_in_cell_checkboxes_but_multi_choice_inputs_stay_dropdowns(self):
         checkboxes = (ROOT / "excel" / "vba" / "modNMDC_Checkboxes.bas").read_text(encoding="utf-8")
+        drafts = (ROOT / "excel" / "vba" / "modNMDC_ReviewDrafts.bas").read_text(encoding="utf-8")
         setup = (ROOT / "packaging" / "Create_NMDC_Document_Index.vbs").read_text(encoding="utf-8")
         self.assertIn("CellControl.SetCheckbox", checkboxes)
         self.assertNotIn("CheckBoxes.Add", checkboxes)
@@ -288,6 +289,100 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn("NMDC_CheckAllSources", checkboxes)
         self.assertIn("ACKNOWLEDGED,NO ACTION REQUIRED", setup)
         self.assertIn("OPEN,ACKNOWLEDGED,RESOLVED,DEFERRED", setup)
+
+    def test_review_draft_module_is_packaged_and_receives_workbook_edits(self):
+        setup = (ROOT / "packaging" / "Create_NMDC_Document_Index.vbs").read_text(encoding="utf-8")
+        drafts = (ROOT / "excel" / "vba" / "modNMDC_ReviewDrafts.bas").read_text(encoding="utf-8")
+        self.assertIn('"modNMDC_ReviewDrafts.bas"', setup)
+        self.assertIn("NMDC_ReviewDraftSheetChange Sh, Target", setup)
+        self.assertIn("Public Function NMDC_ReviewDraftsCanApprove", drafts)
+        self.assertIn("Public Function NMDC_ReviewDraftCaptureCurrentTables", drafts)
+
+    def test_review_draft_store_fails_closed_on_corrupt_rows_and_preserves_write_errors(self):
+        drafts = (ROOT / "excel" / "vba" / "modNMDC_ReviewDrafts.bas").read_text(encoding="utf-8")
+        self.assertIn("If Not NMDC_ReviewDraftRowValid(rowItem) Then Err.Raise", drafts)
+        self.assertIn("If drafts.Exists(NMDC_ReviewDraftKey(rowItem(0), rowItem(1), rowItem(2), rowItem(3))) Then", drafts)
+        self.assertIn("If columns <> 5", drafts)
+        self.assertIn("Private Function NMDC_ReviewDraftRowValid", drafts)
+        self.assertIn("savedErrorNumber = Err.Number", drafts)
+        self.assertIn("mReviewDraftStoreFaulted = True", drafts)
+        self.assertIn('Err.Raise savedErrorNumber, "NMDC_ReviewDraftWrite", savedErrorDescription', drafts)
+
+    def test_source_restage_retires_only_drafts_present_in_new_baseline(self):
+        drafts = (ROOT / "excel" / "vba" / "modNMDC_ReviewDrafts.bas").read_text(encoding="utf-8")
+        complete = drafts.split("Public Sub NMDC_ReviewDraftCompleteSourceRestage()", 1)[1].split(
+            "Private Function NMDC_ReviewDraftHasSourceFields", 1
+        )[0]
+        self.assertIn('NMDC_ReviewDraftComparable(CStr(item(3)), CStr(item(4)))', complete)
+        self.assertIn('NMDC_ReviewDraftRemove(drafts, oldRunId, STATE_SECTION, "SOURCE_RESTAGE", "WAITING")', complete)
+        self.assertIn("If Not NMDC_ReviewDraftHasSourceFields(drafts, oldRunId) Then", complete)
+        self.assertNotIn("NMDC_ReviewDraftClearSection", complete)
+
+    def test_refresh_guards_owner_inputs_and_moves_source_panel_before_pending_resize(self):
+        refresh = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
+        performance = (ROOT / "excel" / "vba" / "modNMDC_Performance.bas").read_text(encoding="utf-8")
+        checkboxes = (ROOT / "excel" / "vba" / "modNMDC_Checkboxes.bas").read_text(encoding="utf-8")
+        drafts = (ROOT / "excel" / "vba" / "modNMDC_ReviewDrafts.bas").read_text(encoding="utf-8")
+        full_refresh = refresh.split("Public Function NMDC_RefreshExchangeData()", 1)[1].split("Private Sub NMDC_SetRefreshStatus", 1)[0]
+        fast_refresh = performance.split("Public Function NMDC_RefreshReviewDataFast()", 1)[1].split("Public Function NMDC_RefreshDashboardOnlyFast", 1)[0]
+        loader = refresh.split("Public Function NMDC_LoadCsvToTable", 1)[1].split("Public Function NMDC_LoadErrorCsvPreserveLocal", 1)[0]
+        self.assertLess(full_refresh.index("NMDC_ReviewDraftStoreHealthy"), full_refresh.index("master_documents.csv"))
+        self.assertIn("NMDC_ReviewDraftCaptureCurrentTables", full_refresh)
+        self.assertLess(fast_refresh.index("NMDC_ReviewDraftCaptureCurrentTables"), fast_refresh.index("pending_update.csv"))
+        self.assertIn("NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables()", loader)
+        self.assertLess(loader.index("NMDC_PreparePendingSourcePanelForResize"), loader.index("table.Resize targetRange"))
+        review_restore = loader.index('If tableName = "ReviewFlags" Then', loader.index("NMDC_ApplyTableGuidance"))
+        self.assertLess(review_restore, loader.index("NMDC_LoadCsvToTable = True"))
+        self.assertIn("oldRange.ClearContents RemoveControls:=True", checkboxes)
+        self.assertIn('NMDC_ParseCsvFile(csvPath, headers, data, dataCount, columnCount, True)', checkboxes)
+        self.assertIn('If tableName = "ReviewFlags" Then', loader)
+        self.assertIn('"\\source_selection.csv", sourceHeaders, sourceData, sourceRows, sourceCols, True)', drafts)
+        self.assertIn('"\\flags.csv", flagHeaders, flagData, flagRows, flagCols, True)', drafts)
+        self.assertIn('NMDC_ParseCsvFile(filePath, headers, data, count, columns, True)', drafts)
+        prepare = checkboxes.split("Public Function NMDC_PreparePendingSourcePanelForResize", 1)[1].split(
+            "Private Function NMDC_MovePendingSourcePanelToHeaderRow", 1
+        )[0]
+        self.assertIn("If incomingDataRows > requiredRows Then requiredRows = incomingDataRows", prepare)
+        self.assertIn("pendingTable.HeaderRowRange.Row + requiredRows + 4", prepare)
+        self.assertIn("NMDC_MovePendingSourcePanelToHeaderRow(ws, headerRow)", checkboxes)
+
+    def test_draft_store_rejects_interrupted_write_files(self):
+        drafts = (ROOT / "excel" / "vba" / "modNMDC_ReviewDrafts.bas").read_text(encoding="utf-8")
+        self.assertIn('NMDC_FileExists(filePath & ".tmp") Or NMDC_FileExists(filePath & ".bak")', drafts)
+        self.assertIn("interrupted write", drafts)
+
+    def test_draft_restore_rejects_missing_dashboard_and_refreshes_gate_restage_completion(self):
+        drafts = (ROOT / "excel" / "vba" / "modNMDC_ReviewDrafts.bas").read_text(encoding="utf-8")
+        refresh = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
+        performance = (ROOT / "excel" / "vba" / "modNMDC_Performance.bas").read_text(encoding="utf-8")
+        restore = drafts.split("Public Function NMDC_ReviewDraftsRestoreCurrent()", 1)[1].split(
+            "Public Function NMDC_ReviewDraftsCanApprove", 1
+        )[0]
+        self.assertIn("If Not NMDC_ParseCsvFile", restore)
+        self.assertIn('NMDC_ReviewDraftCsvHasField(dashboardHeaders, "Pending Run ID")', restore)
+        self.assertIn("NMDC_ReviewDraftsRestoreCurrent = False", restore)
+        self.assertIn("If Not NMDC_ReviewDraftsRestoreCurrent() Then", refresh)
+        self.assertIn("If Not NMDC_ReviewDraftsRestoreCurrent() Then", performance)
+        self.assertIn("ElseIf refreshOk Then", refresh)
+        self.assertIn("ElseIf ok Then", performance)
+
+    def test_setup_defers_owner_sheet_events_until_workbook_open_for_the_user(self):
+        setup = (ROOT / "packaging" / "Create_NMDC_Document_Index.vbs").read_text(encoding="utf-8")
+        module = (ROOT / "excel" / "vba" / "modNMDC_ReviewDrafts.bas").read_text(encoding="utf-8")
+        setup_open = setup.split("excel.DisplayAlerts = False", 1)[1].split("If Err.Number <> 0 Then", 1)[0]
+        change = module.split("Public Sub NMDC_ReviewDraftSheetChange", 1)[1].split("Public Function NMDC_ReviewDraftsRestoreCurrent", 1)[0]
+        self.assertLess(setup_open.index("excel.EnableEvents = False"), setup_open.index("Workbooks.Open"))
+        self.assertIn("If table Is Nothing Then Exit Sub", change)
+        self.assertIn("On Error GoTo Handler", change)
+
+    def test_parser_fix_reporting_is_guarded_and_bound_to_displayed_run(self):
+        admin = (ROOT / "excel" / "vba" / "modNMDC_Admin.bas").read_text(encoding="utf-8")
+        report = admin.split("Public Sub NMDC_ReportSelectedParserFixes()", 1)[1].split(
+            "Public Sub NMDC_RetryAfterParserFix", 1
+        )[0]
+        self.assertLess(report.index("NMDC_AsyncIsBusy"), report.index('Set table = ws.ListObjects("ReviewFlags")'))
+        self.assertLess(report.index("NMDC_ReviewDraftCaptureCurrentTables"), report.index('Set table = ws.ListObjects("ReviewFlags")'))
+        self.assertIn('" --run-id " & NMDC_Quote(runId)', report)
 
     def test_error_refresh_preserves_excel_local_entries(self):
         text = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")

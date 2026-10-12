@@ -17,6 +17,7 @@ End Sub
 Public Sub NMDC_OpenSourceSelection()
     ' Backward-compatible action: source selection now lives on Pending Update.
     On Error GoTo Handler
+    If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then Exit Sub
     If NMDC_RunEngine("export-excel") <> 0 Then
         NMDC_GoToSheet "Error Log"
         Exit Sub

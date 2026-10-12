@@ -16,6 +16,12 @@ Private Sub NMDC_RunStagingAction(ByVal fullRescan As Boolean)
     Dim modeText As String
     Dim exitCode As Long
 
+    If NMDC_AsyncIsBusy() Then
+        MsgBox "A scan is already running. Wait for it to finish before starting another.", vbInformation, "NMDC Document Index"
+        Exit Sub
+    End If
+    If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then Exit Sub
+
     dataFolder = Trim$(NMDC_ConfigValue("Data Folder"))
     If Len(dataFolder) = 0 Or Not NMDC_FolderExists(dataFolder) Then
         MsgBox "Please select a valid data folder first.", vbExclamation, "NMDC Document Index"
@@ -82,6 +88,18 @@ Public Sub NMDC_ApproveUpdate()
     Dim currentStatus As String
     Dim conflictCount As Long
     Dim approvalArgs As String
+    Dim draftBlockReason As String
+
+    If NMDC_AsyncIsBusy() Then
+        MsgBox "The background update is still running. Wait for it to finish, then review the displayed proposal again.", vbExclamation, "NMDC Document Index"
+        Exit Sub
+    End If
+    If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then Exit Sub
+    If Not NMDC_ReviewDraftsCanApprove(NMDC_DisplayedPendingRunId(), draftBlockReason) Then
+        MsgBox draftBlockReason, vbExclamation, "NMDC Document Index"
+        NMDC_GoToSheet "Pending Update"
+        Exit Sub
+    End If
 
     reviewedRunId = NMDC_DisplayedPendingRunId()
     If Len(reviewedRunId) = 0 Then
@@ -282,6 +300,7 @@ End Sub
 
 Public Sub NMDC_ViewLog()
     Dim refreshSucceeded As Boolean
+    If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then Exit Sub
     If NMDC_RunEngine("export-excel") = 0 Then refreshSucceeded = NMDC_RefreshExchangeData()
     NMDC_GoToSheet "Error Log"
 End Sub
@@ -392,6 +411,7 @@ Handler:
 End Sub
 
 Private Sub NMDC_RefreshAndOpen(ByVal sheetName As String)
+    If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then Exit Sub
     If NMDC_RunEngine("export-excel") <> 0 Then
         MsgBox "Excel could not refresh " & sheetName & ". The previous view may be out of date." & vbCrLf & _
                "Please review the Error Log.", vbExclamation, "NMDC Document Index"
@@ -407,7 +427,7 @@ Private Sub NMDC_RefreshAndOpen(ByVal sheetName As String)
     NMDC_GoToSheet sheetName
 End Sub
 
-Private Function NMDC_DisplayedPendingRunId() As String
+Public Function NMDC_DisplayedPendingRunId() As String
     On Error GoTo Handler
     NMDC_DisplayedPendingRunId = Trim$(CStr(ThisWorkbook.Worksheets("Home").Range("H7").Value))
     Exit Function

@@ -66,6 +66,15 @@ def _key_from_row(row: Mapping[str, str]) -> Tuple[str, ...]:
     )
 
 
+def _truthy(value: Any) -> bool:
+    normalized = str(value or "").strip().casefold()
+    if normalized in {"", "false", "no", "0", "off"}:
+        return False
+    if normalized in {"true", "yes", "1", "on"}:
+        return True
+    raise ValueError(f"Unsupported review-field clear marker: {value!r}")
+
+
 def _clean_md(value: Any) -> str:
     return str(value or "").replace("\r", " ").replace("\n", " ").replace("|", "\\|").strip()
 
@@ -167,6 +176,7 @@ def apply_review_decisions(
     state_dir: Path,
     decisions_file: Path,
     request_dir: Path | None = None,
+    expected_run_id: str | None = None,
 ) -> Dict[str, Any]:
     state_dir = Path(state_dir)
     decisions_file = Path(decisions_file)
@@ -177,6 +187,10 @@ def apply_review_decisions(
     run_id = str(latest.get("run_id", ""))
     if not run_id:
         raise ValueError("There is no staged update available for review decisions.")
+    if expected_run_id and str(expected_run_id) != run_id:
+        raise ValueError(
+            f"Displayed proposal {expected_run_id} is no longer current; latest staged run is {run_id}."
+        )
     stage_dir = state_dir / "staging" / run_id
     flags_path = stage_dir / "flags.json"
     flags = _read_json(flags_path, [])
@@ -199,7 +213,12 @@ def apply_review_decisions(
         decision = str(row.get("User Decision", "")).strip().upper()
         comment = str(row.get("User Comment", "")).strip()
         status = str(row.get("Resolution Status", "")).strip().upper()
-        if not decision and not comment and not status:
+        clear_decision = _truthy(row.get("Clear User Decision", ""))
+        clear_comment = _truthy(row.get("Clear User Comment", ""))
+        clear_status = _truthy(row.get("Clear Resolution Status", ""))
+        if (clear_decision and decision) or (clear_comment and comment) or (clear_status and status):
+            raise ValueError("A review field cannot be supplied and cleared in the same row.")
+        if not decision and not comment and not status and not (clear_decision or clear_comment or clear_status):
             continue
         if decision and decision not in ALLOWED_DECISIONS:
             raise ValueError(f"Unsupported review decision: {decision}")
@@ -212,11 +231,17 @@ def apply_review_decisions(
             unmatched.append(key)
             continue
         for flag in matches:
-            if decision:
+            if clear_decision:
+                flag["user_decision"] = ""
+            elif decision:
                 flag["user_decision"] = decision
-            if comment:
+            if clear_comment:
+                flag["user_comment"] = ""
+            elif comment:
                 flag["user_comment"] = comment
-            if status:
+            if clear_status:
+                flag["resolution_status"] = ""
+            elif status:
                 flag["resolution_status"] = status
             flag["reviewed_at"] = _utc_now()
             if decision == "NEEDS PARSER/MAPPING FIX":

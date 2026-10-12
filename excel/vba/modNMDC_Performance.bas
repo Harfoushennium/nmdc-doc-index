@@ -30,8 +30,13 @@ End Function
 Public Sub NMDC_FastStartup()
     On Error GoTo Handler
     Application.StatusBar = "NMDC Document Index: loading dashboard status..."
+    If Not NMDC_ReviewDraftStoreHealthy() Then GoTo CleanExit
+    If Not NMDC_ReviewDraftCaptureCurrentTables() Then GoTo CleanExit
     If NMDC_RunEngine("export-excel") = 0 Then NMDC_RefreshDashboardOnlyFast
     NMDC_ApplyOwnerUX
+    Application.StatusBar = False
+    Exit Sub
+CleanExit:
     Application.StatusBar = False
     Exit Sub
 Handler:
@@ -72,6 +77,7 @@ Private Sub NMDC_StartStagingFast(ByVal fullRescan As Boolean)
     End If
 
     If Not NMDC_PrepareRulesForStage() Then Exit Sub
+    If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then Exit Sub
 
     If fullRescan Then
         modeText = "full"
@@ -143,6 +149,7 @@ Handler:
 End Sub
 
 Public Sub NMDC_ReviewPendingUpdateFast()
+    If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then Exit Sub
     If NMDC_RunEngine("export-excel") <> 0 Then
         NMDC_GoToSheet "Error Log"
         Exit Sub
@@ -151,6 +158,7 @@ Public Sub NMDC_ReviewPendingUpdateFast()
 End Sub
 
 Public Sub NMDC_ReviewFlagsFast()
+    If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then Exit Sub
     If NMDC_RunEngine("export-excel") <> 0 Then
         NMDC_GoToSheet "Error Log"
         Exit Sub
@@ -160,6 +168,7 @@ End Sub
 
 Public Sub NMDC_RefreshDashboardFast()
     On Error GoTo Handler
+    If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then Exit Sub
     If NMDC_RunEngine("export-excel") <> 0 Then
         NMDC_GoToSheet "Error Log"
         Exit Sub
@@ -189,6 +198,10 @@ Public Function NMDC_RefreshReviewDataFast() As Boolean
     oldCalc = Application.Calculation
     oldScreen = Application.ScreenUpdating
     oldEvents = Application.EnableEvents
+    If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then
+        ok = False
+        GoTo CleanExit
+    End If
     Application.Calculation = xlCalculationManual
     Application.ScreenUpdating = False
     Application.EnableEvents = False
@@ -209,10 +222,15 @@ Public Function NMDC_RefreshReviewDataFast() As Boolean
     If Not NMDC_LoadErrorCsvPreserveLocal(NMDC_ExchangePath() & "\errors.csv") Then ok = False
     DoEvents
 
-    Application.StatusBar = "NMDC Document Index: review refresh 5/5 - Dashboard / source choices"
+    Application.StatusBar = "NMDC Document Index: review refresh 5/5 - source choices / dashboard"
+    NMDC_RebuildPendingSourcePanel
     If Not NMDC_LoadDashboard(NMDC_ExchangePath() & "\dashboard.csv") Then ok = False
     NMDC_ApplyOwnerUX
-    NMDC_RebuildPendingSourcePanel
+    If Not NMDC_ReviewDraftsRestoreCurrent() Then
+        ok = False
+    ElseIf ok Then
+        NMDC_ReviewDraftCompleteSourceRestage
+    End If
 
 CleanExit:
     Application.Calculation = oldCalc
@@ -231,12 +249,14 @@ End Function
 
 Public Function NMDC_RefreshDashboardOnlyFast() As Boolean
     On Error GoTo Handler
+    If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then GoTo Handler
     Dim ok As Boolean
     ok = True
     Application.StatusBar = "NMDC Document Index: refreshing dashboard..."
     If Not NMDC_LoadErrorCsvPreserveLocal(NMDC_ExchangePath() & "\errors.csv") Then ok = False
     If Not NMDC_LoadDashboard(NMDC_ExchangePath() & "\dashboard.csv") Then ok = False
     NMDC_ApplyOwnerUX
+    If Not NMDC_ReviewDraftsRestoreCurrent() Then ok = False
     Application.StatusBar = False
     NMDC_RefreshDashboardOnlyFast = ok
     Exit Function

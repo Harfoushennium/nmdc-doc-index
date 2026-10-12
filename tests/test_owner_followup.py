@@ -243,6 +243,84 @@ class OwnerFollowupTests(unittest.TestCase):
             self.assertEqual(saved["user_comment"], "Same format as another project")
             self.assertEqual(saved["resolution_status"], "ACKNOWLEDGED")
 
+    def test_review_decisions_can_explicitly_clear_saved_fields(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp)
+            stage = state / "staging" / "RUN-1"
+            stage.mkdir(parents=True)
+            (state / "staging" / "latest.json").write_text(
+                json.dumps({"run_id": "RUN-1"}), encoding="utf-8"
+            )
+            flag = {
+                "code": "UNRECOGNIZED_LAYOUT",
+                "source": "METHODS/test.xlsx",
+                "source_sheet": "Setup Plans",
+                "event_key": "",
+                "project_no": "1000",
+                "document_no": "",
+                "revision": "",
+                "user_decision": "ACKNOWLEDGED",
+                "user_comment": "Old note",
+                "resolution_status": "ACKNOWLEDGED",
+            }
+            (stage / "flags.json").write_text(json.dumps([flag]), encoding="utf-8")
+            decisions = state / "clear.csv"
+            decisions.write_text(
+                "Flag Code,Source File,Worksheet Name,Event Key,Project No.,Document No.,Revision,User Decision,User Comment,Resolution Status,Clear User Decision,Clear User Comment,Clear Resolution Status\n"
+                "UNRECOGNIZED_LAYOUT,METHODS/test.xlsx,Setup Plans,,1000,,,,,,TRUE,TRUE,TRUE\n",
+                encoding="utf-8-sig",
+            )
+
+            result = apply_review_decisions(state, decisions)
+
+            self.assertEqual(1, result["updated_flags"])
+            saved = json.loads((stage / "flags.json").read_text(encoding="utf-8"))[0]
+            self.assertEqual("", saved["user_decision"])
+            self.assertEqual("", saved["user_comment"])
+            self.assertEqual("", saved["resolution_status"])
+
+    def test_review_decisions_reject_a_replaced_displayed_run_without_mutation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp)
+            stage = state / "staging" / "RUN-2"
+            stage.mkdir(parents=True)
+            (state / "staging" / "latest.json").write_text(
+                json.dumps({"run_id": "RUN-2"}), encoding="utf-8"
+            )
+            flag = {"code": "TEST", "source": "a.xlsx", "source_sheet": "S", "event_key": "",
+                    "project_no": "1", "document_no": "D", "revision": "A", "user_comment": ""}
+            flags_path = stage / "flags.json"
+            flags_path.write_text(json.dumps([flag]), encoding="utf-8")
+            decisions = state / "decisions.csv"
+            decisions.write_text(
+                "Flag Code,Source File,Worksheet Name,Event Key,Project No.,Document No.,Revision,User Comment\n"
+                "TEST,a.xlsx,S,,1,D,A,Owner note\n", encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ValueError, "no longer current"):
+                apply_review_decisions(state, decisions, expected_run_id="RUN-1")
+            self.assertEqual([flag], json.loads(flags_path.read_text(encoding="utf-8")))
+
+    def test_review_decisions_reject_invalid_clear_marker_without_mutation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp)
+            stage = state / "staging" / "RUN-1"
+            stage.mkdir(parents=True)
+            (state / "staging" / "latest.json").write_text(
+                json.dumps({"run_id": "RUN-1"}), encoding="utf-8"
+            )
+            flag = {"code": "TEST", "source": "a.xlsx", "source_sheet": "S", "event_key": "",
+                    "project_no": "1", "document_no": "D", "revision": "A", "user_comment": "Old note"}
+            flags_path = stage / "flags.json"
+            flags_path.write_text(json.dumps([flag]), encoding="utf-8")
+            decisions = state / "decisions.csv"
+            decisions.write_text(
+                "Flag Code,Source File,Worksheet Name,Event Key,Project No.,Document No.,Revision,User Comment,Clear User Comment\n"
+                "TEST,a.xlsx,S,,1,D,A,,Y\n", encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ValueError, "Unsupported review-field clear marker"):
+                apply_review_decisions(state, decisions)
+            self.assertEqual([flag], json.loads(flags_path.read_text(encoding="utf-8")))
+
     def test_layout_compatibility_accepts_common_engineering_identifier_headers(self):
         for header in (
             "Procedure No.",

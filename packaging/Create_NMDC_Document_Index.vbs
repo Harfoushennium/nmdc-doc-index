@@ -53,6 +53,7 @@ RequireFile fso.BuildPath(modulesFolder, "modNMDC_Startup.bas"), "A required Exc
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Performance.bas"), "The responsive scan module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_OwnerUX.bas"), "The owner guidance module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_Checkboxes.bas"), "The source-selection checkbox module is missing."
+RequireFile fso.BuildPath(modulesFolder, "modNMDC_ReviewDrafts.bas"), "The persistent review-draft module is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_LiveFilter.bas"), "The Live Filter module is missing."
 RequireFile fso.BuildPath(modulesFolder, "Cls_LiveFilter_Listener.cls"), "The Live Filter listener class is missing."
 RequireFile fso.BuildPath(modulesFolder, "modNMDC_CustomFields.bas"), "The Custom Fields module is missing."
@@ -75,6 +76,7 @@ Err.Clear
 
 excel.Visible = False
 excel.DisplayAlerts = False
+excel.EnableEvents = False
 Set workbook = excel.Workbooks.Open(sourceWorkbook, False, False)
 If Err.Number <> 0 Then
     ShowFailure "Excel could not open the production workbook source."
@@ -157,6 +159,7 @@ ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Rules.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Startup.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Performance.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_OwnerUX.bas")
+ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_ReviewDrafts.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_Checkboxes.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "modNMDC_LiveFilter.bas")
 ImportModule workbook, fso.BuildPath(modulesFolder, "Cls_LiveFilter_Listener.cls")
@@ -467,7 +470,7 @@ Sub ConfigureFastStartup(ByVal wb)
 End Sub
 
 Sub ConfigureOwnerEvents(ByVal wb)
-    Dim thisComponent, thisModule, sourceText, eventCode
+    Dim thisComponent, thisModule, sourceText, eventCode, lineNo, lineText
 
     Set thisComponent = wb.VBProject.VBComponents(wb.CodeName)
     Set thisModule = thisComponent.CodeModule
@@ -483,8 +486,17 @@ Sub ConfigureOwnerEvents(ByVal wb)
             "Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)" & vbCrLf & _
             "    On Error Resume Next" & vbCrLf & _
             "    NMDC_LiveFilterSheetChange Sh, Target" & vbCrLf & _
+            "    NMDC_ReviewDraftSheetChange Sh, Target" & vbCrLf & _
             "    On Error GoTo 0" & vbCrLf & _
             "End Sub" & vbCrLf
+    ElseIf InStr(1, sourceText, "NMDC_ReviewDraftSheetChange Sh, Target", 1) = 0 Then
+        For lineNo = 1 To thisModule.CountOfLines
+            lineText = Trim(thisModule.Lines(lineNo, 1))
+            If InStr(1, lineText, "NMDC_LiveFilterSheetChange Sh, Target", 1) > 0 Then
+                thisModule.InsertLines lineNo + 1, "    NMDC_ReviewDraftSheetChange Sh, Target"
+                Exit For
+            End If
+        Next
     End If
 
     If InStr(1, sourceText, "Private Sub Workbook_SheetActivate", 1) = 0 Then

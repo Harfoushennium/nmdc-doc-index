@@ -1,7 +1,7 @@
 Attribute VB_Name = "modNMDC_Csv"
 Option Explicit
 
-Public Function NMDC_ParseCsvFile(ByVal filePath As String, ByRef headers As Variant, ByRef data As Variant, ByRef dataCount As Long, ByRef columnCount As Long) As Boolean
+Public Function NMDC_ParseCsvFile(ByVal filePath As String, ByRef headers As Variant, ByRef data As Variant, ByRef dataCount As Long, ByRef columnCount As Long, Optional ByVal preserveEmbeddedNewlines As Boolean = False) As Boolean
     On Error GoTo Handler
 
     Dim text As String
@@ -29,7 +29,7 @@ Public Function NMDC_ParseCsvFile(ByVal filePath As String, ByRef headers As Var
         ReDim dataValues(1 To 1, 1 To columnCount)
     End If
 
-    NMDC_FillCsvArrays text, headerValues, dataValues, rowCount, columnCount
+    NMDC_FillCsvArrays text, headerValues, dataValues, rowCount, columnCount, preserveEmbeddedNewlines
     headers = headerValues
     data = dataValues
     NMDC_ParseCsvFile = True
@@ -106,7 +106,7 @@ Private Sub NMDC_CsvDimensions(ByVal text As String, ByRef rowCount As Long, ByR
     End If
 End Sub
 
-Private Sub NMDC_FillCsvArrays(ByVal text As String, ByRef headers() As Variant, ByRef data() As Variant, ByVal rowCount As Long, ByVal columnCount As Long)
+Private Sub NMDC_FillCsvArrays(ByVal text As String, ByRef headers() As Variant, ByRef data() As Variant, ByVal rowCount As Long, ByVal columnCount As Long, ByVal preserveEmbeddedNewlines As Boolean)
     Dim i As Long
     Dim rowIndex As Long
     Dim columnIndex As Long
@@ -130,10 +130,14 @@ Private Sub NMDC_FillCsvArrays(ByVal text As String, ByRef headers() As Variant,
                     inQuotes = False
                 End If
             ElseIf ch = vbCr Or ch = vbLf Then
-                If ch = vbCr And i < Len(text) Then
-                    If Mid$(text, i + 1, 1) = vbLf Then i = i + 1
+                If preserveEmbeddedNewlines Then
+                    fieldText = fieldText & ch
+                Else
+                    If ch = vbCr And i < Len(text) Then
+                        If Mid$(text, i + 1, 1) = vbLf Then i = i + 1
+                    End If
+                    If Len(fieldText) > 0 And Right$(fieldText, 1) <> " " Then fieldText = fieldText & " "
                 End If
-                If Len(fieldText) > 0 And Right$(fieldText, 1) <> " " Then fieldText = fieldText & " "
             Else
                 fieldText = fieldText & ch
             End If

@@ -55,6 +55,27 @@ The owner environment supports native in-cell checkboxes. In this production bui
 
 Source workbooks are never edited or deleted by this choice.
 
+## Keep and save review inputs
+
+Source choices, Owner Notes and Review Flag inputs remain drafts until saved.
+Refresh keeps those edits, and saving the workbook before closing keeps them
+available when it is reopened. Owner Notes are retained for included sources
+as well as excluded sources.
+
+- Use **Save Source Choices & Restage**, then review the resulting proposal.
+  Approval stays blocked until the new proposal reflects the saved choices.
+- Use **Save Review Decisions** to record flag decisions, comments and status.
+  Clearing a previously saved field is also a review change that must be saved.
+- **Select?** chooses flags for a parser-fix report; this checkbox alone does
+  not block approval.
+- Use **Review Saved Drafts** to inspect edits retained from a replaced proposal.
+  Earlier-proposal edits are displayed for review and are not applied to the
+  new proposal. Enter any changes you still want in the current proposal and save them.
+
+If Excel cannot safely read or retain a draft, refresh and approval stop and
+the Error Log explains the failure. Keep the workbook and its package folder
+together when saving or moving your work.
+
 ## Review Flags and parser/mapping fixes
 
 `Review Flags` is reserved for genuine actionable extraction/data anomalies.

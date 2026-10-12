@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Sequence, Set
 
 from .excel_bridge import load_approved_state, load_latest_stage
-from .source_selection import read_source_exclusions
+from .source_selection import read_source_exclusions, read_source_selection_notes
 
 
 FIELDS: Sequence[str] = (
@@ -64,6 +64,7 @@ def export_source_selection(state_dir: Path, exchange_dir: Path, config_dir: Pat
     approved = load_approved_state(state_dir)
     manifest = staged.get("manifest", {}) if staged.get("run_id") else approved.get("manifest", {})
     exclusions = read_source_exclusions(Path(config_dir) / "source_exclusions.csv")
+    owner_notes = read_source_selection_notes(Path(config_dir) / "source_exclusions.csv")
 
     projects = _project_numbers_by_source(
         list(staged.get("records", []) or []),
@@ -79,7 +80,7 @@ def export_source_selection(state_dir: Path, exchange_dir: Path, config_dir: Pat
         status = str(item.get("selection_status", "") or "")
         excluded = normalized in exclusions
         family = rel.split("/", 1)[0] if "/" in rel else ""
-        owner_note = exclusions[normalized].get("Reason", "") if excluded else ""
+        owner_note = owner_notes.get(normalized, "")
         automatic_reason = str(item.get("selection_exclusion_reason", "") or "")
         project_text = "; ".join(sorted(projects.get(normalized, set()), key=_project_sort_key))
         rows.append(

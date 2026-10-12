@@ -1,6 +1,6 @@
 # Owner controls and performance: architecture review
 
-**Scope:** implementation baseline PR #8 at `846f5ab4d80f41554fe5b609ca1c201da18633e0`. Survey and disposable experiments; no product code or architecture changed. `GLOSSARY.md` and `docs/adr/` are absent. Candidate descriptions do not define interfaces or approve implementation.
+**Scope:** survey implementation baseline PR #8 at `846f5ab4d80f41554fe5b609ca1c201da18633e0`. Measurements below describe that baseline. The owner subsequently selected candidate 1 and approved the five slices and its test seams on 2026-10-11. [Plan #21](https://github.com/Harfoushennium/nmdc-doc-index/issues/21) and [spec #18](https://github.com/Harfoushennium/nmdc-doc-index/issues/18) govern implementation. `GLOSSARY.md` now records the agreed review terminology; there were no ADRs when surveyed. Other architecture alternatives remain proposals.
 
 ## Confirmed control semantics
 
@@ -24,15 +24,25 @@ On disposable COM probes, full refresh was 57.204 s; a separate probe loaded the
 
 Direct filter calls took 0.063 s for a no-match query, 0.133 s for an exclusion matching no rows, and 0.041 s to clear. These are limited timing probes; they do not assert query correctness or establish typing latency, complex rejection/exact/AND behavior, or physical input acceptance. Sixteen existing update-engine tests passed in 0.515 s. Microsoft recommends block range reads/writes ([official guidance](https://learn.microsoft.com/en-us/office/vba/excel/concepts/excel-performance/excel-tips-for-optimizing-performance-obstructions)); applicability here is inference.
 
-Draft tickets, not published or approved:
+Owner-approved slices, published with native sub-issue and blocking relationships under #21:
 
-1. **P0 owner control:** retain checkbox choices/notes through refresh; stop approval of an unsaved scope change until it is saved/restaged. **Blocked by:** none for existing file-level behavior; individual-record policy needs owner clarification. Covers #10/#17.
-2. **P1 refresh:** demonstrate faster repeat review/update with unchanged exports skipped, links preserved and phase timings. **Blocked by:** 1 before integrating new refresh paths.
-3. **P1 reset:** time reset/export/Excel clearing independently, improve the measured slow step, preserve DATA/configuration/audit and demonstrate a successful rescan. **Blocked by:** none for diagnosis. Covers #12.
-4. **P2 search:** prove AND/exact/exclusion/reset and both column selectors in Excel, then improve only reproduced delays. **Blocked by:** none for diagnosis. Covers #16 and acceptance case 11.
-5. **Release verification:** complete all 23 cases on two fresh installations and retained owner settings. **Blocked by:** 1–4 plus working desktop input. PR #8 stays CHANGES until acceptance.
+1. **P0 #18 owner control:** retain checkbox choices/notes and flag inputs through refresh/reopen; stop approval until scope is saved/restaged and decisions saved. Retain old-run drafts for visible review. **Blocked by:** none. Related #10/#17; partial-record approval is outside this slice.
+2. **P1 #19 refresh:** demonstrate faster repeat review/update with unchanged exports skipped, links preserved and phase timings. **Blocked by:** #18 before integrating new refresh paths.
+3. **P1 #12 reset:** time reset/export/Excel clearing independently, improve the measured slow step, preserve DATA/configuration/audit and demonstrate a successful rescan. **Blocked by:** none for diagnosis.
+4. **P2 #20 search:** prove AND/exact/exclusion/reset and both column selectors in Excel, then improve only reproduced delays. **Blocked by:** none for diagnosis. Related #16 and acceptance case 11.
+5. **#15 Release verification:** complete all 23 cases on two fresh installations and retained owner settings. **Blocked by:** #18/#19/#12/#20 and preserved earlier #10/#11/#13/#14 gates, plus working desktop input. PR #8 stays CHANGES until acceptance.
 
-Acceptance dependencies: clarify whether decisions should ever exclude individual records; restore an interactive desktop for physical input checks; complete the remaining 23-case and two-installation gates. Current UX and artifact measurements do not establish owner acceptance.
+Owner accepted the real Excel edit → refresh → save/reopen → approval attempt seam, with engine exclusion/approved-pointer checks. Full physical input, 23-case and two-installation acceptance remain pending. Current measurements do not establish owner acceptance.
+
+## P0 implementation evidence (2026-10-12)
+
+The working candidate now journals source checkbox choices, notes and Review Flag inputs by proposal and stable row identity. Refresh captures edits before rebuilding its panel; old proposal drafts remain visible and are not applied to replacement proposals. Approval is blocked while source changes await save/restage or Review Flag decisions await save. Workbook setup also keeps the native 15-worksheet / 15-Excel-table contract; data regions continue to use named `ListObject` tables.
+
+The maintained disposable Excel verifier passed **28 checks** against package `outputs/current-native-package/20261011-211029` (workbook SHA-256 `6bf17136ea7e633e35927dcf44140e73a8abdb06614bb3d3137d25063fdf187c`). This includes refresh/reopen retention, row reordering and table growth, replacement proposals, waiting-restage guards, malformed draft rejection, approved-state preservation, and all 15 named worksheet tables. The actual approval action reached its guard before export/promotion; only its notification was adapted to a captured cell in the disposable test, so physical dialog interaction remains unproven. A separate native 40,494-row control probe passed 11 checks for clean/dirty/reverted/restaged source choices and the 15-sheet/15-table contract. It did not approve or write DATA.
+
+The standard-library suite passes **267 tests** (`uv run python -m unittest discover -s tests -p 'test_*.py'`). A real-engine CLI scope integration test proves that excluding one source removes its records from the next proposal while the approved pointer/records and both source workbooks remain byte-identical. The 15-table user requirement is already explicit in `USER_PRODUCT_REQUIREMENTS.md` and `PROJECT_SPEC.md`, and is now included in this P0 verification contract.
+
+These checks use the uncommitted working candidate and the PR #8 baseline engine for disposable UI setup. They are not yet GitHub CI evidence or owner acceptance. Physical Excel interaction, final-artifact verification, the other approved fixes, and the 23-case/two-installation release gates remain open.
 
 ## Guided Matt workflow
 

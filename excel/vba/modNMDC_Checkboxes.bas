@@ -13,28 +13,173 @@ Public Sub NMDC_RebuildSourceSelectionCheckboxes()
     NMDC_RebuildPendingSourcePanel
 End Sub
 
+' Move the owner panel out of the incoming PendingUpdate range before Excel
+' resizes that table. Snapshot its values first; the caller has already
+' journaled owner edits against the current proposal.
+Public Function NMDC_PreparePendingSourcePanelForResize(ByVal pendingTable As ListObject, _
+                                                        ByVal incomingDataRows As Long) As Boolean
+    On Error GoTo Handler
+    Dim requiredRows As Long
+    requiredRows = pendingTable.ListRows.Count
+    If incomingDataRows > requiredRows Then requiredRows = incomingDataRows
+    If requiredRows < 1 Then requiredRows = 1
+    NMDC_PreparePendingSourcePanelForResize = NMDC_MovePendingSourcePanelToHeaderRow( _
+        pendingTable.Parent, pendingTable.HeaderRowRange.Row + requiredRows + 4)
+    Exit Function
+Handler:
+    NMDC_LogError "PENDING_SOURCE_PANEL_MOVE_ERROR", _
+        "Excel could not determine a safe source-panel position before refreshing Pending Update.", _
+        Err.Number & " - " & Err.Description
+    NMDC_PreparePendingSourcePanelForResize = False
+End Function
+
+Private Function NMDC_MovePendingSourcePanelToHeaderRow(ByVal ws As Worksheet, ByVal targetHeaderRow As Long) As Boolean
+    On Error GoTo Handler
+
+    Dim panel As ListObject
+    Dim oldRange As Range
+    Dim oldHeaders As Variant
+    Dim oldData As Variant
+    Dim oldHeaderRow As Long
+    Dim oldRowCount As Long
+    Dim oldEvents As Boolean
+    Dim errNumber As Long
+    Dim errDescription As String
+    Dim snapshotReady As Boolean
+    Dim failedRange As Range
+
+    oldEvents = Application.EnableEvents
+    Set panel = Nothing
+    On Error Resume Next
+    Set panel = ws.ListObjects(SOURCE_PANEL_TABLE)
+    On Error GoTo Handler
+    If panel Is Nothing Then
+        NMDC_MovePendingSourcePanelToHeaderRow = True
+        Exit Function
+    End If
+
+    If panel.HeaderRowRange.Row = targetHeaderRow And panel.Range.Column = 1 Then
+        NMDC_MovePendingSourcePanelToHeaderRow = True
+        Exit Function
+    End If
+
+    Application.EnableEvents = False
+    oldHeaderRow = panel.HeaderRowRange.Row
+    Set oldRange = panel.Range
+    oldHeaders = panel.HeaderRowRange.Value2
+    oldRowCount = panel.ListRows.Count
+    If Not panel.DataBodyRange Is Nothing Then oldData = panel.DataBodyRange.Value2
+    snapshotReady = True
+
+    NMDC_ClearPendingPanelDecoration ws, oldHeaderRow
+    panel.Unlist
+    oldRange.ClearContents RemoveControls:=True
+    oldRange.ClearFormats
+
+    Set panel = NMDC_CreatePendingSourceTable(ws, targetHeaderRow, oldHeaders, oldData, oldRowCount)
+    NMDC_FormatPendingSourcePanel ws, panel
+    NMDC_ApplyNativeSourceCheckboxes panel
+    Application.EnableEvents = oldEvents
+    NMDC_MovePendingSourcePanelToHeaderRow = True
+    Exit Function
+
+Handler:
+    errNumber = Err.Number
+    errDescription = Err.Description
+    On Error Resume Next
+    Set panel = Nothing
+    Set panel = ws.ListObjects(SOURCE_PANEL_TABLE)
+    If Not panel Is Nothing Then
+        Set failedRange = panel.Range
+        panel.Unlist
+        failedRange.ClearContents RemoveControls:=True
+        failedRange.ClearFormats
+    End If
+    If snapshotReady Then
+        NMDC_ClearPendingPanelDecoration ws, targetHeaderRow
+        Set panel = NMDC_CreatePendingSourceTable(ws, oldHeaderRow, oldHeaders, oldData, oldRowCount)
+        NMDC_FormatPendingSourcePanel ws, panel
+        NMDC_ApplyNativeSourceCheckboxes panel
+    End If
+    Application.EnableEvents = oldEvents
+    On Error GoTo 0
+    NMDC_LogError "PENDING_SOURCE_PANEL_MOVE_ERROR", _
+        "Excel could not move the source panel clear of the refreshed Pending Update rows.", _
+        errNumber & " - " & errDescription
+    NMDC_MovePendingSourcePanelToHeaderRow = False
+End Function
+
+Private Function NMDC_CreatePendingSourceTable(ByVal ws As Worksheet, ByVal headerRow As Long, _
+                                               ByVal headers As Variant, ByVal data As Variant, _
+                                               ByVal dataRows As Long) As ListObject
+    Dim bodyRows As Long
+    Dim columnCount As Long
+    Dim sourceRange As Range
+    Dim table As ListObject
+    bodyRows = dataRows
+    If bodyRows < 1 Then bodyRows = 1
+    columnCount = UBound(headers, 2)
+    Set sourceRange = ws.Range(ws.Cells(headerRow, 1), ws.Cells(headerRow + bodyRows, columnCount))
+    sourceRange.Rows(1).Value2 = headers
+    Set table = ws.ListObjects.Add(xlSrcRange, sourceRange, , xlYes)
+    table.Name = SOURCE_PANEL_TABLE
+    table.TableStyle = "TableStyleMedium2"
+    If dataRows > 0 Then
+        table.DataBodyRange.Value2 = data
+    ElseIf table.ListRows.Count = 0 Then
+        table.ListRows.Add
+    End If
+    Set NMDC_CreatePendingSourceTable = table
+End Function
+
+Private Sub NMDC_ClearPendingPanelDecoration(ByVal ws As Worksheet, ByVal headerRow As Long)
+    On Error Resume Next
+    ws.Range(ws.Cells(headerRow - 2, 1), ws.Cells(headerRow - 2, 8)).UnMerge
+    ws.Range(ws.Cells(headerRow - 2, 1), ws.Cells(headerRow - 2, 8)).ClearContents
+    ws.Range(ws.Cells(headerRow - 2, 1), ws.Cells(headerRow - 2, 8)).ClearFormats
+    ws.Range(ws.Cells(headerRow - 1, 1), ws.Cells(headerRow - 1, 8)).ClearContents
+    ws.Range(ws.Cells(headerRow - 1, 1), ws.Cells(headerRow - 1, 8)).ClearFormats
+    ws.Shapes("NMDC_Pending_Exclude").Delete
+    ws.Shapes("NMDC_Pending_SourceList").Delete
+    ws.Shapes("NMDC_Pending_SourceSave").Delete
+    ws.Shapes("NMDC_Pending_SourceAll").Delete
+    ws.Shapes("NMDC_Pending_SourceNone").Delete
+    ws.Shapes("NMDC_Pending_ReviewDrafts").Delete
+    On Error GoTo 0
+End Sub
+
 Public Sub NMDC_RebuildPendingSourcePanel()
     On Error GoTo Handler
 
     Dim ws As Worksheet
     Dim table As ListObject
+    Dim oldEvents As Boolean
 
+    oldEvents = Application.EnableEvents
+    If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then Exit Sub
+    Application.EnableEvents = False
     NMDC_EnsureOwnerEnhancements
     NMDC_RetireSeparateSourceSelectionUI
 
     Set ws = ThisWorkbook.Worksheets("Pending Update")
     Set table = NMDC_EnsurePendingSourceTable(ws)
-    If table Is Nothing Then Exit Sub
+    If table Is Nothing Then GoTo CleanExit
 
     If NMDC_FileExists(NMDC_ExchangePath() & "\source_selection.csv") Then
-        If Not NMDC_LoadSourceSelectionPanel(table, NMDC_ExchangePath() & "\source_selection.csv") Then Exit Sub
+        If Not NMDC_LoadSourceSelectionPanel(table, NMDC_ExchangePath() & "\source_selection.csv") Then GoTo CleanExit
     End If
 
     NMDC_FormatPendingSourcePanel ws, table
     NMDC_ApplyNativeSourceCheckboxes table
+    Call NMDC_ReviewDraftsRestoreCurrent()
+CleanExit:
+    Application.EnableEvents = oldEvents
     Exit Sub
 
 Handler:
+    On Error Resume Next
+    Application.EnableEvents = oldEvents
+    On Error GoTo 0
     NMDC_LogError "PENDING_SOURCE_PANEL_ERROR", _
         "Excel could not prepare source selection inside Pending Update.", _
         Err.Number & " - " & Err.Description
@@ -52,10 +197,6 @@ Private Function NMDC_EnsurePendingSourceTable(ByVal ws As Worksheet) As ListObj
     Dim pendingTable As ListObject
     Dim headerRow As Long
     Dim firstColumn As Long
-    Dim oldRange As Range
-    Dim oldHeaders As Variant
-    Dim oldData As Variant
-    Dim oldRowCount As Long
 
     Set table = Nothing
     On Error Resume Next
@@ -100,25 +241,9 @@ Private Function NMDC_EnsurePendingSourceTable(ByVal ws As Worksheet) As ListObj
         If Not pendingTable Is Nothing Then
             headerRow = pendingTable.Range.Row + pendingTable.Range.Rows.Count + 3
             If table.Range.Row <> headerRow Or table.Range.Column <> 1 Then
-                ' Resize cannot reliably move a legacy far-right ListObject.
-                ' Capture its values, unlist it, and recreate it below the
-                ' PendingUpdate table without losing owner choices or notes.
-                Set oldRange = table.Range
-                oldHeaders = table.HeaderRowRange.Value2
-                oldRowCount = table.ListRows.Count
-                If Not table.DataBodyRange Is Nothing Then oldData = table.DataBodyRange.Value2
-                table.Unlist
-                oldRange.ClearContents
-                Set sourceRange = ws.Range(ws.Cells(headerRow, 1), ws.Cells(headerRow + IIf(oldRowCount > 0, oldRowCount, 1), 8))
-                sourceRange.Rows(1).Value2 = oldHeaders
-                Set table = ws.ListObjects.Add(xlSrcRange, sourceRange, , xlYes)
-                table.Name = SOURCE_PANEL_TABLE
-                table.TableStyle = "TableStyleMedium2"
-                If oldRowCount > 0 Then
-                    table.DataBodyRange.Value2 = oldData
-                ElseIf table.ListRows.Count = 0 Then
-                    table.ListRows.Add
-                End If
+                If Not NMDC_MovePendingSourcePanelToHeaderRow(ws, headerRow) Then _
+                    Err.Raise vbObjectError + 240, , "The source-selection panel could not be moved below Pending Update."
+                Set table = ws.ListObjects(SOURCE_PANEL_TABLE)
             End If
         End If
     End If
@@ -145,7 +270,7 @@ Private Function NMDC_LoadSourceSelectionPanel(ByVal table As ListObject, ByVal 
     Dim firstColumn As Long
     Dim targetRange As Range
 
-    If Not NMDC_ParseCsvFile(csvPath, headers, data, dataCount, columnCount) Then Exit Function
+    If Not NMDC_ParseCsvFile(csvPath, headers, data, dataCount, columnCount, True) Then Exit Function
 
     tableRows = dataCount
     If tableRows < 1 Then tableRows = 1
@@ -336,6 +461,11 @@ Public Sub NMDC_SaveSourceSelections()
     Dim rowIndex As Long
     Dim sourceFile As String
     Dim projectNo As String
+    If NMDC_AsyncIsBusy() Then
+        MsgBox "Wait for the background update to finish before saving source choices.", vbExclamation, "NMDC Document Index"
+        Exit Sub
+    End If
+    If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then Exit Sub
     Dim ownerNote As String
     Dim includeValue As Boolean
     Dim csvText As String
@@ -384,6 +514,10 @@ Public Sub NMDC_SaveSourceSelections()
     NMDC_WriteCheckboxUtf8 decisionsPath, csvText
     args = "--selections-file " & NMDC_Quote(decisionsPath)
 
+    ' Persist the approval guard before changing owner configuration. If this
+    ' write fails, no config change can leave the displayed proposal approvable.
+    NMDC_ReviewDraftMarkSourceRestage NMDC_DisplayedPendingRunId()
+
     If NMDC_RunEngine("save-source-selections", args) <> 0 Then
         MsgBox "The source choices could not be saved. Please review Error Log.", _
                vbExclamation, "NMDC Document Index"
@@ -421,19 +555,27 @@ Private Sub NMDC_SetAllPendingSourceChoices(ByVal checkedValue As Boolean)
     Dim table As ListObject
     Dim rowIndex As Long
     Dim sourceFile As String
+    Dim oldEvents As Boolean
 
     Set table = ThisWorkbook.Worksheets("Pending Update").ListObjects(SOURCE_PANEL_TABLE)
     If table.DataBodyRange Is Nothing Then Exit Sub
 
+    oldEvents = Application.EnableEvents
+    Application.EnableEvents = False
     For rowIndex = 1 To table.ListRows.Count
         sourceFile = Trim$(CStr(table.ListColumns("Source File").DataBodyRange.Cells(rowIndex, 1).Value))
         If Len(sourceFile) > 0 Then
             table.ListColumns("Include in Index?").DataBodyRange.Cells(rowIndex, 1).Value = checkedValue
         End If
     Next rowIndex
+    Application.EnableEvents = oldEvents
+    NMDC_ReviewDraftCaptureAllSourceChoices
     Exit Sub
 
 Handler:
+    On Error Resume Next
+    Application.EnableEvents = oldEvents
+    On Error GoTo 0
     NMDC_LogError "PENDING_SOURCE_ALL_ERROR", _
         "Excel could not update all source checkboxes.", _
         Err.Number & " - " & Err.Description

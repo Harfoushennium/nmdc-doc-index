@@ -58,6 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
     _common(review)
     review.add_argument("--decisions-file", type=Path, required=True)
     review.add_argument("--request-dir", type=Path, default=None)
+    review.add_argument("--run-id", default=None, help="Reject decisions if this is not the latest staged run")
 
     source_selection = subparsers.add_parser(
         "set-source-selection",
@@ -154,6 +155,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 args.state_dir,
                 args.decisions_file,
                 request_dir=args.request_dir,
+                expected_run_id=args.run_id,
             )
         elif args.command == "set-source-selection":
             result = set_source_selection(

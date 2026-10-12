@@ -16,6 +16,10 @@ Public Function NMDC_RefreshExchangeData() As Boolean
     previousScreenUpdating = Application.ScreenUpdating
     previousEnableEvents = Application.EnableEvents
 
+    If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then
+        refreshOk = False
+        GoTo CleanExit
+    End If
     Application.ScreenUpdating = False
     Application.EnableEvents = False
     Application.Calculation = xlCalculationManual
@@ -41,12 +45,16 @@ Public Function NMDC_RefreshExchangeData() As Boolean
     NMDC_SetRefreshStatus 7, 8, "Error Log"
     If Not NMDC_LoadErrorCsvPreserveLocal(NMDC_ExchangePath() & "\errors.csv") Then refreshOk = False
 
-    NMDC_SetRefreshStatus 8, 8, "Dashboard"
-    If Not NMDC_LoadDashboard(NMDC_ExchangePath() & "\dashboard.csv") Then refreshOk = False
-
     NMDC_ApplyWorkbookGuidance
     NMDC_ApplyOwnerUX
+    NMDC_SetRefreshStatus 8, 8, "Source choices / Dashboard"
     NMDC_RebuildPendingSourcePanel
+    If Not NMDC_LoadDashboard(NMDC_ExchangePath() & "\dashboard.csv") Then refreshOk = False
+    If Not NMDC_ReviewDraftsRestoreCurrent() Then
+        refreshOk = False
+    ElseIf refreshOk Then
+        NMDC_ReviewDraftCompleteSourceRestage
+    End If
 
     Set pendingSheet = ThisWorkbook.Worksheets("Pending Update")
     Set sourceSelectionTable = Nothing
@@ -112,6 +120,15 @@ Public Function NMDC_LoadCsvToTable(ByVal csvPath As String, ByVal sheetName As 
     Dim columnCount As Long
     Dim headerRow As Long
     Dim firstColumn As Long
+    Dim savedErrorNumber As Long
+    Dim savedErrorDescription As String
+
+    If tableName = "PendingUpdate" Or tableName = "ReviewFlags" Then
+        If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then
+            NMDC_LoadCsvToTable = False
+            Exit Function
+        End If
+    End If
 
     Set ws = ThisWorkbook.Worksheets(sheetName)
     Set table = Nothing
@@ -133,10 +150,17 @@ Public Function NMDC_LoadCsvToTable(ByVal csvPath As String, ByVal sheetName As 
         Exit Function
     End If
 
-    If Not NMDC_ParseCsvFile(csvPath, headers, data, dataCount, columnCount) Then GoTo ImportFailed
+    If tableName = "ReviewFlags" Then
+        If Not NMDC_ParseCsvFile(csvPath, headers, data, dataCount, columnCount, True) Then GoTo ImportFailed
+    Else
+        If Not NMDC_ParseCsvFile(csvPath, headers, data, dataCount, columnCount) Then GoTo ImportFailed
+    End If
 
     tableRows = dataCount
     If tableRows < 1 Then tableRows = 1
+    If tableName = "PendingUpdate" Then
+        If Not NMDC_PreparePendingSourcePanelForResize(table, dataCount) Then GoTo ImportFailed
+    End If
     headerRow = table.HeaderRowRange.Row
     firstColumn = table.Range.Column
 
@@ -173,6 +197,13 @@ Public Function NMDC_LoadCsvToTable(ByVal csvPath As String, ByVal sheetName As 
     NMDC_ApplyReviewFlagValidation table
     NMDC_ApplyTableGuidance table
 
+    If tableName = "ReviewFlags" Then
+        If Not NMDC_ReviewDraftsRestoreCurrent() Then
+            NMDC_LoadCsvToTable = False
+            Exit Function
+        End If
+    End If
+
     NMDC_LoadCsvToTable = True
     Exit Function
 
@@ -181,9 +212,11 @@ ImportFailed:
     Exit Function
 
 Handler:
+    savedErrorNumber = Err.Number
+    savedErrorDescription = Err.Description
     NMDC_LogError "CSV_IMPORT_ERROR", _
         "Excel could not load " & sheetName & ".", _
-        "Table: " & tableName & " | File: " & csvPath & " | " & Err.Number & " - " & Err.Description
+        "Table: " & tableName & " | File: " & csvPath & " | " & savedErrorNumber & " - " & savedErrorDescription
     NMDC_LoadCsvToTable = False
 End Function
 
