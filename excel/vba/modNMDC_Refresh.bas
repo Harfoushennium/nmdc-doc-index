@@ -168,7 +168,7 @@ Public Function NMDC_LoadCsvToTable(ByVal csvPath As String, ByVal sheetName As 
 
     If Not table.DataBodyRange Is Nothing Then
         On Error Resume Next
-        table.DataBodyRange.Hyperlinks.Delete
+        NMDC_ClearGeneratedTableHyperlinks table
         table.DataBodyRange.ClearContents
         On Error GoTo Handler
     End If
@@ -219,6 +219,19 @@ Handler:
         "Table: " & tableName & " | File: " & csvPath & " | " & savedErrorNumber & " - " & savedErrorDescription
     NMDC_LoadCsvToTable = False
 End Function
+
+Private Sub NMDC_ClearGeneratedTableHyperlinks(ByVal table As ListObject)
+    Dim column As ListColumn
+
+    For Each column In table.ListColumns
+        Select Case LCase$(Trim$(CStr(column.Name)))
+            Case "document link", "source file", "relative_path", "relative path"
+                If Not column.DataBodyRange Is Nothing Then
+                    column.DataBodyRange.Clear
+                End If
+        End Select
+    Next column
+End Sub
 
 Public Function NMDC_LoadErrorCsvPreserveLocal(ByVal csvPath As String) As Boolean
     On Error GoTo Handler

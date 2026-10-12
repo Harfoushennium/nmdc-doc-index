@@ -182,6 +182,21 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn("Application.AutoCorrect.AutoFillFormulasInLists = False", text)
         self.assertNotIn('formulas(rowIndex, 1) = "=HYPERLINK(', text)
 
+    def test_refresh_bulk_clears_only_generated_hyperlink_columns(self):
+        refresh = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
+        loader = refresh.split("Public Function NMDC_LoadCsvToTable", 1)[1].split(
+            "Public Function NMDC_LoadErrorCsvPreserveLocal", 1
+        )[0]
+        self.assertIn("NMDC_ClearGeneratedTableHyperlinks table", loader)
+        self.assertNotIn("table.DataBodyRange.Hyperlinks.Delete", loader)
+        cleanup = refresh.split("Private Sub NMDC_ClearGeneratedTableHyperlinks", 1)[1].split(
+            "End Sub", 1
+        )[0]
+        for name in ("Document Link", "Source File", "relative_path", "Relative Path"):
+            self.assertIn(f'"{name.casefold()}"', cleanup.casefold())
+        self.assertIn("column.DataBodyRange.Clear", cleanup)
+        self.assertNotIn("Hyperlinks.Delete", cleanup)
+
     def test_csv_refresh_keeps_identifiers_text_but_types_dates_and_numbers(self):
         refresh = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
         parser = (ROOT / "excel" / "vba" / "modNMDC_Csv.bas").read_text(encoding="utf-8")
