@@ -28,7 +28,18 @@ Public Sub NMDC_ResetAllRecords()
         Exit Sub
     End If
 
-    If NMDC_RunEngine("export-excel") = 0 Then NMDC_RefreshExchangeData
+    If NMDC_RunEngine("export-excel") <> 0 Then
+        MsgBox "Runtime records were reset, but Excel views could not be exported." & vbCrLf & _
+               "Do not rely on the displayed tables. Review the Error Log, then retry Export / Refresh before rescanning.", _
+               vbExclamation, "Reset Completed; Excel Refresh Needed"
+        Exit Sub
+    End If
+    If Not NMDC_RefreshExchangeData() Then
+        MsgBox "Runtime records were reset and exported, but the Excel tables did not finish refreshing." & vbCrLf & _
+               "Do not rely on the displayed tables. Review the Error Log, then retry Export / Refresh before rescanning.", _
+               vbExclamation, "Reset Completed; Excel Refresh Needed"
+        Exit Sub
+    End If
     MsgBox "All indexed/staged records were reset." & vbCrLf & _
            "Source DATA and configuration were not changed. Run Full Rescan / Rebuild All when ready.", _
            vbInformation, "NMDC Document Index"
