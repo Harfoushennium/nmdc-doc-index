@@ -68,9 +68,9 @@ Private Sub NMDC_RunStagingAction(ByVal fullRescan As Boolean)
     Application.StatusBar = False
 
     MsgBox "The proposed update is ready for your review." & vbCrLf & vbCrLf & _
-           "Please check Pending Update and Review Flags before approving.", _
+           "Please check File Review and Review Flags before approving.", _
            vbInformation, "NMDC Document Index"
-    NMDC_GoToSheet "Pending Update"
+    NMDC_GoToSheet "File Review"
     Exit Sub
 
 Handler:
@@ -97,14 +97,14 @@ Public Sub NMDC_ApproveUpdate()
     If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then Exit Sub
     If Not NMDC_ReviewDraftsCanApprove(NMDC_DisplayedPendingRunId(), draftBlockReason) Then
         MsgBox draftBlockReason, vbExclamation, "NMDC Document Index"
-        NMDC_GoToSheet "Pending Update"
+        NMDC_GoToSheet "File Review"
         Exit Sub
     End If
 
     reviewedRunId = NMDC_DisplayedPendingRunId()
     If Len(reviewedRunId) = 0 Then
         MsgBox "There is no displayed pending update to approve." & vbCrLf & _
-               "Please press Review Pending Update first.", vbExclamation, "NMDC Document Index"
+               "Please press Review File Updates first.", vbExclamation, "NMDC Document Index"
         Exit Sub
     End If
 
@@ -125,9 +125,15 @@ Public Sub NMDC_ApproveUpdate()
     currentRunId = NMDC_DisplayedPendingRunId()
     If Len(currentRunId) = 0 Or StrComp(reviewedRunId, currentRunId, vbBinaryCompare) <> 0 Then
         MsgBox "The pending update changed after your last review." & vbCrLf & vbCrLf & _
-               "Nothing was approved. Please review the current Pending Update before approving.", _
+               "Nothing was approved. Please review the current File Review before approving.", _
                vbExclamation, "NMDC Document Index"
-        NMDC_GoToSheet "Pending Update"
+        NMDC_GoToSheet "File Review"
+        Exit Sub
+    End If
+
+    If Not NMDC_FileExists(NMDC_RuntimePath() & "\staging\" & reviewedRunId & "\file_review.json") Then
+        MsgBox "Save File Choices for this proposal before approval.", vbExclamation, "NMDC Document Index"
+        NMDC_GoToSheet "File Review"
         Exit Sub
     End If
 
@@ -154,7 +160,7 @@ Public Sub NMDC_ApproveUpdate()
     End If
     If answer <> vbYes Then Exit Sub
 
-    approvalArgs = "--run-id " & NMDC_Quote(reviewedRunId)
+    approvalArgs = "--run-id " & NMDC_Quote(reviewedRunId) & " --require-file-review"
     If conflictCount > 0 Then approvalArgs = approvalArgs & " --allow-conflicts"
     exitCode = NMDC_RunEngine("approve", approvalArgs)
     If exitCode <> 0 Then
@@ -279,7 +285,7 @@ Public Sub NMDC_RefreshDashboard()
 End Sub
 
 Public Sub NMDC_ReviewPendingUpdate()
-    NMDC_RefreshAndOpen "Pending Update"
+    NMDC_RefreshAndOpen "File Review"
 End Sub
 
 Public Sub NMDC_ReviewFlags()

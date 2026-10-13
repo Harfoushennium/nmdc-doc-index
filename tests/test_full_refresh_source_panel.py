@@ -30,7 +30,7 @@ class FullRefreshSourcePanelTests(unittest.TestCase):
         guidance = procedure.index("NMDC_ApplyWorkbookGuidance")
         owner_ui = procedure.index("NMDC_ApplyOwnerUX")
         rebuild = procedure.index("NMDC_RebuildPendingSourcePanel")
-        lookup = procedure.index('Set sourceSelectionTable = pendingSheet.ListObjects("SourceSelection")')
+        lookup = procedure.index('Set sourceSelectionTable = pendingSheet.ListObjects("FileReview")')
         missing_guard = procedure.index("If sourceSelectionTable Is Nothing Then")
         clean_exit = procedure.index("CleanExit:")
         self.assertLess(guidance, owner_ui)

@@ -606,6 +606,8 @@ def export_excel_exchange(state_dir: Path, output_dir: Path) -> Dict[str, Any]:
     _write_csv(output_dir / "flags.csv", FLAG_FIELDS, flags)
     _write_csv(output_dir / "history.csv", HISTORY_FIELDS, history)
     _write_csv(output_dir / "errors.csv", ERROR_FIELDS, errors)
+    from .file_review import export_file_review
+    export_file_review(state_dir, output_dir, str(stage.get("run_id", "")))
 
     return {
         "approved_run_id": approved.get("run_id", ""),

@@ -237,9 +237,9 @@ def compare_manifests(
         content_changed = now.get("sha256") != before.get("sha256")
         if full_rescan:
             decisions.append(SourceDecision(rel, "CHANGED" if content_changed else "UNCHANGED", "REPROCESS", "FULL_RESCAN"))
-        elif parser_changed:
+        elif parser_changed or before.get("parser_version", approved.get("parser_version")) != current.get("parser_version"):
             decisions.append(SourceDecision(rel, "CHANGED" if content_changed else "UNCHANGED", "REPROCESS", "PARSER_VERSION_CHANGED"))
-        elif config_changed:
+        elif config_changed or before.get("config_fingerprint", approved.get("config_fingerprint")) != current.get("config_fingerprint"):
             decisions.append(SourceDecision(rel, "CHANGED" if content_changed else "UNCHANGED", "REPROCESS", "CONFIG_CHANGED"))
         elif content_changed:
             decisions.append(SourceDecision(rel, "CHANGED", "REPROCESS", "SOURCE_CHANGED"))
@@ -576,6 +576,7 @@ def stage_update(
         "record_counts": record_changes["counts"],
         "staged_records": len(staged_rows),
         "approved_records_before": len(approved_rows),
+        "approved_base_run_id": str(approved_manifest.get("run_id", "")),
     }
     _write_json(stage_dir / "summary.json", summary)
     _write_json(state_dir / "staging" / "latest.json", {"run_id": run_id})
@@ -596,7 +597,8 @@ def _resolve_stage(state_dir: Path, run_id: str | None) -> Tuple[str, Path]:
     return run_id, stage_dir
 
 
-def approve_stage(state_dir: Path, run_id: str | None = None, *, allow_conflicts: bool = False) -> Dict[str, Any]:
+def approve_stage(state_dir: Path, run_id: str | None = None, *, allow_conflicts: bool = False,
+                  require_file_review: bool = False) -> Dict[str, Any]:
     """Promote one staged package into approved state after explicit user approval."""
     state_dir = Path(state_dir)
     run_id, stage_dir = _resolve_stage(state_dir, run_id)
@@ -619,6 +621,14 @@ def approve_stage(state_dir: Path, run_id: str | None = None, *, allow_conflicts
     if blocking and not allow_conflicts:
         raise ValueError(f"Staged update has {blocking} blocking conflict flag(s); approval is not allowed without an explicit override.")
 
+    from .file_review import merge_deferred_files, validated_review
+    review = validated_review(state_dir, run_id, required=require_file_review)
+    merged = merge_deferred_files(state_dir, stage_dir, review) if review else None
+    if merged:
+        _, merge_flags = compare_records([], merged[2])
+        if merge_flags:
+            raise ValueError("File choices would produce duplicate record keys. Stage a corrected proposal before approval.")
+
     approved_dir = state_dir / "approved"
     version_dir = approved_dir / "versions" / run_id
     version_dir.mkdir(parents=True, exist_ok=True)
@@ -627,11 +637,18 @@ def approve_stage(state_dir: Path, run_id: str | None = None, *, allow_conflicts
         if not src.exists():
             raise FileNotFoundError(f"Staged package is incomplete: {name}")
         shutil.copy2(src, version_dir / name)
+    if merged:
+        manifest, cache, rows = merged
+        _write_json(version_dir / "manifest.json", manifest)
+        _write_json(version_dir / "cache_index.json", cache)
+        _write_jsonl(version_dir / "records.jsonl", rows)
+        _write_json(version_dir / "file_review.json", review)
     approval = {
         "run_id": run_id,
         "decision": "APPROVED",
         "approved_at": utc_now(),
         "allow_conflicts": bool(allow_conflicts),
+        "deferred_files": [source for source, choice in review.get("choices", {}).items() if not choice["accept"]],
     }
     _write_json(version_dir / "approval.json", approval)
     # The pointer is the commit marker. Old approved versions stay intact until

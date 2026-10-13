@@ -1,3 +1,5 @@
+> Owner-confirmed workflow (13 Oct 2026): File Review is the primary affected-file Table; Change Details is optional. Unchecked files keep their approved contents and do not change persistent source scope. Save File Choices does not rescan. Approval is on File Review and requires saved choices and review decisions. Real Excel acceptance is still required.
+
 # NMDC Document Index production package
 
 ## User setup
@@ -8,7 +10,7 @@
 4. Enable macros when Excel asks.
 5. Press **Select Data Folder** and choose the folder containing `METHODS` and `TECH`.
 6. Press **Update Changed Files** or **Full Rescan / Rebuild All**.
-7. Review **Pending Update** and **Review Flags** before approving.
+7. Review **File Review** and **Review Flags** before approving.
 
 The one-time setup uses Microsoft Excel to attach all production VBA modules and workbook events. If Excel blocks that attachment, setup displays the exact Trust Center setting needed and stops without changing the source workbook.
 
@@ -40,15 +42,15 @@ The Live Filter follows the owner's REV03 reference architecture.
 
 Setup registers Microsoft Forms 2.0 before importing the listener class. ActiveX search boxes are created lazily only after the workbook is opened in normal visible Excel; setup does not create them while Excel is hidden under VBS automation.
 
-## Source selection in Pending Update
+## File acceptance on File Review
 
-Source selection is part of **Pending Update** instead of a separate user-facing worksheet.
+**File Review** contains affected files; **Change Details** holds the optional record preview.
 
-- **Include in Index?** uses the modern Microsoft 365 native in-cell Checkbox control.
-- Checked = include the source in index scope.
-- Unchecked = intentionally exclude the source.
+- **Accept Update?** uses the modern Microsoft 365 native in-cell Checkbox control.
+- Checked = accept this file update.
+- Unchecked = retain its previously approved data for this proposal.
 - Add an optional Owner Note when useful.
-- Click **Save Source Choices & Restage** once after making the choices.
+- Click **Save File Choices** once after making the choices.
 - **Check All** / **Uncheck All** are available for bulk selection.
 
 The owner environment supports native in-cell checkboxes. In this production build, failure to create these controls is treated as a visible error; the UI does not silently downgrade to visible TRUE/FALSE text.
@@ -59,11 +61,11 @@ Source workbooks are never edited or deleted by this choice.
 
 Source choices, Owner Notes and Review Flag inputs remain drafts until saved.
 Refresh keeps those edits, and saving the workbook before closing keeps them
-available when it is reopened. Owner Notes are retained for included sources
-as well as excluded sources.
+available when it is reopened. Owner Notes are retained for accepted files
+as well as deferred files.
 
-- Use **Save Source Choices & Restage**, then review the resulting proposal.
-  Approval stays blocked until the new proposal reflects the saved choices.
+- Use **Save File Choices** to bind choices to the current proposal without rescanning.
+  Approval stays blocked until all file choices and review decisions are saved.
 - Use **Save Review Decisions** to record flag decisions, comments and status.
   Clearing a previously saved field is also a review change that must be saved.
 - **Select?** chooses flags for a parser-fix report; this checkbox alone does

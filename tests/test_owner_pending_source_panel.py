@@ -64,22 +64,16 @@ class OwnerPendingSourcePanelTests(unittest.TestCase):
             self.assertEqual("2642", rows[0]["Project No."])
             self.assertEqual("METHODS/2642 HAIL GHASHA.xlsx", rows[0]["Source File"])
 
-    def test_source_selection_is_moved_onto_pending_update(self):
+    def test_file_review_is_independent_of_optional_details(self):
         checkboxes = self._read("excel/vba/modNMDC_Checkboxes.bas")
-        self.assertIn('Set ws = ThisWorkbook.Worksheets("Pending Update")', checkboxes)
-        self.assertIn('Set pendingTable = ws.ListObjects("PendingUpdate")', checkboxes)
-        self.assertIn(
-            "headerRow = pendingTable.Range.Row + pendingTable.Range.Rows.Count + 3",
-            checkboxes,
-        )
-        self.assertIn(
-            "Set sourceRange = ws.Range(ws.Cells(headerRow, firstColumn)",
-            checkboxes,
-        )
-        self.assertNotIn('ws.Range("L5:S6")', checkboxes)
-        self.assertIn('"Include in Index?", "Project No.", "Source File"', checkboxes)
+        setup = self._read("packaging/Create_NMDC_Document_Index.vbs")
+        self.assertIn('Set ws = ThisWorkbook.Worksheets("File Review")', checkboxes)
+        self.assertIn('"File Review", "FileReview", 5', setup)
+        self.assertIn('"Accept Update?", "Project No.", "Source File"', setup)
+        self.assertNotIn('pendingTable.Range.Rows.Count', checkboxes)
+        self.assertIn('"View Change Details"', checkboxes)
+        self.assertIn('"Approve Update"', checkboxes)
         self.assertIn('legacyWs.Visible = xlSheetVeryHidden', checkboxes)
-        self.assertIn('button.OnAction = "NMDC_SaveSourceSelections"', checkboxes)
 
     def test_source_selection_uses_modern_native_excel_checkbox(self):
         checkboxes = self._read("excel/vba/modNMDC_Checkboxes.bas")
@@ -98,7 +92,8 @@ class OwnerPendingSourcePanelTests(unittest.TestCase):
     def test_pending_guidance_is_merge_safe(self):
         checkboxes = self._read("excel/vba/modNMDC_Checkboxes.bas")
         owner = self._read("excel/vba/modNMDC_OwnerUX.bas")
-        self.assertIn('ws.Range("A4:I4").ClearContents', checkboxes)
+        self.assertIn('ws.Range("A4:H4").ClearContents', checkboxes)
+        self.assertNotIn("DataBodyRange.Merge", checkboxes)
         self.assertIn("NMDC_SafeMergeAndSet", owner)
         self.assertNotIn('ws.Range("A4:I4").Value = _', checkboxes)
 

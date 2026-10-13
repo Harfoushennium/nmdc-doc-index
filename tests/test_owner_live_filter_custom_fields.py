@@ -40,7 +40,7 @@ class OwnerLiveFilterCustomFieldsTests(unittest.TestCase):
             "MASTER DOCUMENTS",
             "REVISIONS",
             "TRANSACTIONS",
-            "PENDING UPDATE",
+            "CHANGE DETAILS", "FILE REVIEW",
             "REVIEW FLAGS",
             "USER DECISIONS",
             "UPDATE HISTORY",

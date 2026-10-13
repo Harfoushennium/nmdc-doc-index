@@ -21,7 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from nmdc_profiler.ui_layout import FLAG_FIELDS, PENDING_FIELDS
-from nmdc_profiler.source_selection_view import FIELDS as SOURCE_FIELDS
+from nmdc_profiler.file_review import FIELDS as SOURCE_FIELDS
 
 
 def read_csv(path):
@@ -80,7 +80,7 @@ def main():
 Public Function ReadDraftProbe(ByVal id As String) As String
     Dim found As Boolean
     On Error GoTo Handler
-    ReadDraftProbe = NMDC_ReviewDraftGet(NMDC_DisplayedPendingRunId(), "SOURCE", id, "Owner Note", found)
+    ReadDraftProbe = NMDC_ReviewDraftGet(NMDC_DisplayedPendingRunId(), "FILES", id, "Owner Note", found)
     Exit Function
 Handler:
     ReadDraftProbe = "ERROR " & CStr(Err.Number) & " " & Err.Description
@@ -96,8 +96,8 @@ End Function
         run_a = "owner-draft-fixture-A"
         source_rows = [dict.fromkeys(SOURCE_FIELDS, "") for _ in range(2)]
         for index, row in enumerate(source_rows):
-            row.update({"Include in Index?": "TRUE", "Project No.": "9999", "Source File": f"METHODS/Fixture-{index}.xlsx",
-                        "Source Family": "METHODS", "Current Status": "SELECTED", "Last Processed Run": run_a})
+            row.update({"Accept Update?": "TRUE", "Project No.": "9999", "Source File": f"METHODS/Fixture-{index}.xlsx",
+                        "Change Type": "NEW", "Added": "1", "Modified": "0", "Removed": "0"})
         flag_rows = [dict.fromkeys(FLAG_FIELDS, "") for _ in range(2)]
         for index, row in enumerate(flag_rows):
             row.update({"Select?": "FALSE", "Flag Code": "UNCLASSIFIED", "Source File": source_rows[index]["Source File"],
@@ -110,12 +110,12 @@ End Function
         headers, dashboard = read_csv(exchange / "dashboard.csv")
         dashboard[0].update({"Pending Run ID": run_a, "Pending Status": "STAGED", "Pending Added": "3", "Review Flags": "2"})
         write_csv(exchange / "dashboard.csv", headers, dashboard)
-        write_csv(exchange / "source_selection.csv", SOURCE_FIELDS, source_rows)
+        write_csv(exchange / "file_review.csv", SOURCE_FIELDS, source_rows)
         write_csv(exchange / "flags.csv", FLAG_FIELDS, flag_rows)
         write_csv(exchange / "pending_update.csv", PENDING_FIELDS, pending_rows[:3])
         book.Worksheets("Home").Range("H7").Value = ""
         record("unbound workbook dashboard refresh", excel.Run(prefix + "NMDC_RefreshDashboardOnlyFast"))
-        pending = book.Worksheets("Pending Update")
+        pending = book.Worksheets("Change Details")
         flags = book.Worksheets("Review Flags").ListObjects("ReviewFlags")
         record("dashboard binds only refreshed proposal tables",
                str(book.Worksheets("Home").Range("H7").Value) == run_a and
@@ -124,7 +124,7 @@ End Function
                str(flags.ListColumns("Event Key").DataBodyRange.Cells(1, 1).Value) == "fixture-event-0")
 
         def source_cell(field, index=1):
-            return pending.ListObjects("SourceSelection").ListColumns(field).DataBodyRange.Cells(index, 1)
+            return book.Worksheets("File Review").ListObjects("FileReview").ListColumns(field).DataBodyRange.Cells(index, 1)
 
         def flag_cell(field, index=1):
             return flags.ListColumns(field).DataBodyRange.Cells(index, 1)
@@ -134,14 +134,14 @@ End Function
 
         record("clean proposal has no draft block", can_approve())
         multiline = 'First line\nSecond line, "quoted"'
-        source_cell("Include in Index?").Value = False
+        source_cell("Accept Update?").Value = False
         source_cell("Owner Note").Value = multiline
         flag_cell("Select?").Value = True
         flag_cell("User Decision").Value = "ACKNOWLEDGED"
         flag_cell("User Comment").Value = multiline
         flag_cell("Resolution Status").Value = "OPEN"
         record("fast refresh retains disabled-event edits", excel.Run(prefix + "NMDC_RefreshReviewDataFast"))
-        record("source inputs retained", not bool(source_cell("Include in Index?").Value) and source_cell("Owner Note").Value == multiline)
+        record("source inputs retained", not bool(source_cell("Accept Update?").Value) and source_cell("Owner Note").Value == multiline)
         record("flag inputs retained", bool(flag_cell("Select?").Value) and flag_cell("User Decision").Value == "ACKNOWLEDGED" and
                flag_cell("User Comment").Value == multiline and flag_cell("Resolution Status").Value == "OPEN")
         record("dirty proposal is blocked", not can_approve())
@@ -166,14 +166,14 @@ End Function
             actions.AddFromString(action_source)
         record("full refresh retains draft", excel.Run(prefix + "NMDC_RefreshExchangeData") and source_cell("Owner Note").Value == multiline and flag_cell("User Comment").Value == multiline)
         # Reorder exchange rows: edits follow identity, not worksheet row number.
-        write_csv(exchange / "source_selection.csv", SOURCE_FIELDS, list(reversed(source_rows)))
+        write_csv(exchange / "file_review.csv", SOURCE_FIELDS, list(reversed(source_rows)))
         write_csv(exchange / "flags.csv", FLAG_FIELDS, list(reversed(flag_rows)))
         record("reordered refresh", excel.Run(prefix + "NMDC_RefreshReviewDataFast"))
         record("drafts follow source and flag identities", source_cell("Owner Note", 2).Value == multiline and flag_cell("User Comment", 2).Value == multiline and not source_cell("Owner Note", 1).Value)
         book.Save()
         book.Close(SaveChanges=False)
         book = excel.Workbooks.Open(str(target / "NMDC_Document_Index.xlsm"), UpdateLinks=0)
-        pending = book.Worksheets("Pending Update")
+        pending = book.Worksheets("Change Details")
         flags = book.Worksheets("Review Flags").ListObjects("ReviewFlags")
         record("saved reopen refresh", excel.Run(prefix + "NMDC_RefreshReviewDataFast"))
         record("saved reopen retains draft", source_cell("Owner Note", 2).Value == multiline and flag_cell("User Comment", 2).Value == multiline and not can_approve())
@@ -183,32 +183,26 @@ End Function
         record("event-enabled panel refresh retains inputs", source_cell("Owner Note", 2).Value == "Event-captured note" and bool(excel.EnableEvents))
         excel.EnableEvents = False
         write_csv(exchange / "pending_update.csv", PENDING_FIELDS, pending_rows)
-        record("pending table grows past old source panel", excel.Run(prefix + "NMDC_LoadCsvToTable", str(exchange / "pending_update.csv"), "Pending Update", "PendingUpdate") and pending.ListObjects("PendingUpdate").ListRows.Count == 35)
-        record("growth preserves source inputs and native checkboxes", source_cell("Owner Note", 2).Value == "Event-captured note" and int(source_cell("Include in Index?", 2).CellControl.Type) == 2)
+        record("pending table grows past old source panel", excel.Run(prefix + "NMDC_LoadCsvToTable", str(exchange / "pending_update.csv"), "Change Details", "PendingUpdate") and pending.ListObjects("PendingUpdate").ListRows.Count == 35)
+        record("growth preserves source inputs and native checkboxes", source_cell("Owner Note", 2).Value == "Event-captured note" and int(source_cell("Accept Update?", 2).CellControl.Type) == 2)
         # A different proposal may not inherit drafts from this one.
         run_b = "owner-draft-fixture-B"
         dashboard[0]["Pending Run ID"] = run_b
         write_csv(exchange / "dashboard.csv", headers, dashboard)
         record("replacement proposal dashboard refresh", excel.Run(prefix + "NMDC_RefreshDashboardOnlyFast"))
-        record("old drafts retained without cross-run application", not source_cell("Owner Note", 2).Value and not flag_cell("User Comment", 2).Value and "retained" in str(pending.Range("A4").Value).casefold())
+        record("old drafts retained without cross-run application", not source_cell("Owner Note", 2).Value and not flag_cell("User Comment", 2).Value and "retained" in str(book.Worksheets("File Review").Range("A4").Value).casefold())
         draft_path = runtime / "owner_review_drafts.csv"
         draft_headers, drafts = read_csv(draft_path)
         record("old draft report retains original run", any(row["Run ID"] == run_a and row["Value"] == "Event-captured note" for row in drafts))
-        source_cell("Owner Note", 2).Value = "Saved before stage"
-        record("capture restage choice", excel.Run(prefix + "NMDC_ReviewDraftCaptureCurrentTables"))
-        excel.Run(prefix + "NMDC_ReviewDraftMarkSourceRestage", run_b)
-        record("restage waiting blocks approval", not can_approve())
-        # The proposal received the saved value, but the owner edited it again while staging.
-        source_cell("Owner Note", 2).Value = "Edited during stage"
-        record("capture later owner edit", excel.Run(prefix + "NMDC_ReviewDraftCaptureCurrentTables"))
-        replacement_sources = list(reversed(source_rows))
-        replacement_sources[1] = dict(replacement_sources[1], **{"Owner Note": "Saved before stage"})
-        write_csv(exchange / "source_selection.csv", SOURCE_FIELDS, replacement_sources)
-        dashboard[0]["Pending Run ID"] = "owner-draft-fixture-C"
-        write_csv(exchange / "dashboard.csv", headers, dashboard)
-        record("restage with later edit refresh", excel.Run(prefix + "NMDC_RefreshReviewDataFast"))
-        _, drafts = read_csv(draft_path)
-        record("later edit retained and restage remains blocked", any(row["Value"] == "Edited during stage" for row in drafts) and not can_approve())
+        source_cell("Owner Note", 2).Value = "Saved file note"
+        record("capture file choice", excel.Run(prefix + "NMDC_ReviewDraftCaptureCurrentTables"))
+        record("unsaved file choice blocks approval", not can_approve())
+        saved_sources = list(reversed(source_rows))
+        saved_sources[1] = dict(saved_sources[1], **{"Owner Note": "Saved file note"})
+        write_csv(exchange / "file_review.csv", SOURCE_FIELDS, saved_sources)
+        record("saved baseline retires matching draft", excel.Run(prefix + "NMDC_ReviewDraftCaptureCurrentTables"))
+        record("saved current choices reload", excel.Run(prefix + "NMDC_RefreshReviewDataFast"))
+        record("saved file draft clears without restaging", can_approve() and source_cell("Owner Note", 2).Value == "Saved file note")
         record("approved state untouched", not (runtime / "approved/current.json").exists())
         record("workbook contract preserved", book.Worksheets.Count == 15 and sum(sheet.ListObjects.Count for sheet in book.Worksheets) == 15)
         # Corruption must be rejected at the public store interface without a UI dialog.

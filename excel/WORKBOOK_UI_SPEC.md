@@ -10,15 +10,17 @@ The normal user operates the product from Excel only. Technical runtime details 
 2. `Master Documents`
 3. `Revisions`
 4. `Transactions`
-5. `Pending Update`
-6. `Review Flags`
-7. `User Decisions`
-8. `Configuration`
-9. `Rules & Mappings`
-10. `Update History`
-11. `Error Log`
-12. `Help`
-13. `System Data` (hidden/protected)
+5. `File Review`
+6. `Change Details`
+7. `Review Flags`
+8. `User Decisions`
+9. `Configuration`
+10. `Rules & Mappings`
+11. `Custom Fields`
+12. `Update History`
+13. `Error Log`
+14. `Help`
+15. `System Data` (hidden)
 
 ## Home
 
@@ -41,7 +43,7 @@ The Home page is the control panel.
 
 - **Update Changed Files**
 - **Full Rescan / Rebuild All**
-- **Review Pending Update**
+- **Review File Updates**
 - **Approve Update**
 - **Hold Update**
 - **Reject Update**
@@ -122,9 +124,15 @@ Preferred columns:
 - Source Cell
 - Event Key
 
-## Pending Update
+## File Review
 
-User-facing review of the staged update before approval.
+Primary owner review on the `FileReview` Excel Table. Show affected files only, one row per Source File: Accept Update?, Project No., Source File, Change Type, Added, Modified, Removed, Owner Note.
+
+Checked accepts a file update; unchecked retains its previously approved data for this proposal, including removed files. Deferred new files add no records. This choice does not update permanent source exclusions. Save File Choices is bound to the exact displayed run and approved baseline and does not rescan. Approval is on this sheet and requires saved file choices, saved review decisions and the existing conflict checks. View Change Details opens the optional record preview. Review Saved Drafts exposes old-run edits without applying them to the new run.
+
+## Change Details
+
+Optional read-only record review of the staged update. Normal owner review and acceptance are on File Review.
 
 **A staged update never replaces the approved master automatically.** Only the explicit **Approve Update** action may promote a staged dataset to the approved index.
 
@@ -283,7 +291,7 @@ Short non-technical instructions:
 
 1. Select the data folder.
 2. Press Update Changed Files.
-3. Review Pending Update and Review Flags.
+3. Review File Updates and Review Flags.
 4. Resolve/hold conflicts.
 5. Press Approve Update when satisfied.
 6. Use Full Rescan when rules/parser change or when you want a complete rebuild.
@@ -306,7 +314,7 @@ Short non-technical instructions:
 `Select Data Folder` is handled locally by Excel/VBA and saved into workbook configuration; it is not an engine command.
 `Configuration`, `Rules & Mappings`, and `Help` are local Excel navigation actions and do not invoke the engine.
 
-The production approval call must bind to the exact pending run displayed and reviewed in Excel: `approve --run-id <displayed run ID>`. Before approval, Excel refreshes the exchange data and stops if the current pending run ID differs from the reviewed run ID.
+The production approval call must bind to the exact pending run displayed and reviewed in Excel: `approve --run-id <displayed run ID> --require-file-review`. Before approval, Excel refreshes the exchange data and stops if the current pending run ID differs from the reviewed run ID.
 
 When the displayed run contains conflict flags, Excel requires a separate explicit warning/confirmation and may pass `--allow-conflicts`. The engine must still refuse non-overridable parser, source-hash, and duplicate-record-key conflicts. This permits an owner to intentionally accept an overridable business event such as a confirmed source removal without weakening technical data-integrity blocks.
 
@@ -314,8 +322,8 @@ When the displayed run contains conflict flags, Excel requires a separate explic
 
 - Excel imports exchange CSV columns as text by default so identifiers and revisions are preserved exactly. Values such as revision `00`, document numbers with leading zeroes, and event references such as `1-2` must not be converted by Excel.
 - The engine is responsible for intentional date normalization before export. The Excel refresh must not reinterpret identifier-like values as dates or numbers.
-- If `export-excel` fails, Excel must stop the action, open the Error Log, and must not announce or open a stale Pending Update as if it were current.
-- Review Pending Update and Review Flags refresh the exchange data before opening their sheets.
+- If `export-excel` fails, Excel must stop the action, open the Error Log, and must not announce or open a stale File Review as if it were current.
+- Review File Updates and Review Flags refresh the exchange data before opening their sheets.
 - An approval is allowed only for the exact pending run ID that remains current after a successful refresh.
 
 ## Wrong-data context

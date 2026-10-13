@@ -11,6 +11,9 @@ const requiredSheets = [
   "Review Flags", "User Decisions", "Configuration", "Rules & Mappings",
   "Update History", "Error Log", "Help", "System Data",
 ];
+if (path.extname(workbookPath).toLowerCase() === ".xlsm") {
+  requiredSheets.splice(requiredSheets.indexOf("Pending Update"), 1, "File Review", "Change Details");
+}
 const actualSheets = workbook.worksheets.items.map((sheet) => sheet.name);
 for (const name of requiredSheets) {
   if (!actualSheets.includes(name)) throw new Error(`Required worksheet missing: ${name}`);

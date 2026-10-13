@@ -34,12 +34,14 @@ class Stage4OwnerRegressionTests(unittest.TestCase):
         self.assertIn("Private Sub SearchBox_Change()", listener)
         self.assertIn("Call Mod_LiveFilter.Run_Live_Filter(SearchBox.Value)", listener)
 
-    def test_pending_update_guidance_matches_below_table_design(self):
+    def test_file_review_guidance_keeps_details_optional(self):
         owner = self.read("excel/vba/modNMDC_OwnerUX.bas")
         check = self.read("excel/vba/modNMDC_Checkboxes.bas")
         perf = self.read("excel/vba/modNMDC_Performance.bas")
         combined = owner + "\n" + check + "\n" + perf
-        self.assertIn("source-selection section below", combined)
+        self.assertIn("Change Details is optional", combined)
+        self.assertIn("Unchecked files keep their approved data", combined)
+        self.assertNotIn("source-selection section below", combined)
         self.assertNotIn("source panel at the right", combined)
         self.assertNotIn("source panel on the right", combined)
         self.assertNotIn("Esc/Enter stops typing mode", combined)

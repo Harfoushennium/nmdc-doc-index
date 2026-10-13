@@ -1,20 +1,21 @@
 {
-  "schema_version": "2",
+  "schema_version": "3",
   "workbook_sheets": [
     "Home",
     "Master Documents",
     "Revisions",
     "Transactions",
-    "Pending Update",
     "Review Flags",
-    "Source Selection",
     "User Decisions",
     "Configuration",
     "Rules & Mappings",
     "Update History",
     "Error Log",
     "Help",
-    "System Data"
+    "System Data",
+    "File Review",
+    "Change Details",
+    "Custom Fields"
   ],
   "buttons": {
     "Update Changed Files": {
@@ -25,14 +26,12 @@
       "command": "stage",
       "mode": "full"
     },
-    "Review Pending Update": {
-      "command": "export-excel",
-      "target_sheet": "Pending Update"
-    },
     "Approve Update": {
       "command": "approve",
       "requires_displayed_run_id": true,
-      "explicit_conflict_confirmation": true
+      "explicit_conflict_confirmation": true,
+      "requires_saved_file_review": true,
+      "target_sheet": "File Review"
     },
     "Hold Update": {
       "command": "hold",
@@ -75,20 +74,15 @@
       "command": "local-vba",
       "target_sheet": "Help"
     },
-    "Source Selection": {
+    "Review File Updates": {
       "command": "export-excel",
-      "target_sheet": "Source Selection"
+      "target_sheet": "File Review"
     }
   },
   "secondary_controls": {
     "Save Review Decisions": {
       "command": "save-review-decisions",
       "source_table": "ReviewFlags"
-    },
-    "Save Selection & Restage": {
-      "command": "save-source-selections",
-      "source_table": "SourceSelection",
-      "restage_after_save": true
     },
     "Check All Sources": {
       "command": "local-vba",
@@ -107,6 +101,17 @@
       "preserves_source_data": true,
       "preserves_configuration": true,
       "preserves_audit_history": true
+    },
+    "Save File Choices": {
+      "command": "save-file-review",
+      "source_table": "FileReview",
+      "requires_displayed_run_id": true,
+      "restage_after_save": false
+    },
+    "View Change Details": {
+      "command": "local-vba",
+      "target_sheet": "Change Details",
+      "optional": true
     }
   },
   "exchange_files": [
@@ -118,7 +123,8 @@
     "flags.csv",
     "history.csv",
     "errors.csv",
-    "source_selection.csv"
+    "source_selection.csv",
+    "file_review.csv"
   ],
   "exchange_columns": {
     "flags.csv": [
@@ -159,6 +165,16 @@
       "Owner Note",
       "Selection Reason",
       "Last Processed Run"
+    ],
+    "file_review.csv": [
+      "Accept Update?",
+      "Project No.",
+      "Source File",
+      "Change Type",
+      "Added",
+      "Modified",
+      "Removed",
+      "Owner Note"
     ]
   },
   "flag_levels": [
@@ -172,7 +188,7 @@
   "identifier_preservation_rule": "Import exchange CSV fields as text unless the engine contract explicitly declares a non-identifier typed field.",
   "source_file_hyperlink_rule": "Every table column that identifies a source workbook must be converted to a clickable Excel hyperlink resolved against the selected Data Folder.",
   "user_input_rule": "Use Excel checkboxes for genuine binary owner choices when practical, especially include/exclude source scope. Use dropdown lists for mutually exclusive choices with three or more meanings. Keep explanatory comments/notes as free text. Avoid dense checkbox controls on large extraction tables where they would reduce performance or readability.",
-  "source_selection_rule": "Source Selection uses one Excel checkbox per source workbook. Checked means included in index scope; unchecked means owner-excluded. Checkbox changes are batched and applied only when Save Selection & Restage is pressed. Source files are never edited or deleted by this choice.",
+  "source_selection_rule": "Persistent source scope remains configuration-driven and distinct from proposal acceptance.",
   "review_flag_workflow_rule": "Review Flags uses native Select? checkboxes plus explicit Source File and Worksheet Name columns. Parser-fix reports are written to sequential PARSER_FIX_REPORTS/NNNN folders and explicitly saved to the staged-run audit trail.",
   "wrong_data_context": [
     "run_id",
@@ -195,5 +211,6 @@
   ],
   "technical_conflicts_rule": "Non-overridable technical conflicts must be corrected and restaged before approval.",
   "dynamic_rules_rule": "Business classifications and mappings must be user-editable in Excel and synchronized to engine configuration without source-code edits.",
-  "normal_user_interface": "Excel only"
+  "normal_user_interface": "Excel only",
+  "file_review_rule": "File Review shows affected files only. Checked accepts the file update; unchecked retains its approved records and manifest/cache baseline for this proposal. Save choices for the exact displayed run before approval. Change Details is optional."
 }

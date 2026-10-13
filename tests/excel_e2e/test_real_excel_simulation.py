@@ -525,7 +525,7 @@ class ExcelSimulation:
         )
 
     def _structure(self) -> str:
-        required = {"Home", "Master Documents", "Revisions", "Transactions", "Pending Update", "Review Flags", "Configuration", "Rules & Mappings", "Custom Fields", "Update History", "Error Log", "System Data"}
+        required = {"File Review", "Home", "Master Documents", "Revisions", "Transactions", "Change Details", "Review Flags", "Configuration", "Rules & Mappings", "Custom Fields", "Update History", "Error Log", "System Data"}
         names = {str(self.workbook.Worksheets(i).Name) for i in range(1, self.workbook.Worksheets.Count + 1)}
         missing = sorted(required - names)
         if missing:
@@ -567,7 +567,7 @@ class ExcelSimulation:
                 self._record(4, "DATA selection and protection", lambda: "Configured DATA/runtime paths are observable through Configuration")
                 self._record(5, "Full Rescan", lambda: self._macro("NMDC_FullRescan"))
                 self._record(6, "Review Flags", lambda: self._table_count("Review Flags", "ReviewFlags"))
-                self._record(7, "Pending Update layout", lambda: self._table_count("Pending Update", "PendingUpdate"))
+                self._record(7, "Optional Change Details layout", lambda: self._table_count("Change Details", "PendingUpdate"))
                 self._record(8, "Native source checkboxes", lambda: self._macro("NMDC_RebuildPendingSourcePanel"))
                 self._record(12, "Reset", lambda: self._macro("NMDC_ResetAllRecords"))
                 self._record(13, "Undo", self._undo_test)
@@ -596,7 +596,7 @@ class ExcelSimulation:
         # a setup probe and an open result; retain the latest result only.
         by_number = {row.number: row for row in self.results}
         names = {
-            3: "Home actions", 4: "DATA selection and protection", 6: "Review Flags", 7: "Pending Update layout", 8: "Native source checkboxes",
+            3: "Home actions", 4: "DATA selection and protection", 6: "Review Flags", 7: "Optional Change Details layout", 8: "Native source checkboxes",
             9: "Live Filter basic", 10: "Live Filter advanced syntax", 11: "Live Filter column switching/performance", 13: "Undo", 14: "Hold / Reject / Approve",
             15: "Filter/sort refresh safety", 16: "Hyperlink audit", 17: "Rules & Mappings", 18: "Custom Field Vessel Names", 19: "Review decisions",
             20: "Flag Wrong Data", 21: "Report Requirement / Problem",
@@ -632,7 +632,7 @@ class ExcelSimulation:
         clean_book = self.excel.Workbooks.Open(str(clean / "NMDC_Document_Index.xlsm"), False, False)
         try:
             names = {str(clean_book.Worksheets(i).Name) for i in range(1, clean_book.Worksheets.Count + 1)}
-            if "Home" not in names or "Pending Update" not in names:
+            if "Home" not in names or "Change Details" not in names:
                 raise AssertionError("clean workbook is missing required sheets")
             self._set_config_on_book(clean_book, "Data Folder", str((ROOT / "DATA").resolve()))
             self._run_macro_on_book(clean_book, "NMDC_FullRescan")

@@ -33,8 +33,8 @@ Public Function NMDC_RefreshExchangeData() As Boolean
     NMDC_SetRefreshStatus 3, 8, "Transactions"
     If Not NMDC_LoadCsvToTable(NMDC_ExchangePath() & "\events.csv", "Transactions", "EventRegister") Then refreshOk = False
 
-    NMDC_SetRefreshStatus 4, 8, "Pending Update"
-    If Not NMDC_LoadCsvToTable(NMDC_ExchangePath() & "\pending_update.csv", "Pending Update", "PendingUpdate") Then refreshOk = False
+    NMDC_SetRefreshStatus 4, 8, "Change Details"
+    If Not NMDC_LoadCsvToTable(NMDC_ExchangePath() & "\pending_update.csv", "Change Details", "PendingUpdate") Then refreshOk = False
 
     NMDC_SetRefreshStatus 5, 8, "Review Flags"
     If Not NMDC_LoadCsvToTable(NMDC_ExchangePath() & "\flags.csv", "Review Flags", "ReviewFlags") Then refreshOk = False
@@ -48,24 +48,23 @@ Public Function NMDC_RefreshExchangeData() As Boolean
     NMDC_ApplyWorkbookGuidance
     NMDC_ApplyOwnerUX
     NMDC_SetRefreshStatus 8, 8, "Source choices / Dashboard"
-    NMDC_RebuildPendingSourcePanel
+    If Not NMDC_RebuildPendingSourcePanel() Then refreshOk = False
     If Not NMDC_LoadDashboard(NMDC_ExchangePath() & "\dashboard.csv") Then refreshOk = False
     If Not NMDC_ReviewDraftsRestoreCurrent() Then
         refreshOk = False
-    ElseIf refreshOk Then
-        NMDC_ReviewDraftCompleteSourceRestage
+
     End If
 
-    Set pendingSheet = ThisWorkbook.Worksheets("Pending Update")
+    Set pendingSheet = ThisWorkbook.Worksheets("File Review")
     Set sourceSelectionTable = Nothing
     On Error Resume Next
-    Set sourceSelectionTable = pendingSheet.ListObjects("SourceSelection")
+    Set sourceSelectionTable = pendingSheet.ListObjects("FileReview")
     On Error GoTo Handler
     If sourceSelectionTable Is Nothing Then
         refreshOk = False
         NMDC_LogError "SOURCE_SELECTION_REFRESH_ERROR", _
-            "Excel refreshed the exchange data but could not prepare source choices on Pending Update.", _
-            "The SourceSelection table was missing after NMDC_RebuildPendingSourcePanel completed."
+            "Excel refreshed the exchange data but could not prepare source choices on File Review.", _
+            "The FileReview table was missing after NMDC_RebuildPendingSourcePanel completed."
     End If
 
 CleanExit:
@@ -94,7 +93,7 @@ Private Sub NMDC_SetRefreshStatus(ByVal currentStep As Long, ByVal totalSteps As
     DoEvents
 End Sub
 
-Private Sub NMDC_ResetTableViewForRefresh(ByVal table As ListObject)
+Public Sub NMDC_ResetTableViewForRefresh(ByVal table As ListObject)
     On Error Resume Next
 
     ' Never resize or replace rows while a ListObject is filtered or sorted.
@@ -220,7 +219,7 @@ Handler:
     NMDC_LoadCsvToTable = False
 End Function
 
-Private Sub NMDC_ClearGeneratedTableHyperlinks(ByVal table As ListObject)
+Public Sub NMDC_ClearGeneratedTableHyperlinks(ByVal table As ListObject)
     Dim column As ListColumn
 
     For Each column In table.ListColumns
@@ -299,7 +298,7 @@ Private Function NMDC_BlankOrNewRow(ByVal table As ListObject) As ListRow
     Set NMDC_BlankOrNewRow = table.ListRows.Add
 End Function
 
-Private Sub NMDC_ApplyTypedFormatting(ByVal table As ListObject)
+Public Sub NMDC_ApplyTypedFormatting(ByVal table As ListObject)
     On Error GoTo Handler
 
     Dim column As ListColumn
@@ -407,7 +406,7 @@ End Function
 
 Private Function NMDC_IsNumericHeader(ByVal headerName As String) As Boolean
     Select Case UCase$(Trim$(headerName))
-        Case "SOURCE ROW", "NEW SOURCES", "CHANGED SOURCES", "REMOVED SOURCES", _
+        Case "ADDED", "MODIFIED", "REMOVED", "SOURCE ROW", "NEW SOURCES", "CHANGED SOURCES", "REMOVED SOURCES", _
              "ADDED RECORDS", "MODIFIED RECORDS", "REMOVED RECORDS", _
              "REVIEW FLAGS", "CONFLICT FLAGS", "APPROVED DOCUMENTS", _
              "APPROVED REVISIONS", "APPROVED TRANSACTIONS", "PENDING ADDED", _
@@ -512,7 +511,7 @@ Handler:
         table.Name & " | " & errNumber & " - " & errDescription
 End Sub
 
-Private Sub NMDC_ActivateSourceLinks(ByVal table As ListObject)
+Public Sub NMDC_ActivateSourceLinks(ByVal table As ListObject)
     On Error GoTo Handler
 
     NMDC_ActivateSourceColumn table, "Source File"

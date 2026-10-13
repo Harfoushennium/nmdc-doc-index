@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from nmdc_profiler.excel_bridge import create_support_request, export_excel_exchange
+from nmdc_profiler.file_review import save_file_review
 from nmdc_profiler.layout_compat import install_layout_compatibility
 from nmdc_profiler.review_decisions import apply_review_decisions
 from nmdc_profiler.runtime_admin import reset_runtime_state, undo_last_approval
@@ -41,6 +42,12 @@ def build_parser() -> argparse.ArgumentParser:
     _common(approve)
     approve.add_argument("--run-id", required=True)
     approve.add_argument("--allow-conflicts", action="store_true")
+    approve.add_argument("--require-file-review", action="store_true")
+
+    file_review = subparsers.add_parser("save-file-review", help="Save proposal-bound affected-file choices without changing source scope")
+    _common(file_review)
+    file_review.add_argument("--run-id", required=True)
+    file_review.add_argument("--choices-file", type=Path, required=True)
 
     for name in ("hold", "reject"):
         decision = subparsers.add_parser(name, help=f"{name.title()} one exact staged run")
@@ -141,7 +148,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             result = export_excel_exchange(args.state_dir, args.exchange_dir)
             export_source_selection(args.state_dir, args.exchange_dir, args.config_dir)
         elif args.command == "approve":
-            result = approve_stage(args.state_dir, args.run_id, allow_conflicts=args.allow_conflicts)
+            result = approve_stage(args.state_dir, args.run_id, allow_conflicts=args.allow_conflicts,
+                                   require_file_review=args.require_file_review)
+        elif args.command == "save-file-review":
+            result = save_file_review(args.state_dir, args.run_id, args.choices_file)
         elif args.command == "hold":
             result = hold_stage(args.state_dir, args.run_id, note=args.note)
         elif args.command == "reject":

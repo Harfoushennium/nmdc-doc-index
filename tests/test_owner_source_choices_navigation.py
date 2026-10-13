@@ -28,7 +28,7 @@ class OwnerSourceChoicesNavigationTests(unittest.TestCase):
         self.assertIn("Const GUIDE_WIDTH As Double = 600", guide)
         self.assertIn('sourceButton.Name = "NMDC_Pending_SourceNavigation"', guide)
         self.assertIn('!NMDC_GoToSourceChoices', guide)
-        self.assertIn('sourceButton.TextFrame.Characters.Text = "SOURCE CHOICES"', guide)
+        self.assertIn('sourceButton.TextFrame.Characters.Text = "FILE REVIEW"', guide)
         self.assertIn("sourceButton.AlternativeText", guide)
         self.assertIn(".Placement = xlFreeFloating", guide)
         self.assertIn('guide.Name = "NMDC_Pending_SourceGuide"', guide)
@@ -39,12 +39,12 @@ class OwnerSourceChoicesNavigationTests(unittest.TestCase):
 
     def test_action_rebuilds_then_gotos_dynamic_source_selection_header(self):
         action = self.owner_ux.split("Public Sub NMDC_GoToSourceChoices()", 1)[1].split("End Sub", 1)[0]
-        self.assertIn('Set sourceTable = ws.ListObjects("SourceSelection")', action)
+        self.assertIn('Set sourceTable = ws.ListObjects("FileReview")', action)
         self.assertIn("If sourceTable Is Nothing Then NMDC_RebuildPendingSourcePanel", action)
         self.assertNotIn("NMDC_RunEngine", action)
         self.assertNotIn("NMDC_RefreshReviewDataFast", action)
         rebuild_at = action.index("NMDC_RebuildPendingSourcePanel")
-        acquire_at = action.index('Set sourceTable = ws.ListObjects("SourceSelection")', rebuild_at + 1)
+        acquire_at = action.index('Set sourceTable = ws.ListObjects("FileReview")', rebuild_at + 1)
         goto_at = action.index("Application.Goto Reference:=sourceTable.HeaderRowRange, Scroll:=True")
         viewport_at = action.index("ActiveWindow.ScrollRow = Application.Max(1, sourceTable.HeaderRowRange.Row - 2)")
         self.assertLess(rebuild_at, acquire_at)
@@ -57,19 +57,18 @@ class OwnerSourceChoicesNavigationTests(unittest.TestCase):
         self.assertIn("NMDC_RebuildPendingSourcePanel", legacy_open)
         self.assertIn("NMDC_GoToSourceChoices", legacy_open)
 
-        ensure = self.checkboxes.split("Private Function NMDC_EnsurePendingSourceTable", 1)[1].split("End Function", 1)[0]
-        self.assertIn('Set pendingTable = ws.ListObjects("PendingUpdate")', ensure)
-        self.assertIn("headerRow = pendingTable.Range.Row + pendingTable.Range.Rows.Count + 3", ensure)
-        self.assertIn('table.Name = SOURCE_PANEL_TABLE', ensure)
-        self.assertIn('Private Const SOURCE_PANEL_TABLE As String = "SourceSelection"', self.checkboxes)
+        self.assertIn('Set ws = ThisWorkbook.Worksheets("File Review")', action)
+        self.assertIn('Private Const SOURCE_PANEL_TABLE As String = "FileReview"', self.checkboxes)
+        self.assertNotIn('pendingTable.Range.Rows.Count', self.checkboxes)
 
     def test_navigation_preserves_batched_source_choice_workflow(self):
         action = self.owner_ux.split("Public Sub NMDC_OpenSourceSelection()", 1)[1].split("End Sub", 1)[0]
         self.assertIn("NMDC_RebuildPendingSourcePanel", action)
         save_action = self.checkboxes.split("Public Sub NMDC_SaveSourceSelections()", 1)[1].split("End Sub", 1)[0]
-        self.assertIn('NMDC_RunEngine("save-source-selections", args)', save_action)
-        self.assertIn("NMDC_UpdateChangedFilesFast", save_action)
-        self.assertIn("Save Source Choices & Restage", self.checkboxes)
+        self.assertIn('NMDC_RunEngine("save-file-review", args)', save_action)
+        self.assertNotIn("NMDC_UpdateChangedFilesFast", save_action)
+        self.assertIn("--run-id", save_action)
+        self.assertIn("Save File Choices", self.checkboxes)
         self.assertNotIn("NMDC_RunEngine", self.checkboxes.split("Public Sub NMDC_SourceCheckboxClicked()", 1)[1].split("End Sub", 1)[0])
 
     def test_real_package_assembler_deploys_navigation_and_excludes_dormant_form(self):

@@ -135,10 +135,10 @@ Public Sub NMDC_StageFastCompleted()
 
     Application.StatusBar = False
     MsgBox "The proposed update is ready for review." & vbCrLf & vbCrLf & _
-           "Review Pending Update. Use the native Excel checkboxes in the source-selection section below the staged changes table to include or exclude source workbooks, then Save Source Choices & Restage." & vbCrLf & _
-           "When acceptable, return Home and choose Approve Update, Hold Update, or Reject Update.", _
+           "Review affected files on File Review. Unchecked files keep their approved data. Save File Choices before approval; Change Details is optional." & vbCrLf & _
+           "When acceptable, use Approve Update on File Review. Hold or Reject is available on Home.", _
            vbInformation, "NMDC Document Index"
-    NMDC_GoToSheet "Pending Update"
+    NMDC_GoToSheet "File Review"
     Exit Sub
 
 Handler:
@@ -154,7 +154,7 @@ Public Sub NMDC_ReviewPendingUpdateFast()
         NMDC_GoToSheet "Error Log"
         Exit Sub
     End If
-    If NMDC_RefreshReviewDataFast() Then NMDC_GoToSheet "Pending Update"
+    If NMDC_RefreshReviewDataFast() Then NMDC_GoToSheet "File Review"
 End Sub
 
 Public Sub NMDC_ReviewFlagsFast()
@@ -206,8 +206,8 @@ Public Function NMDC_RefreshReviewDataFast() As Boolean
     Application.ScreenUpdating = False
     Application.EnableEvents = False
 
-    Application.StatusBar = "NMDC Document Index: review refresh 1/5 - Pending Update"
-    If Not NMDC_LoadCsvToTable(NMDC_ExchangePath() & "\pending_update.csv", "Pending Update", "PendingUpdate") Then ok = False
+    Application.StatusBar = "NMDC Document Index: review refresh 1/5 - Change Details"
+    If Not NMDC_LoadCsvToTable(NMDC_ExchangePath() & "\pending_update.csv", "Change Details", "PendingUpdate") Then ok = False
     DoEvents
 
     Application.StatusBar = "NMDC Document Index: review refresh 2/5 - Review Flags"
@@ -223,13 +223,12 @@ Public Function NMDC_RefreshReviewDataFast() As Boolean
     DoEvents
 
     Application.StatusBar = "NMDC Document Index: review refresh 5/5 - source choices / dashboard"
-    NMDC_RebuildPendingSourcePanel
+    If Not NMDC_RebuildPendingSourcePanel() Then ok = False
     If Not NMDC_LoadDashboard(NMDC_ExchangePath() & "\dashboard.csv") Then ok = False
     NMDC_ApplyOwnerUX
     If Not NMDC_ReviewDraftsRestoreCurrent() Then
         ok = False
-    ElseIf ok Then
-        NMDC_ReviewDraftCompleteSourceRestage
+
     End If
 
 CleanExit:

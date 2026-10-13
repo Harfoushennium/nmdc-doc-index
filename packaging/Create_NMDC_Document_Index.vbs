@@ -242,6 +242,7 @@ If Err.Number <> 0 Then
     WScript.Quit 10
 End If
 TraceStep "owner-ux-applied"
+workbook.Worksheets("Home").Activate
 workbook.Save
 TraceStep "final-workbook-saved"
 workbook.Close True
@@ -358,12 +359,13 @@ End Sub
 
 Sub EnsureNamedTables(ByVal wb)
     EnsureSourceSelectionSheet wb
+    wb.Worksheets("Pending Update").Name = "Change Details"
     EnsureTable wb, "Master Documents", "MasterDocuments", 5, Empty
     EnsureTable wb, "Revisions", "RevisionRegister", 5, Empty
     EnsureTable wb, "Transactions", "EventRegister", 5, Empty
-    EnsureTable wb, "Pending Update", "PendingUpdate", 5, Array("Change Type", "Project No.", "Document No.", "Revision", "Event Type", "Plain-English Summary", "Source File", "Review Required", "Record Identity")
+    EnsureTable wb, "Change Details", "PendingUpdate", 5, Array("Change Type", "Project No.", "Document No.", "Revision", "Event Type", "Plain-English Summary", "Source File", "Review Required", "Record Identity")
     EnsureTable wb, "Review Flags", "ReviewFlags", 5, Empty
-    EnsureTable wb, "Source Selection", "SourceSelection", 5, Array("Include in Index?", "Source File", "Source Family", "Current Status", "Owner Note", "Selection Reason", "Last Processed Run")
+    EnsureTable wb, "File Review", "FileReview", 5, Array("Accept Update?", "Project No.", "Source File", "Change Type", "Added", "Modified", "Removed", "Owner Note")
     EnsureTable wb, "User Decisions", "UserDecisionLog", 11, Empty
     EnsureTable wb, "Configuration", "Configuration", 5, Empty
     EnsureTable wb, "Rules & Mappings", "ClassificationRules", 5, Empty
@@ -375,16 +377,11 @@ End Sub
 
 Sub EnsureSourceSelectionSheet(ByVal wb)
     Dim ws
-    Set ws = Nothing
-    On Error Resume Next
-    Set ws = wb.Worksheets("Source Selection")
-    On Error GoTo 0
-    If ws Is Nothing Then
-        Set ws = wb.Worksheets.Add(, wb.Worksheets(wb.Worksheets.Count))
-        ws.Name = "Source Selection"
-        ws.Range("A1").Value = "Source Selection"
-        ws.Range("A2").Value = "Use the checkboxes to choose which source workbooks participate in the index. This does not modify or delete the source files."
-    End If
+    Set ws = wb.Worksheets.Add(, wb.Worksheets(wb.Worksheets.Count))
+    ws.Name = "File Review"
+    ws.Move wb.Worksheets("Pending Update")
+    ws.Range("A1").Value = "File Review"
+    ws.Range("A4").Value = "Accept affected files here; Change Details is optional."
 End Sub
 
 Sub EnsureTable(ByVal wb, ByVal sheetName, ByVal tableName, ByVal headerRow, ByVal expectedHeaders)
@@ -723,15 +720,15 @@ Sub AttachHomeButtons(ByVal wb)
                    "A24:D25", "E24:H25", "I24:L25", _
                    "A27:D28", "E27:H28", "I27:L28", _
                    "A40:D41")
-    labels = Array("Update Changed Files", "Full Rescan / Rebuild All", "Review Pending Update", _
-                   "Approve Update", "Hold Update", "Reject Update", _
+    labels = Array("Update Changed Files", "Full Rescan / Rebuild All", "Review File Updates", _
+                   "Review File Choices", "Hold Update", "Reject Update", _
                    "Select Data Folder", "Review Flags", "Save Review Decisions", _
                    "Configuration", "Rules & Mappings", "View Log", _
                    "Flag Wrong Data", "Report Requirement / Problem", "Refresh Dashboard", _
                    "Undo Last Approval", "Reset All Records", "Help", _
                    "Source Selection")
     macros = Array("NMDC_UpdateChangedFilesFast", "NMDC_FullRescanFast", "NMDC_ReviewPendingUpdateFast", _
-                   "NMDC_ApproveUpdate", "NMDC_HoldUpdate", "NMDC_RejectUpdate", _
+                   "NMDC_GoToSourceChoices", "NMDC_HoldUpdate", "NMDC_RejectUpdate", _
                    "NMDC_SelectDataFolder", "NMDC_ReviewFlagsFast", "NMDC_SaveReviewDecisions", _
                    "NMDC_OpenConfiguration", "NMDC_OpenRulesMappingsOwner", "NMDC_ViewLog", _
                    "NMDC_FlagWrongDataFromTable", "NMDC_ReportRequirementFromTable", "NMDC_RefreshDashboardFast", _

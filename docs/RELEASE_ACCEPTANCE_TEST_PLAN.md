@@ -1,6 +1,6 @@
 # NMDC Document Index — Release Acceptance Test Plan
 
-> **Current owner stabilization override (19 Sep 2026):** PR #8 is not release-accepted. Source selection must be integrated into **Pending Update** using modern Microsoft 365 in-cell checkboxes, and Live Filter must use a **real editable search input** with the search semantics/help from the owner's original reference module. Static tests and green CI are insufficient; real Microsoft Excel simulation is mandatory. See `ANTIGRAVITY_HANDOFF.md`.
+> **Current owner stabilization override (13 Oct 2026):** PR #8 remains unaccepted. File Review is the primary affected-file acceptance worksheet; Change Details is optional. Unchecked files retain their approved data for this proposal and never change permanent exclusions. Native Excel simulation and the two-install gate remain mandatory.
 
 **Written by:** ChatGPT  
 **Role:** Implementer / Release Coordinator
@@ -16,7 +16,7 @@ A **clean current-data Full Rescan** is accepted only when:
 - known empty register templates are recognized as empty rather than reported as errors;
 - `Review Flags` contains **0 actionable extraction findings**;
 - `Error Log` contains **0 extraction/refresh errors**;
-- routine additions/changes remain visible in `Pending Update`/history instead of `Review Flags`;
+- routine additions/changes remain visible in `Change Details`/history instead of `Review Flags`;
 - source-file and document hyperlinks point to the exact row-specific target;
 - the generated workbook opens without the slow-workbook metadata warning, merge warning, or black console window;
 - source `DATA/` remains unchanged.
@@ -42,7 +42,7 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 2. Require staged `flags.json` to be empty for the current known corpus.
 3. Require `review_flags = 0`, `blocking_flags = 0`, and staged status `STAGED`.
 4. Confirm `SOURCE_NEW`, `SOURCE_CHANGED`, parser/config refresh notices and cache-rebuild notices never appear in Review Flags.
-5. Confirm those lifecycle changes remain represented in `Pending Update`, source decisions, dashboard counters and Update History.
+5. Confirm those lifecycle changes remain represented in `Change Details`, source decisions, dashboard counters and Update History.
 
 ## Gate C — Hyperlink integrity
 
@@ -72,8 +72,8 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 2. No visible CMD/console window during engine execution.
 3. Status/progress feedback remains visible while extraction and table refresh run.
 4. Every action on Home has plain-English guidance describing when to use it and what it changes.
-5. `Pending Update` contains the review preview plus a clearly separated same-sheet source-selection section; `Review Flags` is reserved for genuine actionable anomalies.
-6. Empty Error Log/Review Flags and any same-sheet source-selection table remain valid Excel tables with headers and filters.
+5. File Review is the normal affected-file review; Change Details is a separate optional record preview. Review Flags is reserved for actionable anomalies.
+6. All worksheet data areas, including File Review and Change Details, are valid Excel Tables even when empty.
 7. Quoted commas/newlines in CSV exchange data must not split one logical row into multiple Excel rows.
 8. Body rows use professional default presentation: Aptos 10, automatic font color, no body fill, consistent alignment, sensible widths/heights, light borders and wrapping only where useful.
 9. Small tables AutoFit row height within safe limits; large extraction tables use compact stable row height to preserve performance.
@@ -90,21 +90,19 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 7. Discipline, Category and Subcategory are clearly described as the classification outputs the rule assigns.
 8. Invalid/duplicate rules must fail validation before staging; they must never be silently accepted.
 
-## Gate G — Source Selection checkbox workflow
+## Gate G — Proposal file acceptance
 
-1. The source-selection section inside `Pending Update` must show one modern Microsoft 365 in-cell checkbox for each real source workbook row.
-2. Checked means **include in index scope**; unchecked means **owner-excluded**.
-3. The underlying include value remains auditable/exportable even though the TRUE/FALSE text is hidden from normal view.
-4. Checkbox clicks update only the local selection state; they must **not** launch an engine scan individually.
-5. `Save Selection & Restage` batches all checkbox choices in one engine operation and then stages one new proposal.
-6. `Check All` and `Uncheck All` operate on the source list; `Uncheck All` requires confirmation.
-7. Owner Note is optional free text and is persisted as the reason for an exclusion.
-8. Excluding a source does not edit, delete, rename, move or lock the original workbook.
-9. Excluding/restoring sources does not modify the approved index until a subsequent explicit **Approve Update**.
-10. Checkbox controls must remain associated with the correct source after refresh/sort because their row is resolved at click time rather than through fragile fixed linked-cell addresses.
-11. Multi-choice fields such as Review Flag decisions, Resolution Status and rule match choices remain dropdowns rather than being represented by ambiguous groups of checkboxes.
-12. Automated regression tests must cover checked/unchecked export, batch persistence, restore, Check All/Uncheck All contract and packaging of the checkbox module.
-13. The owner environment is Microsoft 365 with native in-cell checkbox support. Failure to create the source-selection checkboxes is a release-blocking UI error; the production workbook must not silently fall back to visible TRUE/FALSE text.
+1. File Review shows only affected files, with Project No., Source File, Change Type, added/modified/removed counts and Owner Note.
+2. Native Accept Update? checkboxes are required; creation failure is a release-blocking UI error and must not silently downgrade to TRUE/FALSE text. Checked accepts the file update; unchecked retains previously approved data for this proposal.
+3. Checkbox clicks never scan or approve. Save File Choices binds choices to the exact displayed run and approved baseline without restaging.
+4. Approval is blocked until file choices and Review Flag decision/comment/status inputs are saved. Unresolved conflicts remain subject to existing conflict guards.
+5. Mixed acceptance retains deferred file rows, manifest entries and caches. The next scan must still offer deferred changes.
+6. Deferred new files contribute no records; deferred removed files retain their approved data. All-deferred approval leaves approved records unchanged.
+7. Saving/reloading, sorting and save/reopen preserve choices and notes by file identity. Replacement runs preserve prior drafts without cross-applying them.
+8. View Change Details opens a separate optional Table; file approval does not require viewing individual record changes.
+9. Both review worksheets retain independent Excel Tables and native controls through refresh/table growth.
+10. Existing permanent exclusions remain excluded; File Review choices do not edit config/source_exclusions.csv or DATA.
+11. Engine regression tests prove mixed/deferred/stale-run safety. Real Excel acceptance proves typing, buttons, checkbox rendering, notes, save/reopen and actual dialogs.
 
 ## Gate G2 — Review Flags selection checkbox workflow
 
@@ -119,7 +117,7 @@ Real future faults such as a persistently locked/corrupt source, an actually amb
 
 ## Gate H — Dynamic Live Filter
 
-1. Live Filter must be available on table-heavy sheets that benefit from rapid search: Master Documents, Revisions, Transactions, Pending Update, Review Flags, User Decisions, Update History and Error Log.
+1. Live Filter must be available on table-heavy sheets that benefit from rapid search: Master Documents, Revisions, Transactions, Change Details, Review Flags, User Decisions, Update History and Error Log.
 2. The search input must be a **real editable Excel input**: the user can click inside it, see a caret, type normally, use Backspace normally, and never enter a global keyboard-capture mode.
 3. Filtering updates on **every keystroke** without Enter/Tab.
 4. The user explicitly chooses one target table column and the selected column is clearly displayed.
@@ -206,10 +204,10 @@ After all automated gates are green, the owner should:
 5. select the real DATA folder and run **Full Rescan / Rebuild All**;
 6. confirm Review Flags is empty and Error Log contains no extraction/refresh error;
 7. sample Source File and Document Link hyperlinks across multiple projects and confirm every link opens the correct file;
-8. verify Pending Update remains a review-only change preview;
-9. open **Pending Update** and confirm its source-selection section shows every source row with an include checkbox; uncheck one harmless test source, add an Owner Note, click **Save Selection & Restage**, and verify that source is omitted from the staged proposal without modifying the original workbook;
-10. re-check the same source, save/restage, and verify it returns to index scope;
-11. test **Check All** and cancel/confirm **Uncheck All** appropriately without approving the staged update;
+8. verify Change Details remains a review-only change preview;
+9. open File Review; uncheck an affected disposable fixture file, add a note, save choices and reopen; verify both inputs. Before approval verify approved data is unchanged. In the disposable approval fixture, verify the unchecked file keeps its approved contents.
+10. stage another proposal and confirm deferred file changes are still offered; verify prior drafts remain reviewable without cross-application.
+11. test Check All and cancel/confirm Uncheck All in File Review. Verify that unsaved choices and unsaved review decisions block approval.
 12. on Master Documents, press Ctrl+Shift+F and select the Document Title table header; confirm the placeholder names Document Title; then type directly in `TxtBox_Search` using one partial term, two required terms (space/`+`), one `-EXCLUDE` term and a quoted exact value; use **RESET SEARCH** afterward;
 13. open **Custom Fields & Keywords**, add a temporary `Vessel Names` field searching `Document Title;Source File`, add at least two vessel keyword mappings, and apply them; confirm the new column is populated only where the configured keywords match;
 14. test both `FIRST` and `ALL UNIQUE`; test one `ALL TERMS` expression with `+`/space AND and `-EXCLUDE`; test wildcard mode only with a harmless sample rule where the expected result is obvious;

@@ -16,9 +16,9 @@ class ExcelUIContractTests(unittest.TestCase):
             "Master Documents",
             "Revisions",
             "Transactions",
-            "Pending Update",
+            "Change Details",
             "Review Flags",
-            "Source Selection",
+            "File Review",
             "User Decisions",
             "Configuration",
             "Rules & Mappings",
@@ -26,12 +26,13 @@ class ExcelUIContractTests(unittest.TestCase):
             "Error Log",
             "Help",
             "System Data",
+            "Custom Fields",
         }
         self.assertEqual(set(contract["workbook_sheets"]), required_sheets)
         required_buttons = {
             "Update Changed Files",
             "Full Rescan / Rebuild All",
-            "Review Pending Update",
+            "Review File Updates",
             "Approve Update",
             "Hold Update",
             "Reject Update",
@@ -44,12 +45,11 @@ class ExcelUIContractTests(unittest.TestCase):
             "Report Requirement / Problem",
             "View Log",
             "Help",
-            "Source Selection",
         }
         self.assertEqual(set(contract["buttons"]), required_buttons)
         self.assertEqual(contract["normal_user_interface"], "Excel only")
         self.assertIn("user-editable in Excel", contract["dynamic_rules_rule"])
-        self.assertIn("checkbox", contract["source_selection_rule"].lower())
+        self.assertIn("unchecked", contract["file_review_rule"].lower())
         self.assertIn("dropdown", contract["user_input_rule"].lower())
 
     def test_exchange_file_contract_is_stable(self):
@@ -66,6 +66,7 @@ class ExcelUIContractTests(unittest.TestCase):
                 "history.csv",
                 "errors.csv",
                 "source_selection.csv",
+                "file_review.csv",
             ],
         )
         self.assertEqual(
@@ -165,7 +166,7 @@ class ExcelUIContractTests(unittest.TestCase):
             "master_documents.csv": ("Master Documents", "MasterDocuments"),
             "revisions.csv": ("Revisions", "RevisionRegister"),
             "events.csv": ("Transactions", "EventRegister"),
-            "pending_update.csv": ("Pending Update", "PendingUpdate"),
+            "pending_update.csv": ("Change Details", "PendingUpdate"),
             "flags.csv": ("Review Flags", "ReviewFlags"),
             "history.csv": ("Update History", "UpdateHistory"),
         }
@@ -189,7 +190,7 @@ class ExcelUIContractTests(unittest.TestCase):
         )[0]
         self.assertIn("NMDC_ClearGeneratedTableHyperlinks table", loader)
         self.assertNotIn("table.DataBodyRange.Hyperlinks.Delete", loader)
-        cleanup = refresh.split("Private Sub NMDC_ClearGeneratedTableHyperlinks", 1)[1].split(
+        cleanup = refresh.split("Public Sub NMDC_ClearGeneratedTableHyperlinks", 1)[1].split(
             "End Sub", 1
         )[0]
         for name in ("Document Link", "Source File", "relative_path", "Relative Path"):
@@ -276,7 +277,7 @@ class ExcelUIContractTests(unittest.TestCase):
             "EventRegister",
             "PendingUpdate",
             "ReviewFlags",
-            "SourceSelection",
+            "FileReview",
             "UserDecisionLog",
             "Configuration",
             "ClassificationRules",
@@ -291,7 +292,7 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn('ws.ListObjects("Configuration")', text)
         self.assertIn('"NMDC_FlagWrongDataFromTable"', text)
         self.assertIn('"NMDC_ReportRequirementFromTable"', text)
-        self.assertIn('"Include in Index?"', text)
+        self.assertIn('"Accept Update?"', text)
 
     def test_source_selection_uses_native_in_cell_checkboxes_but_multi_choice_inputs_stay_dropdowns(self):
         checkboxes = (ROOT / "excel" / "vba" / "modNMDC_Checkboxes.bas").read_text(encoding="utf-8")
@@ -300,7 +301,7 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn("CellControl.SetCheckbox", checkboxes)
         self.assertNotIn("CheckBoxes.Add", checkboxes)
         self.assertIn("NMDC_SaveSourceSelections", checkboxes)
-        self.assertIn("save-source-selections", checkboxes)
+        self.assertIn("save-file-review", checkboxes)
         self.assertIn("NMDC_CheckAllSources", checkboxes)
         self.assertIn("ACKNOWLEDGED,NO ACTION REQUIRED", setup)
         self.assertIn("OPEN,ACKNOWLEDGED,RESOLVED,DEFERRED", setup)
@@ -323,15 +324,16 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn("mReviewDraftStoreFaulted = True", drafts)
         self.assertIn('Err.Raise savedErrorNumber, "NMDC_ReviewDraftWrite", savedErrorDescription', drafts)
 
-    def test_source_restage_retires_only_drafts_present_in_new_baseline(self):
-        drafts = (ROOT / "excel" / "vba" / "modNMDC_ReviewDrafts.bas").read_text(encoding="utf-8")
-        complete = drafts.split("Public Sub NMDC_ReviewDraftCompleteSourceRestage()", 1)[1].split(
-            "Private Function NMDC_ReviewDraftHasSourceFields", 1
-        )[0]
-        self.assertIn('NMDC_ReviewDraftComparable(CStr(item(3)), CStr(item(4)))', complete)
-        self.assertIn('NMDC_ReviewDraftRemove(drafts, oldRunId, STATE_SECTION, "SOURCE_RESTAGE", "WAITING")', complete)
-        self.assertIn("If Not NMDC_ReviewDraftHasSourceFields(drafts, oldRunId) Then", complete)
-        self.assertNotIn("NMDC_ReviewDraftClearSection", complete)
+    def test_saved_file_choices_reconcile_against_baseline_without_clearing_later_edits(self):
+        drafts = (ROOT / "excel/vba/modNMDC_ReviewDrafts.bas").read_text(encoding="utf-8")
+        checkboxes = (ROOT / "excel/vba/modNMDC_Checkboxes.bas").read_text(encoding="utf-8")
+        self.assertIn('SOURCE_SECTION As String = "FILES"', drafts)
+        self.assertIn('Case "SOURCE"', drafts)
+        self.assertNotIn("NMDC_ReviewDraftCompleteSourceRestage", drafts)
+        save = checkboxes.split("Public Sub NMDC_SaveSourceSelections()", 1)[1].split("End Sub", 1)[0]
+        self.assertIn('NMDC_RunEngine("export-excel")', save)
+        self.assertIn("NMDC_RefreshReviewDataFast()", save)
+        self.assertNotIn("NMDC_ReviewDraftClearSection", save)
 
     def test_refresh_guards_owner_inputs_and_moves_source_panel_before_pending_resize(self):
         refresh = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
@@ -348,18 +350,15 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertLess(loader.index("NMDC_PreparePendingSourcePanelForResize"), loader.index("table.Resize targetRange"))
         review_restore = loader.index('If tableName = "ReviewFlags" Then', loader.index("NMDC_ApplyTableGuidance"))
         self.assertLess(review_restore, loader.index("NMDC_LoadCsvToTable = True"))
-        self.assertIn("oldRange.ClearContents RemoveControls:=True", checkboxes)
+        self.assertNotIn("NMDC_MovePendingSourcePanelToHeaderRow", checkboxes)
         self.assertIn('NMDC_ParseCsvFile(csvPath, headers, data, dataCount, columnCount, True)', checkboxes)
         self.assertIn('If tableName = "ReviewFlags" Then', loader)
-        self.assertIn('"\\source_selection.csv", sourceHeaders, sourceData, sourceRows, sourceCols, True)', drafts)
+        self.assertIn('"\\file_review.csv", sourceHeaders, sourceData, sourceRows, sourceCols, True)', drafts)
         self.assertIn('"\\flags.csv", flagHeaders, flagData, flagRows, flagCols, True)', drafts)
         self.assertIn('NMDC_ParseCsvFile(filePath, headers, data, count, columns, True)', drafts)
-        prepare = checkboxes.split("Public Function NMDC_PreparePendingSourcePanelForResize", 1)[1].split(
-            "Private Function NMDC_MovePendingSourcePanelToHeaderRow", 1
-        )[0]
-        self.assertIn("If incomingDataRows > requiredRows Then requiredRows = incomingDataRows", prepare)
-        self.assertIn("pendingTable.HeaderRowRange.Row + requiredRows + 4", prepare)
-        self.assertIn("NMDC_MovePendingSourcePanelToHeaderRow(ws, headerRow)", checkboxes)
+        prepare = checkboxes.split("Public Function NMDC_PreparePendingSourcePanelForResize", 1)[1].split("End Function", 1)[0]
+        self.assertIn("NMDC_PreparePendingSourcePanelForResize = True", prepare)
+        self.assertNotIn("pendingTable.HeaderRowRange", prepare)
 
     def test_draft_store_rejects_interrupted_write_files(self):
         drafts = (ROOT / "excel" / "vba" / "modNMDC_ReviewDrafts.bas").read_text(encoding="utf-8")
@@ -378,8 +377,8 @@ class ExcelUIContractTests(unittest.TestCase):
         self.assertIn("NMDC_ReviewDraftsRestoreCurrent = False", restore)
         self.assertIn("If Not NMDC_ReviewDraftsRestoreCurrent() Then", refresh)
         self.assertIn("If Not NMDC_ReviewDraftsRestoreCurrent() Then", performance)
-        self.assertIn("ElseIf refreshOk Then", refresh)
-        self.assertIn("ElseIf ok Then", performance)
+        self.assertIn("If Not NMDC_RebuildPendingSourcePanel() Then refreshOk = False", refresh)
+        self.assertIn("If Not NMDC_RebuildPendingSourcePanel() Then ok = False", performance)
 
     def test_setup_defers_owner_sheet_events_until_workbook_open_for_the_user(self):
         setup = (ROOT / "packaging" / "Create_NMDC_Document_Index.vbs").read_text(encoding="utf-8")

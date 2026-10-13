@@ -15,7 +15,7 @@ Handler:
 End Sub
 
 Public Sub NMDC_OpenSourceSelection()
-    ' Backward-compatible action: source selection now lives on Pending Update.
+    ' Backward-compatible action: the action now opens File Review.
     On Error GoTo Handler
     If Not NMDC_ReviewDraftStoreHealthy() Or Not NMDC_ReviewDraftCaptureCurrentTables() Then Exit Sub
     If NMDC_RunEngine("export-excel") <> 0 Then
@@ -26,13 +26,13 @@ Public Sub NMDC_OpenSourceSelection()
         NMDC_GoToSheet "Error Log"
         Exit Sub
     End If
-    NMDC_GoToSheet "Pending Update"
+    NMDC_GoToSheet "File Review"
     NMDC_RebuildPendingSourcePanel
     NMDC_GoToSourceChoices
     Exit Sub
 Handler:
     NMDC_LogError "SOURCE_SELECTION_OPEN_ERROR", _
-        "Excel could not open source selection on Pending Update.", Err.Number & " - " & Err.Description
+        "Excel could not open File Review.", Err.Number & " - " & Err.Description
 End Sub
 
 Public Sub NMDC_GoToSourceChoices()
@@ -41,13 +41,13 @@ Public Sub NMDC_GoToSourceChoices()
     Dim ws As Worksheet
     Dim sourceTable As ListObject
 
-    Set ws = ThisWorkbook.Worksheets("Pending Update")
+    Set ws = ThisWorkbook.Worksheets("File Review")
     Set sourceTable = Nothing
     On Error Resume Next
-    Set sourceTable = ws.ListObjects("SourceSelection")
+    Set sourceTable = ws.ListObjects("FileReview")
     On Error GoTo Handler
     If sourceTable Is Nothing Then NMDC_RebuildPendingSourcePanel
-    Set sourceTable = ws.ListObjects("SourceSelection")
+    Set sourceTable = ws.ListObjects("FileReview")
     If sourceTable Is Nothing Then Err.Raise vbObjectError + 974, "NMDC Source Selection", "Source choices table is unavailable."
     Application.Goto Reference:=sourceTable.HeaderRowRange, Scroll:=True
     ActiveWindow.ScrollRow = Application.Max(1, sourceTable.HeaderRowRange.Row - 2)
@@ -55,7 +55,7 @@ Public Sub NMDC_GoToSourceChoices()
 
 Handler:
     NMDC_LogError "SOURCE_SELECTION_OPEN_ERROR", _
-        "Excel could not navigate to source choices on Pending Update.", Err.Number & " - " & Err.Description
+        "Excel could not navigate to file choices on File Review.", Err.Number & " - " & Err.Description
 End Sub
 
 Public Sub NMDC_OpenRulesMappingsOwner()
@@ -72,63 +72,13 @@ Public Sub NMDC_IncludeSelectedSource()
 End Sub
 
 Private Sub NMDC_SetSelectedSourceChoice(ByVal includeSource As Boolean)
-    On Error GoTo Handler
-
-    Dim sourceFile As String
-    Dim actionText As String
-    Dim reason As String
-    Dim args As String
-    Dim answer As VbMsgBoxResult
-
-    sourceFile = NMDC_SelectedSourceFile()
-    If Len(sourceFile) = 0 Then
-        MsgBox "Select a data row first in Pending Update." & vbCrLf & _
-               "The source file is taken from the selected row.", _
-               vbExclamation, "NMDC Document Index"
-        Exit Sub
-    End If
-
-    If includeSource Then
-        actionText = "INCLUDE"
-        answer = MsgBox("Include this source workbook in the index?" & vbCrLf & vbCrLf & _
-                        sourceFile & vbCrLf & vbCrLf & _
-                        "The proposal will be restaged. Nothing is approved automatically.", _
-                        vbQuestion + vbYesNo + vbDefaultButton2, "NMDC Document Index")
-        If answer <> vbYes Then Exit Sub
-    Else
-        actionText = "EXCLUDE"
-        answer = MsgBox("Exclude this entire source workbook from the index?" & vbCrLf & vbCrLf & _
-                        sourceFile & vbCrLf & vbCrLf & _
-                        "All records originating only from this source will be omitted from the next staged proposal. " & _
-                        "The source workbook itself will NOT be changed or deleted.", _
-                        vbExclamation + vbYesNo + vbDefaultButton2, "NMDC Document Index")
-        If answer <> vbYes Then Exit Sub
-        reason = InputBox("Optional reason for excluding this source:" & vbCrLf & _
-                          "Example: Duplicate register / not authoritative / outside index scope", _
-                          "Exclude Source", "Owner excluded during Pending Update review")
-    End If
-
-    args = "--source-file " & NMDC_Quote(sourceFile) & _
-           " --action " & actionText & _
-           " --reason " & NMDC_Quote(reason)
-
-    If NMDC_RunEngine("set-source-selection", args) <> 0 Then
-        MsgBox "The source selection could not be saved. Please review Error Log.", _
-               vbExclamation, "NMDC Document Index"
-        Exit Sub
-    End If
-
-    MsgBox "Source choice saved: " & actionText & vbCrLf & vbCrLf & _
-           sourceFile & vbCrLf & vbCrLf & _
-           "The index will now restage the proposal. Nothing is approved yet.", _
-           vbInformation, "NMDC Document Index"
-    NMDC_UpdateChangedFilesFast
-    Exit Sub
-
-Handler:
-    NMDC_LogError "SOURCE_SELECTION_SAVE_ERROR", _
-        "Excel could not save the selected source choice.", _
-        Err.Number & " - " & Err.Description
+    Dim table As ListObject, rowIndex As Long
+    If ActiveSheet.Name <> "File Review" Then NMDC_GoToSourceChoices: Exit Sub
+    Set table = ActiveSheet.ListObjects("FileReview")
+    If table.DataBodyRange Is Nothing Then Exit Sub
+    If Intersect(Selection, table.DataBodyRange) Is Nothing Then Exit Sub
+    rowIndex = Selection.Cells(1, 1).Row - table.DataBodyRange.Row + 1
+    table.ListColumns("Accept Update?").DataBodyRange.Cells(rowIndex, 1).Value2 = includeSource
 End Sub
 
 Private Function NMDC_SelectedSourceFile() As String
@@ -162,12 +112,11 @@ End Function
 Public Function NMDC_RefreshSourceSelectionTable() As Boolean
     ' Compatibility entry point. There is no separate owner-facing source sheet now.
     On Error GoTo Handler
-    NMDC_RebuildPendingSourcePanel
-    NMDC_RefreshSourceSelectionTable = True
+    NMDC_RefreshSourceSelectionTable = NMDC_RebuildPendingSourcePanel()
     Exit Function
 Handler:
     NMDC_LogError "SOURCE_SELECTION_REFRESH_ERROR", _
-        "Excel could not refresh source selection on Pending Update.", Err.Number & " - " & Err.Description
+        "Excel could not refresh File Review.", Err.Number & " - " & Err.Description
     NMDC_RefreshSourceSelectionTable = False
 End Function
 
@@ -178,8 +127,8 @@ Private Sub NMDC_ApplyHomeButtonGuides()
     Dim shape As Shape
 
     titles = Array( _
-        "Update Changed Files", "Full Rescan / Rebuild All", "Review Pending Update", _
-        "Approve Update", "Hold Update", "Reject Update", _
+        "Update Changed Files", "Full Rescan / Rebuild All", "Review File Updates", _
+        "Review File Choices", "Hold Update", "Reject Update", _
         "Select Data Folder", "Review Flags", "Save Review Decisions", _
         "Configuration", "Rules & Mappings", "View Log", _
         "Flag Wrong Data", "Report Requirement / Problem", "Refresh Dashboard", _
@@ -188,8 +137,8 @@ Private Sub NMDC_ApplyHomeButtonGuides()
     guides = Array( _
         "NORMAL USE - scan new/changed files only", _
         "HEAVY - rebuild every source from the local cache", _
-        "Preview changes + source include checkboxes", _
-        "Accept the whole remaining staged proposal", _
+        "Review affected files; optional change details", _
+        "Choose files to accept; unchecked keeps approved data", _
         "Pause the proposal without changing approved data", _
         "Discard the staged proposal", _
         "Choose the folder that contains source registers", _
@@ -245,8 +194,8 @@ Private Sub NMDC_ApplyHomeWorkflowGuide()
 
     NMDC_SetGuideRow ws, 31, "1", "SELECT SOURCE", "Select Data Folder once. Application/runtime stays local; source files may remain in OneDrive."
     NMDC_SetGuideRow ws, 32, "2", "SCAN", "Use Update Changed Files normally. Full Rescan is only for deliberate rebuilds or troubleshooting."
-    NMDC_SetGuideRow ws, 33, "3", "REVIEW", "Open Pending Update. The left table is the proposed change list. Nothing is approved yet."
-    NMDC_SetGuideRow ws, 34, "4", "CHOOSE SOURCES", "On Pending Update, use the native Excel checkboxes in the source-selection section below the staged changes table: checked = include, unchecked = exclude. Save Source Choices & Restage once."
+    NMDC_SetGuideRow ws, 33, "3", "REVIEW", "Open File Review to review the affected files. Change Details is optional."
+    NMDC_SetGuideRow ws, 34, "4", "CHOOSE FILES", "Check files to accept their update. Uncheck to retain approved data for this proposal. Save File Choices once."
     NMDC_SetGuideRow ws, 35, "5", "DECIDE", "Approve = accept the whole remaining proposal; Hold = postpone; Reject = discard the staged proposal."
     NMDC_SetGuideRow ws, 36, "6", "EXCEPTIONS", "Review Flags is only for genuine extraction/data exceptions. The validated current DATA should produce zero extraction flags."
     NMDC_SetGuideRow ws, 37, "TIP", "LIVE FILTER", "Use the REV03 search box on the sheet. Press Ctrl+Shift+F only to choose the target table header, then type directly in TxtBox_Search. Spaces or + = AND; -word = EXCLUDE; quoted text = exact. RESET SEARCH clears the filter."
@@ -282,7 +231,7 @@ Private Sub NMDC_ApplyPendingUpdateDecisionGuide()
     Const SOURCE_BUTTON_WIDTH As Double = 150
     Const GUIDE_GAP As Double = 8
     Const GUIDE_WIDTH As Double = 600
-    Set ws = ThisWorkbook.Worksheets("Pending Update")
+    Set ws = ThisWorkbook.Worksheets("Change Details")
 
     On Error Resume Next
     If CStr(ws.Range("A2").Value2) = "No staged update is included in this review-only baseline. Use the macro-enabled package to create a fresh staged comparison." Then
@@ -297,8 +246,8 @@ Private Sub NMDC_ApplyPendingUpdateDecisionGuide()
     Set sourceButton = ws.Shapes.AddShape(5, anchor.Left, anchor.Top, SOURCE_BUTTON_WIDTH, 26)
     sourceButton.Name = "NMDC_Pending_SourceNavigation"
     sourceButton.OnAction = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!NMDC_GoToSourceChoices"
-    sourceButton.TextFrame.Characters.Text = "SOURCE CHOICES"
-    sourceButton.AlternativeText = "Jump to source choices below the staged changes table on this sheet."
+    sourceButton.TextFrame.Characters.Text = "FILE REVIEW"
+    sourceButton.AlternativeText = "Open File Review to choose the files to update."
     With sourceButton
         .TextFrame.HorizontalAlignment = xlCenter
         .TextFrame.VerticalAlignment = 3
@@ -314,7 +263,7 @@ Private Sub NMDC_ApplyPendingUpdateDecisionGuide()
     Set guide = ws.Shapes.AddShape(1, anchor.Left + SOURCE_BUTTON_WIDTH + GUIDE_GAP, anchor.Top, GUIDE_WIDTH, 26)
     guide.Name = "NMDC_Pending_SourceGuide"
     guide.TextFrame.Characters.Text = _
-        "Open the source checkbox panel. Select sources, then use Save Source Choices & Restage once to update the proposal."
+        "Optional details. Review and accept files on File Review."
     With guide
         .Fill.ForeColor.RGB = RGB(255, 247, 219)
         .Line.ForeColor.RGB = RGB(255, 247, 219)
@@ -332,7 +281,7 @@ Private Sub NMDC_ApplyPendingUpdateDecisionGuide()
     End With
 
     NMDC_SafeMergeAndSet ws, "A4:I4", _
-        "REVIEW WORKFLOW. The first table shows proposed record changes. The source-selection section below it contains one native Excel checkbox per source workbook. Checked = include; unchecked = exclude. Save Source Choices & Restage after changes. Approve/Hold/Reject applies to the remaining whole proposal."
+        "OPTIONAL CHANGE DETAILS. Review and accept the affected files on File Review. Unchecked files retain their approved data."
     With ws.Range("A4:I4")
         .Interior.Color = RGB(255, 247, 219)
         .Font.Name = "Aptos"

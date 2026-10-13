@@ -387,7 +387,7 @@ Generate the user-facing macro-enabled workbook (`NMDC_Document_Index.xlsm`), st
 - Consolidated 15 worksheets and 15 unique named ListObjects.
 - Owner-reference Dynamic Live Filter REV03 architecture: worksheet ActiveX `TxtBox_Search`, `Cls_LiveFilter_Listener` per-keystroke events, `Ctrl+Shift+F` target-header selection, `+AND / -EXCLUDE` syntax, quoted exact matching, and `RESET SEARCH`.
 - Formula-driven custom fields and keyword mappings.
-- In-cell source-selection checkboxes in `Pending Update`.
+- Separate File Review and optional Change Details worksheets. Native file acceptance checkboxes preserve approved data for unchecked files; Save File Choices is proposal-bound and does not change permanent scope or rescan.
 - Fast responsive background staging with status bar progress.
 - 64-bit safe APIs (`PtrSafe Sleep`) and commercial OneDrive path resolution.
 - 23-case real Microsoft Excel simulation matrix (`test_real_excel_simulation.py`) records automated evidence and explicitly leaves human caret/typing/visual interactions for owner acceptance rather than falsely marking them PASS.

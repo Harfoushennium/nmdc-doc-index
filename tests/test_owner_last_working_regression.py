@@ -64,8 +64,8 @@ class OwnerLastWorkingRegressionTests(unittest.TestCase):
 
     def test_source_selection_is_integrated_without_dropping_backend_compatibility(self):
         checkboxes = self._read("excel/vba/modNMDC_Checkboxes.bas")
-        self.assertIn('ThisWorkbook.Worksheets("Pending Update")', checkboxes)
-        self.assertIn('SOURCE_PANEL_TABLE As String = "SourceSelection"', checkboxes)
+        self.assertIn('ThisWorkbook.Worksheets("File Review")', checkboxes)
+        self.assertIn('SOURCE_PANEL_TABLE As String = "FileReview"', checkboxes)
         self.assertIn('legacyWs.Visible = xlSheetVeryHidden', checkboxes)
         self.assertIn('homeWs.Shapes("NMDC_Action_19").Delete', checkboxes)
         self.assertIn("Public Sub NMDC_SourceCheckboxClicked()", checkboxes)

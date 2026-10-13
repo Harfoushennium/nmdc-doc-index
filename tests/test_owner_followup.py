@@ -63,8 +63,8 @@ class OwnerFollowupTests(unittest.TestCase):
     def test_workbook_guidance_explains_inputs_outputs_and_pending_update(self):
         startup = (ROOT / "excel" / "vba" / "modNMDC_Startup.bas").read_text(encoding="utf-8")
         self.assertIn("Public Sub NMDC_ApplyWorkbookGuidance", startup)
-        self.assertIn("REVIEW + SOURCE SELECTION", startup)
-        self.assertIn('Case "INCLUDE IN INDEX?"', startup)
+        self.assertIn("OPTIONAL CHANGE DETAILS", startup)
+        self.assertIn('Case "ACCEPT UPDATE?"', startup)
         self.assertIn('Case "OWNER NOTE"', startup)
         self.assertIn("USER ACTION SHEET", startup)
         self.assertIn('Case "USER DECISION"', startup)
@@ -97,7 +97,7 @@ class OwnerFollowupTests(unittest.TestCase):
 
     def test_refresh_resets_filters_and_sort_before_replacing_rows(self):
         refresh = (ROOT / "excel" / "vba" / "modNMDC_Refresh.bas").read_text(encoding="utf-8")
-        self.assertIn("Private Sub NMDC_ResetTableViewForRefresh", refresh)
+        self.assertIn("Public Sub NMDC_ResetTableViewForRefresh", refresh)
         self.assertIn("If table.Parent.FilterMode Then table.Parent.ShowAllData", refresh)
         self.assertIn("table.Sort.SortFields.Clear", refresh)
         self.assertIn("table.ShowAutoFilter = True", refresh)

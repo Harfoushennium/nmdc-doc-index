@@ -266,37 +266,19 @@ Reset must:
 
 ---
 
-## 9. Pending Update / source selection
+## 9. File Review / optional Change Details
 
-Owner requirements:
+**Owner-confirmed supersession, 13 Oct 2026:** The previous same-sheet source-scope UI is replaced by two review worksheets.
 
-- No separate owner-facing Source Selection worksheet.
-- Source decisions are made **inside Pending Update**.
-- One source-level decision per workbook.
-- Use modern Microsoft 365 **in-cell Checkbox** control.
-- Checkbox cell stores TRUE/FALSE.
-- Show Project No.
-- Show Source File.
-- Show useful current status/context.
-- Optional Owner Note.
-- Allow Check All / Uncheck All.
-- Save/Restage once after selections, not once per checkbox click.
-
-Use the native control available from Excel Controls, programmatically through the supported CellControl checkbox API where available.
-
-Do NOT use:
-
-- ActiveX checkboxes;
-- Form Control checkboxes;
-- `CheckBoxes.Add`;
-- floating linked-cell checkbox objects;
-- per-checkbox macro callbacks.
-
-Current far-right panel makes the sheet too wide and is rejected.
-
-Redesign the same-sheet UX. Prefer a compact section below the Pending Update table or another same-sheet layout that does not create excessive width.
-
----
+- File Review is the normal owner workflow and shows affected files only: new, changed and removed, with Project No., Source File and brief change counts.
+- Each affected file has a native Microsoft 365 Accept Update? checkbox and optional Owner Note.
+- Checked accepts that file's update. Unchecked skips this proposal for that file and retains its previously approved contents. It does not persist an exclusion.
+- Save File Choices saves all choices against the exact displayed run and approved baseline without rescanning.
+- Approve Update is on File Review. Saved review decisions and unresolved blocking issues remain gates.
+- View Change Details opens the separate record preview. Reading it is optional.
+- Prior drafts remain reviewable when a proposal is replaced and must never be applied to the new run.
+- Both data areas remain Excel Tables; review-table growth must not move the file choices.
+- Engine permanent scope/configuration and its legacy commands remain distinct from proposal acceptance.
 
 ## 10. Review Flags / extraction
 
@@ -572,8 +554,8 @@ Do not blindly hardcode these; explain legitimate changes.
 - Count/table/banner/report agree.
 - Genuine faults remain visible.
 
-### Test 07 — Pending Update layout
-- Professional same-sheet review/source-selection UX.
+### Test 07 — Separate review sheets
+- File Review is primary; Change Details is optional. Both data areas are Excel Tables.
 - No duplicate text.
 - No excessive horizontal width.
 - No overlap.

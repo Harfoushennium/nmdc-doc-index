@@ -13,7 +13,7 @@ This file captures the owner-visible product requirements that govern the NMDC D
 - **Excel is the primary user interface:** The end-user operates the system entirely within Microsoft Excel (`NMDC_Document_Index.xlsm`).
 - **No Developer Tooling Required:** The owner does not need Python, PowerShell, Command Prompt, Git, or direct runtime-file editing for normal daily operations.
 - **Read-Only Source Policy:** Source `DATA/` workbooks (`METHODS/` and `TECH/`) are historical records and are **strictly read-only**. The index pipeline never unmerges, saves, edits, normalizes, or repairs files in `DATA/`.
-- **Staged Approval Model:** No scan or update may silently replace or modify the approved index. All extractions are initially staged into `Pending Update` for explicit operator review and approval.
+- **Staged Approval Model:** No scan or update may silently replace or modify the approved index. All extractions are staged for file-level owner review on `File Review`; record-level `Change Details` is optional.
 - **Merge & Acceptance Authority:** The repository owner alone holds final acceptance and merge authority.
 
 ---
@@ -36,7 +36,7 @@ The production workbook (`NMDC_Document_Index.xlsm`) consists of exactly **15 wo
 2. **`Master Documents`** (`MasterDocuments` table): Unique document-level register.
 3. **`Revisions`** (`RevisionRegister` table): Revision-level history with latest-revision flags.
 4. **`Transactions`** (`EventRegister` table): Complete event/submission/transmittal transaction log.
-5. **`Pending Update`** (`PendingUpdate` table): Staging area for new and changed records awaiting approval. Includes in-cell source-selection checkboxes.
+5. **`Change Details`** (`PendingUpdate` table): Optional read-only record preview. No file decisions are entered here.
 6. **`Review Flags`** (`ReviewFlags` table): Flags documents requiring classification review, ambiguous numbers, or syntax warnings.
 7. **`User Decisions`** (`UserDecisionLog` table): Persistent audit log of operator review decisions.
 8. **`Configuration`** (`Configuration` table): Path configurations (`Data Folder`, runtime directories, engine executable path).
@@ -45,7 +45,7 @@ The production workbook (`NMDC_Document_Index.xlsm`) consists of exactly **15 wo
 11. **`Update History`** (`UpdateHistory` table): Historical record of all staged, approved, held, or rejected runs.
 12. **`Error Log`** (`ErrorLog` table): Plain-English error reporting with recommended actions.
 13. **`System Data`** (`BaselineCounts` & `SourceInventory` tables): Internal audit counts and source inventory.
-14. **`Source Selection`** (`SourceSelection` table): Backup source selection registry.
+14. **`File Review`** (`FileReview` table): Primary affected-file review, native Accept Update? checkboxes, notes, Save File Choices and Approve Update.
 
 ---
 
@@ -59,7 +59,7 @@ The production workbook (`NMDC_Document_Index.xlsm`) consists of exactly **15 wo
   - Spaces or `+` mean required/AND terms; `-word` excludes rows containing that term; surrounding quotes invoke the reference exact-match behavior.
   - A visible **RESET SEARCH** button clears the table filter, clears the textbox, restores the placeholder, and returns focus to the search box.
   - A visible **CHANGE COLUMN** button opens the same table-header chooser as `Ctrl+Shift+F`.
-  - The same control pattern is installed on Master Documents, Revisions, Transactions, Pending Update, Review Flags, User Decisions, Update History, and Error Log.
+  - The same control pattern is installed on Master Documents, Revisions, Transactions, File Review, Change Details, Review Flags, User Decisions, Update History, and Error Log.
 - **Visual Presentation Standards:**
   - Font: Clean Aptos 10 typography across all data cells.
   - Automatic font coloring with no harsh or arbitrary cell background fills.
@@ -73,7 +73,7 @@ The production workbook (`NMDC_Document_Index.xlsm`) consists of exactly **15 wo
 
 ## 5. Staged Review & Admin Controls
 
-- **Source Scope Controls:** Native Microsoft 365 in-cell checkboxes inside `Pending Update` allow including or excluding entire source workbooks in a single **Save Selection & Restage** operation without repeatedly re-scanning. The owner environment supports native in-cell checkboxes; the production UX must not silently downgrade these controls to visible TRUE/FALSE text.
+- **Proposal File Choices:** File Review shows affected files only. Checked accepts the proposed file update; unchecked retains previously approved data for this run and does not change permanent exclusions. Save File Choices is required before approval; it saves choices and notes without restaging. Change Details is optional. Saved Review Flag decisions and unresolved conflict guards remain mandatory.
 - **Non-Coder Rules Editor:** Plain-text match types (`CONTAINS`, `EXACT`, `STARTS_WITH`, `ENDS_WITH`). No complex regular expressions required for routine rules.
 - **Actionable parser/mapping exception workflow:** `Review Flags` uses a native Microsoft 365 **Select?** checkbox column and separate **Source File** / **Worksheet Name** columns so the exact affected worksheet is explicit. When selected rows are reported for `NEEDS PARSER/MAPPING FIX`, the workbook must create `PARSER_FIX_REPORTS\0001`, `0002`, ... beside the workbook package. Each request folder is self-contained and must not overwrite or mix with an older request. It must explain that the installed executable cannot safely rewrite its own parser code. After a corrected parser/configuration is installed, **Retry After Fix** must reprocess the source through Full Rescan without modifying source DATA or approving the staged proposal automatically.
 - **Safe Recovery Actions:**
@@ -81,6 +81,8 @@ The production workbook (`NMDC_Document_Index.xlsm`) consists of exactly **15 wo
   - **Undo Last Approval:** Restores the previous approved index version from audit history.
 
 ---
+
+Native Microsoft 365 checkbox rendering is a production requirement. The workbook must not silently downgrade to visible TRUE/FALSE text. A checkbox creation failure blocks successful refresh and acceptance.
 
 ## 6. Acceptance & Release Criteria
 

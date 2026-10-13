@@ -34,8 +34,8 @@ Public Sub NMDC_ApplyWorkbookGuidance()
         "SYSTEM OUTPUT - READ ONLY. One row per extracted document revision. Filters and sorts are reset on refresh. Do not type corrections directly into this table."
     NMDC_SetSheetBanner "Transactions", _
         "SYSTEM OUTPUT - READ ONLY. One row per extracted event/transaction. Filters and sorts are reset on refresh. Use Source File / Document Link to verify the source record."
-    NMDC_SetSheetBanner "Pending Update", _
-        "REVIEW + SOURCE SELECTION. The staged-changes table is read only. In the source-selection section below it, use Include in Index? checkboxes and optional Owner Note, then Save Source Choices & Restage. Approve / Hold / Reject is done from Home."
+    NMDC_SetSheetBanner "Change Details", _
+        "OPTIONAL CHANGE DETAILS. This read-only table shows record changes. Review and accept files on File Review."
     NMDC_SetSheetBanner "Review Flags", _
         "USER ACTION SHEET. Editable fields are User Decision, User Comment and Resolution Status. Filters and sorts are reset on refresh. Decisions record your review; they do NOT edit the source workbook or silently rewrite extracted data."
     NMDC_SetSheetBanner "User Decisions", _
@@ -60,7 +60,8 @@ Public Sub NMDC_ApplyWorkbookGuidance()
     NMDC_ApplyNamedTableGuidance "Master Documents", "MasterDocuments"
     NMDC_ApplyNamedTableGuidance "Revisions", "RevisionRegister"
     NMDC_ApplyNamedTableGuidance "Transactions", "EventRegister"
-    NMDC_ApplyNamedTableGuidance "Pending Update", "PendingUpdate"
+    NMDC_ApplyNamedTableGuidance "Change Details", "PendingUpdate"
+    NMDC_ApplyNamedTableGuidance "File Review", "FileReview"
     NMDC_ApplyNamedTableGuidance "Review Flags", "ReviewFlags"
     NMDC_ApplyNamedTableGuidance "User Decisions", "UserDecisionLog"
     NMDC_ApplyNamedTableGuidance "Configuration", "Configuration"
@@ -630,11 +631,11 @@ Private Function NMDC_HeaderHelp(ByVal tableName As String, ByVal headerName As 
         Case "PLAIN-ENGLISH SUMMARY"
             NMDC_HeaderHelp = "SYSTEM OUTPUT - READ ONLY. Explains what this staged row means if the update is approved."
         Case "REVIEW REQUIRED"
-            NMDC_HeaderHelp = "SYSTEM OUTPUT - READ ONLY. YES means the staged change deserves attention before approval. Row-level review decisions are entered on Review Flags; source include/exclude choices are made in the source-selection section on Pending Update."
-        Case "INCLUDE IN INDEX?"
-            NMDC_HeaderHelp = "USER INPUT - CHECKBOX. Checked = include this entire source workbook in the next staged proposal. Unchecked = intentionally exclude it. The source file itself is never deleted or edited. Click Save Source Choices & Restage after finishing your selections."
+            NMDC_HeaderHelp = "SYSTEM OUTPUT - READ ONLY. YES means the staged change deserves attention before approval. Row-level review decisions are entered on Review Flags; file acceptance choices are made on File Review."
+        Case "ACCEPT UPDATE?"
+            NMDC_HeaderHelp = "USER INPUT - CHECKBOX. Checked accepts the file update; unchecked keeps its previously approved data for this proposal. Save File Choices before approval."
         Case "OWNER NOTE"
-            NMDC_HeaderHelp = "USER INPUT - OPTIONAL TEXT. Add a short reason or reminder for this source decision, for example Duplicate register, Not authoritative, or Outside index scope."
+            NMDC_HeaderHelp = "USER INPUT - OPTIONAL TEXT. Add a short reason or reminder for accepting or deferring this file update."
         Case "SELECTION REASON"
             NMDC_HeaderHelp = "SYSTEM/AUDIT OUTPUT - READ ONLY. Explains why this source is currently included or excluded, including an owner decision or automatic source-selection rule."
         Case "LAST PROCESSED RUN"

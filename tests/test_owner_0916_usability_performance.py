@@ -285,7 +285,7 @@ class Owner0916UsabilityPerformanceTests(unittest.TestCase):
         self.assertIn("modNMDC_Performance.bas", setup)
         self.assertIn("modNMDC_OwnerUX.bas", setup)
         self.assertIn("modNMDC_Checkboxes.bas", setup)
-        self.assertIn('"Include in Index?"', setup)
+        self.assertIn('"Accept Update?"', setup)
         self.assertIn("NMDC_UpdateChangedFilesFast", setup)
         self.assertIn("NMDC_FullRescanFast", setup)
         self.assertIn("NMDC_ReviewPendingUpdateFast", setup)
@@ -304,8 +304,8 @@ class Owner0916UsabilityPerformanceTests(unittest.TestCase):
         self.assertNotIn("events.csv", fast_refresh)
 
         self.assertIn("QUICK WORKFLOW - WHAT TO DO", owner_ux)
-        self.assertIn("native Excel checkboxes", owner_ux)
-        self.assertIn("Save Source Choices & Restage", owner_ux)
+        self.assertIn("Check files to accept", owner_ux)
+        self.assertIn("Save File Choices", owner_ux)
         self.assertIn("CONTAINS,EXACT,STARTS_WITH,ENDS_WITH", owner_ux)
         self.assertNotIn("CONTAINS,EXACT,FUZZY,REGEX", owner_ux)
 
@@ -315,8 +315,8 @@ class Owner0916UsabilityPerformanceTests(unittest.TestCase):
         self.assertIn("NMDC_SaveSourceSelections", checkboxes)
         self.assertIn("NMDC_CheckAllSources", checkboxes)
         self.assertIn("NMDC_UncheckAllSources", checkboxes)
-        self.assertIn("save-source-selections", checkboxes)
-        self.assertIn("save-source-selections", engine)
+        self.assertIn("save-file-review", checkboxes)
+        self.assertIn("save-file-review", engine)
 
     def test_checkbox_policy_keeps_multi_choice_inputs_as_dropdowns(self):
         """Checkboxes are for true binary owner choices, not multi-option decisions."""

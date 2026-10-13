@@ -3,7 +3,7 @@ Option Explicit
 
 Private Const DRAFT_FILE As String = "owner_review_drafts.csv"
 Private Const DRAFT_HEADERS As String = "Run ID,Section,Identity,Field,Value"
-Private Const SOURCE_SECTION As String = "SOURCE"
+Private Const SOURCE_SECTION As String = "FILES"
 Private Const FLAGS_SECTION As String = "FLAGS"
 Private Const STATE_SECTION As String = "STATE"
 Private mReviewDraftStoreFaulted As Boolean
@@ -54,11 +54,11 @@ Public Function NMDC_ReviewDraftCaptureCurrentTables() As Boolean
     End If
     Set drafts = NMDC_ReviewDraftLoad()
 
-    If Not NMDC_ParseCsvFile(NMDC_ExchangePath() & "\source_selection.csv", sourceHeaders, sourceData, sourceRows, sourceCols, True) Then Err.Raise vbObjectError + 226, , "Source selection baseline is unavailable."
-    Set ws = ThisWorkbook.Worksheets("Pending Update")
+    If Not NMDC_ParseCsvFile(NMDC_ExchangePath() & "\file_review.csv", sourceHeaders, sourceData, sourceRows, sourceCols, True) Then Err.Raise vbObjectError + 226, , "Source selection baseline is unavailable."
+    Set ws = ThisWorkbook.Worksheets("File Review")
         Set table = Nothing
         On Error Resume Next
-        Set table = ws.ListObjects("SourceSelection")
+        Set table = ws.ListObjects("FileReview")
         On Error GoTo Handler
         If Not table Is Nothing Then
             If Not table.DataBodyRange Is Nothing Then
@@ -68,7 +68,7 @@ Public Function NMDC_ReviewDraftCaptureCurrentTables() As Boolean
                     csvRow = NMDC_ReviewDraftFindSourceCsvRow(sourceData, sourceRows, sourceHeaders, sourceKey)
                     If csvRow = 0 Then Err.Raise vbObjectError + 229, , "Displayed source row is missing from the current exchange baseline."
                     If csvRow > 0 Then
-                        For Each fieldName In Array("Include in Index?", "Owner Note")
+                        For Each fieldName In Array("Accept Update?", "Owner Note")
                             If NMDC_ReviewDraftCsvHasField(sourceHeaders, CStr(fieldName)) Then
                                 currentValue = CStr(table.ListColumns(CStr(fieldName)).DataBodyRange.Cells(rowIndex, 1).Value2)
                                 baselineValue = NMDC_ReviewDraftCsvDataValue(sourceData, csvRow, sourceHeaders, CStr(fieldName))
@@ -146,10 +146,10 @@ Public Sub NMDC_ReviewDraftSheetChange(ByVal Sh As Object, ByVal Target As Range
 
     If Target Is Nothing Then Exit Sub
     Select Case CStr(Sh.Name)
-        Case "Pending Update"
+        Case "File Review"
             Set table = Nothing
             On Error Resume Next
-            Set table = Sh.ListObjects("SourceSelection")
+            Set table = Sh.ListObjects("FileReview")
             On Error GoTo Handler
             sectionText = SOURCE_SECTION
         Case "Review Flags"
@@ -177,7 +177,7 @@ Public Sub NMDC_ReviewDraftSheetChange(ByVal Sh As Object, ByVal Target As Range
         rowIndex = cell.Row - body.Row + 1
         fieldName = CStr(table.HeaderRowRange.Cells(1, cell.Column - table.Range.Column + 1).Value2)
         If sectionText = SOURCE_SECTION Then
-            If fieldName <> "Include in Index?" And fieldName <> "Owner Note" Then GoTo NextCell
+            If fieldName <> "Accept Update?" And fieldName <> "Owner Note" Then GoTo NextCell
         Else
             If fieldName <> "Select?" And fieldName <> "User Decision" And _
                fieldName <> "User Comment" And fieldName <> "Resolution Status" Then GoTo NextCell
@@ -256,8 +256,8 @@ Public Function NMDC_ReviewDraftsRestoreCurrent() As Boolean
             Set table = Nothing
             Select Case CStr(item(1))
                 Case SOURCE_SECTION
-                    Set ws = ThisWorkbook.Worksheets("Pending Update")
-                    Set table = ws.ListObjects("SourceSelection")
+                    Set ws = ThisWorkbook.Worksheets("File Review")
+                    Set table = ws.ListObjects("FileReview")
                 Case FLAGS_SECTION
                     Set ws = ThisWorkbook.Worksheets("Review Flags")
                     Set table = ws.ListObjects("ReviewFlags")
@@ -267,7 +267,7 @@ Public Function NMDC_ReviewDraftsRestoreCurrent() As Boolean
             rowIndex = NMDC_ReviewDraftFindRow(table, CStr(item(2)), CStr(item(1)))
             If rowIndex > 0 Then
                 Set cell = table.ListRows(rowIndex).Range.Cells(1, table.ListColumns(CStr(item(3))).Index)
-                If CStr(item(3)) = "Include in Index?" Or CStr(item(3)) = "Select?" Then
+                If CStr(item(3)) = "Accept Update?" Or CStr(item(3)) = "Select?" Then
                     cell.Value2 = NMDC_ReviewDraftBoolean(item(4))
                 Else
                     cell.Value2 = CStr(item(4))
@@ -303,15 +303,12 @@ Public Function NMDC_ReviewDraftsCanApprove(ByVal runId As String, ByRef reason 
     Dim item As Variant
     Dim sourceCount As Long
     Dim flagCount As Long
-    Dim restagePending As Boolean
 
     Set drafts = NMDC_ReviewDraftLoad()
     For Each key In drafts.Keys
         item = drafts(key)
         If CStr(item(1)) = SOURCE_SECTION Then
             If StrComp(CStr(item(0)), runId, vbBinaryCompare) = 0 Then sourceCount = sourceCount + 1
-        ElseIf CStr(item(1)) = STATE_SECTION And CStr(item(2)) = "SOURCE_RESTAGE" Then
-            restagePending = True
         ElseIf CStr(item(1)) = FLAGS_SECTION And _
                StrComp(CStr(item(0)), runId, vbBinaryCompare) = 0 And _
                (CStr(item(3)) = "User Decision" Or CStr(item(3)) = "User Comment" Or CStr(item(3)) = "Resolution Status") Then
@@ -319,10 +316,9 @@ Public Function NMDC_ReviewDraftsCanApprove(ByVal runId As String, ByRef reason 
         End If
     Next key
 
-    If sourceCount > 0 Or flagCount > 0 Or restagePending Then
+    If sourceCount > 0 Or flagCount > 0 Then
         reason = "Approval is blocked because owner changes are still draft. "
-        If sourceCount > 0 Then reason = reason & CStr(sourceCount) & " source choice/note field(s) must be saved and restaged. "
-        If restagePending Then reason = reason & "Saved source choices await a successful new staged proposal. "
+        If sourceCount > 0 Then reason = reason & CStr(sourceCount) & " file choice/note field(s) must be saved. "
         If flagCount > 0 Then reason = reason & CStr(flagCount) & " Review Flag decision/comment/status field(s) must be saved. "
         reason = reason & "Use Review Saved Drafts to inspect preserved edits, then save the current review inputs."
         NMDC_ReviewDraftsCanApprove = False
@@ -406,94 +402,6 @@ Public Sub NMDC_ReviewDraftCaptureAllSourceChoices()
             "The displayed owner inputs could not be compared with the current proposal."
     End If
 End Sub
-
-Public Sub NMDC_ReviewDraftMarkSourceRestage(ByVal runId As String)
-    NMDC_ReviewDraftSet runId, STATE_SECTION, "SOURCE_RESTAGE", "WAITING", "TRUE"
-End Sub
-
-Public Sub NMDC_ReviewDraftCompleteSourceRestage()
-    On Error GoTo Handler
-    Dim drafts As Object
-    Dim keys As Variant
-    Dim key As Variant
-    Dim item As Variant
-    Dim currentRunId As String
-    Dim dashboardHeaders As Variant, dashboardData As Variant
-    Dim sourceHeaders As Variant, sourceData As Variant
-    Dim dashboardRows As Long, dashboardCols As Long
-    Dim sourceRows As Long, sourceCols As Long
-    Dim sourceKey As String
-    Dim csvRow As Long
-    Dim fieldName As Variant
-    Dim changed As Boolean
-    Dim oldRunId As String
-
-    Set drafts = NMDC_ReviewDraftLoad()
-    currentRunId = NMDC_DisplayedPendingRunId()
-    If Len(currentRunId) = 0 Then Exit Sub
-    If Not NMDC_ParseCsvFile(NMDC_ExchangePath() & "\dashboard.csv", dashboardHeaders, dashboardData, dashboardRows, dashboardCols) Then _
-        Err.Raise vbObjectError + 236, , "The new staged proposal dashboard is unavailable."
-    If StrComp(NMDC_ReviewDraftCsvValue(dashboardHeaders, dashboardData, dashboardRows, "Pending Run ID"), _
-               currentRunId, vbBinaryCompare) <> 0 Then Exit Sub
-    If Not NMDC_ParseCsvFile(NMDC_ExchangePath() & "\source_selection.csv", sourceHeaders, sourceData, sourceRows, sourceCols, True) Then _
-        Err.Raise vbObjectError + 237, , "The new staged source baseline is unavailable."
-    If Not NMDC_ReviewDraftCsvHasField(sourceHeaders, "Include in Index?") Or _
-       Not NMDC_ReviewDraftCsvHasField(sourceHeaders, "Owner Note") Then _
-        Err.Raise vbObjectError + 238, , "The new staged source baseline is missing owner-input fields."
-
-    keys = drafts.Keys
-    For Each key In keys
-        If drafts.Exists(CStr(key)) Then
-            item = drafts(key)
-            If CStr(item(1)) = STATE_SECTION And CStr(item(2)) = "SOURCE_RESTAGE" And _
-               Len(currentRunId) > 0 And StrComp(currentRunId, CStr(item(0)), vbBinaryCompare) <> 0 Then
-                oldRunId = CStr(item(0))
-                For Each fieldName In keys
-                    If drafts.Exists(CStr(fieldName)) Then
-                        item = drafts(fieldName)
-                        If CStr(item(0)) = oldRunId And CStr(item(1)) = SOURCE_SECTION Then
-                            sourceKey = CStr(item(2))
-                            csvRow = NMDC_ReviewDraftFindSourceCsvRow(sourceData, sourceRows, sourceHeaders, sourceKey)
-                            If csvRow > 0 Then
-                                If NMDC_ReviewDraftComparable(CStr(item(3)), CStr(item(4))) = _
-                                   NMDC_ReviewDraftComparable(CStr(item(3)), NMDC_ReviewDraftCsvDataValue(sourceData, csvRow, sourceHeaders, CStr(item(3)))) Then
-                                    drafts.Remove CStr(fieldName)
-                                    changed = True
-                                End If
-                            End If
-                        End If
-                    End If
-                Next fieldName
-
-                ' Keep the restage marker while any old-run source edit is unmatched.
-                ' This protects edits made after Save was clicked or when the saved
-                ' configuration did not make it into the staged proposal.
-                If Not NMDC_ReviewDraftHasSourceFields(drafts, oldRunId) Then
-                    If NMDC_ReviewDraftRemove(drafts, oldRunId, STATE_SECTION, "SOURCE_RESTAGE", "WAITING") Then changed = True
-                End If
-            End If
-        End If
-    Next key
-    If changed Then NMDC_ReviewDraftWrite drafts
-    NMDC_ReviewDraftUpdateNotice drafts, currentRunId
-    NMDC_ReviewDraftAddReportButton
-    Exit Sub
-Handler:
-    mReviewDraftStoreFaulted = True
-    NMDC_ReviewDraftReportStoreError "Excel could not clear source drafts after a successful restage.", Err.Number & " - " & Err.Description
-End Sub
-
-Private Function NMDC_ReviewDraftHasSourceFields(ByVal drafts As Object, ByVal runId As String) As Boolean
-    Dim key As Variant
-    Dim item As Variant
-    For Each key In drafts.Keys
-        item = drafts(key)
-        If CStr(item(0)) = runId And CStr(item(1)) = SOURCE_SECTION Then
-            NMDC_ReviewDraftHasSourceFields = True
-            Exit Function
-        End If
-    Next key
-End Function
 
 Public Sub NMDC_ReviewDraftOpenReport()
     On Error GoTo Handler
@@ -621,6 +529,13 @@ Private Function NMDC_ReviewDraftRowValid(ByVal item As Variant) As Boolean
     fieldName = CStr(item(3))
     Select Case sectionText
         Case SOURCE_SECTION
+            If fieldName = "Accept Update?" Then
+                NMDC_ReviewDraftRowValid = NMDC_ReviewDraftBooleanValueValid(CStr(item(4)))
+            Else
+                NMDC_ReviewDraftRowValid = (fieldName = "Owner Note")
+            End If
+        Case "SOURCE"
+            ' Preserve historical scope drafts for read-only review; never replay as acceptance.
             If fieldName = "Include in Index?" Then
                 NMDC_ReviewDraftRowValid = NMDC_ReviewDraftBooleanValueValid(CStr(item(4)))
             Else
@@ -714,40 +629,18 @@ Private Sub NMDC_ReviewDraftUpdateNotice(ByVal drafts As Object, ByVal currentRu
         Next runKey
         notice = notice & "were retained, not applied. Use Review Saved Drafts to inspect before continuing."
     End If
-    With ThisWorkbook.Worksheets("Pending Update").Range("A4")
+    With ThisWorkbook.Worksheets("File Review").Range("A4")
         If currentCount > 0 Or staleCount > 0 Then
-            .Value = "REVIEW WORKFLOW. Source choices and notes are saved by Save Source Choices & Restage; flag decisions/comments/status are saved by Save Review Decisions. Approve/Hold/Reject applies to the whole proposal." & notice
+            .Value = "REVIEW WORKFLOW. File choices and notes are saved by Save File Choices; flag decisions/comments/status are saved by Save Review Decisions. Approval applies saved file choices. Unchecked files retain approved data." & notice
             .WrapText = True
         Else
-            .Value = "REVIEW WORKFLOW. Review staged changes first. Source checkboxes and Owner Notes are drafts until Save Source Choices & Restage. Approve/Hold/Reject applies to the whole proposal."
+            .Value = "REVIEW WORKFLOW. Review affected files here. File checkboxes and Owner Notes are drafts until Save File Choices. Approval applies saved file choices. Unchecked files retain approved data."
         End If
     End With
 End Sub
 
 Private Sub NMDC_ReviewDraftAddReportButton()
-    On Error Resume Next
-    Dim ws As Worksheet
-    Dim table As ListObject
-    Dim area As Range
-    Dim button As Shape
-    Set ws = ThisWorkbook.Worksheets("Pending Update")
-    Set table = ws.ListObjects("SourceSelection")
-    If table Is Nothing Then Exit Sub
-    ws.Shapes("NMDC_Pending_ReviewDrafts").Delete
-    Set area = ws.Range(ws.Cells(table.HeaderRowRange.Row - 1, 9), ws.Cells(table.HeaderRowRange.Row - 1, 10))
-    Set button = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width, area.Height)
-    button.Name = "NMDC_Pending_ReviewDrafts"
-    button.OnAction = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!NMDC_ReviewDraftOpenReport"
-    button.TextFrame.Characters.Text = "Review Saved Drafts"
-    button.TextFrame.HorizontalAlignment = xlCenter
-    button.TextFrame.VerticalAlignment = 3
-    button.Fill.ForeColor.RGB = RGB(91, 100, 112)
-    button.Line.ForeColor.RGB = RGB(91, 100, 112)
-    button.TextFrame.Characters.Font.Name = "Aptos"
-    button.TextFrame.Characters.Font.Size = 8.5
-    button.TextFrame.Characters.Font.Bold = True
-    button.TextFrame.Characters.Font.Color = RGB(255, 255, 255)
-    button.Placement = xlMoveAndSize
+    ' File Review creates its fixed-position Review Saved Drafts button.
 End Sub
 
 Private Function NMDC_ReviewDraftPath() As String
@@ -819,7 +712,7 @@ Private Function NMDC_ReviewDraftFindFlagCsvRow(ByVal data As Variant, ByVal row
 End Function
 
 Private Function NMDC_ReviewDraftComparable(ByVal fieldName As String, ByVal valueText As String) As String
-    If fieldName = "Include in Index?" Or fieldName = "Select?" Then
+    If fieldName = "Accept Update?" Or fieldName = "Select?" Then
         If NMDC_ReviewDraftBoolean(valueText) Then
             NMDC_ReviewDraftComparable = "TRUE"
         Else
