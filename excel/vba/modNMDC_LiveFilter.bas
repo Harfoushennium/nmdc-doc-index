@@ -271,6 +271,8 @@ End Sub
 Public Sub Setup_New_Target(TheHeader As Range)
     Dim TheTable As ListObject
     Dim TheColumn As ListColumn
+    Dim PreviousRange As Range
+    Dim PreviousTable As ListObject
 
     On Error Resume Next
     Set TheTable = TheHeader.ListObject
@@ -304,6 +306,18 @@ Public Sub Setup_New_Target(TheHeader As Range)
         Exit Sub
     End If
 
+    ' Retire the previous search field before replacing its anchor. Otherwise
+    ' Excel combines the old search with the new column's criteria.
+    On Error Resume Next
+    Set PreviousRange = ThisWorkbook.Names("LiveFilter_Anchor").RefersToRange
+    On Error GoTo TargetSwitchFailed
+    If Not PreviousRange Is Nothing Then
+        Set PreviousTable = PreviousRange.ListObject
+        If Not PreviousTable Is Nothing Then
+            PreviousTable.Range.AutoFilter Field:=PreviousRange.Column - PreviousTable.Range.Column + 1
+        End If
+    End If
+
     On Error Resume Next
     ThisWorkbook.Names("LiveFilter_Anchor").Delete
     On Error GoTo 0
@@ -313,7 +327,14 @@ Public Sub Setup_New_Target(TheHeader As Range)
     Call Wake_Up_The_Tool(ShowErrors:=True)
     If Not TheListener Is Nothing Then
         Call Fix_Placeholder_Text(TheListener.SearchBox, CStr(TheHeader.Value))
+        If TheListener.SearchBox.ForeColor = RGB(0, 0, 0) Then
+            Call Run_Live_Filter(CStr(TheListener.SearchBox.Value))
+        End If
     End If
+    Exit Sub
+TargetSwitchFailed:
+    MsgBox "Excel could not clear the previous search column. The target was not changed." & vbCrLf & _
+           Err.Description, vbExclamation, "NMDC Live Filter"
 End Sub
 
 Public Sub Run_Live_Filter(ByVal UserText As String)

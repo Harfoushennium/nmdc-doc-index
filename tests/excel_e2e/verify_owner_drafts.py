@@ -138,6 +138,22 @@ End Function
             for i in range(6)
         ))
 
+        # Exercise the real target-switch chain, including the textbox event.
+        # A source-file search must not constrain a subsequent Change Type search.
+        review_table = review_sheet.ListObjects("FileReview")
+        excel.Run(prefix + "NMDC_LiveFilterSelectColumnByName", "File Review", "Source File")
+        search_box = review_sheet.OLEObjects("TxtBox_Search").Object
+        search_box.ForeColor = 0
+        search_box.Value = "Fixture-0"
+        visible_files = lambda: sum(not bool(row.Range.EntireRow.Hidden) for row in review_table.ListRows)
+        record("source search isolates one fixture", visible_files() == 1)
+        excel.Run(prefix + "NMDC_LiveFilterSelectColumnByName", "File Review", "Change Type")
+        record("column switch removes prior search and reapplies query",
+               not bool(review_table.AutoFilter.Filters(3).On) and visible_files() == 0)
+        search_box.Value = "NEW"
+        record("new column query includes both files", visible_files() == 2)
+        excel.Run(prefix + "NMDC_LiveFilterClear")
+
         def source_cell(field, index=1):
             return book.Worksheets("File Review").ListObjects("FileReview").ListColumns(field).DataBodyRange.Cells(index, 1)
 
