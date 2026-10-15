@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import re
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Tuple
+
+from .update_engine import _read_jsonl, _write_jsonl
 
 ALLOWED_DECISIONS = {
     "ACKNOWLEDGED",
@@ -196,12 +200,14 @@ def apply_review_decisions(
     flags = _read_json(flags_path, [])
     if not isinstance(flags, list):
         raise ValueError("The staged review flag file is invalid.")
+    user_flags_path = state_dir / "user_flags" / "flags.jsonl"
+    user_flags = _read_jsonl(user_flags_path)
 
     with decisions_file.open(newline="", encoding="utf-8-sig") as handle:
         rows = [{k: (v or "") for k, v in row.items()} for row in csv.DictReader(handle)]
 
     index: Dict[Tuple[str, ...], List[Dict[str, Any]]] = {}
-    for raw in flags:
+    for raw in flags + user_flags:
         if not isinstance(raw, dict):
             continue
         index.setdefault(_key_from_flag(raw), []).append(raw)
@@ -248,7 +254,21 @@ def apply_review_decisions(
                 fix_request_flags.append(flag)
             updated += 1
 
+    if unmatched:
+        raise ValueError(
+            f"{len(unmatched)} review decision(s) no longer match an available flag. "
+            "Nothing was saved; refresh Review Flags and retry."
+        )
+
     _write_json(flags_path, flags)
+    if user_flags:
+        temporary = user_flags_path.with_name(user_flags_path.name + f".tmp-{uuid.uuid4().hex}")
+        try:
+            _write_jsonl(temporary, user_flags)
+            os.replace(temporary, user_flags_path)
+        finally:
+            if temporary.exists():
+                temporary.unlink()
 
     unique_fix_flags: Dict[Tuple[str, ...], Dict[str, Any]] = {}
     for flag in fix_request_flags:

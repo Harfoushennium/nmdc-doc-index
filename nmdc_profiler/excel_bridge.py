@@ -568,7 +568,7 @@ def build_user_flag_rows(state_dir: Path) -> List[Record]:
                 "Worksheet Name": flag.get("source_sheet", ""),
                 "Source Row": flag.get("source_row", ""),
                 "Source Cell": flag.get("source_cell", ""),
-                "User Decision": flag.get("resolution_route", ""),
+                "User Decision": flag.get("user_decision", flag.get("resolution_route", "")),
                 "User Comment": flag.get("user_comment", ""),
                 "Resolution Status": flag.get("resolution_status", "OPEN"),
                 "Event Key": flag.get("event_key", ""),
