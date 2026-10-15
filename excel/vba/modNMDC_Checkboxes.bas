@@ -111,6 +111,8 @@ End Function
 Private Sub NMDC_FormatPendingSourcePanel(ByVal ws As Worksheet, ByVal table As ListObject)
     Dim labels As Variant, actions As Variant, i As Long
     Dim area As Range, button As Shape
+    Const BUTTON_WIDTH As Double = 128
+    Const BUTTON_GAP As Double = 6
     labels = Array("Save File Choices", "Check All", "Uncheck All", "Approve Update", "View Change Details", "Review Saved Drafts")
     actions = Array("NMDC_SaveSourceSelections", "NMDC_CheckAllSources", "NMDC_UncheckAllSources", "NMDC_ApproveUpdate", "NMDC_ViewChangeDetails", "NMDC_ReviewDraftOpenReport")
     ws.Range("A1").Value = "File Review"
@@ -128,23 +130,27 @@ Private Sub NMDC_FormatPendingSourcePanel(ByVal ws As Worksheet, ByVal table As 
         .VerticalAlignment = xlCenter
         .RowHeight = 60
     End With
+    table.ListColumns("Accept Update?").Range.ColumnWidth = 15
+    table.ListColumns("Project No.").Range.ColumnWidth = 16
+    table.ListColumns("Source File").Range.ColumnWidth = 48
+    table.ListColumns("Change Type").Range.ColumnWidth = 12
+    table.ListColumns("Added").Range.ColumnWidth = 8
+    table.ListColumns("Modified").Range.ColumnWidth = 8
+    table.ListColumns("Removed").Range.ColumnWidth = 8
+    table.ListColumns("Owner Note").Range.ColumnWidth = 32
     ws.Rows(2).RowHeight = 30
+    Set area = ws.Range("A2")
     For i = 0 To UBound(labels)
         On Error Resume Next
         ws.Shapes("NMDC_FileReview_" & CStr(i)).Delete
         On Error GoTo 0
-        Set area = ws.Cells(2, 1 + i * 2).Resize(1, 2)
-        Set button = ws.Shapes.AddShape(5, area.Left, area.Top, area.Width - 2, area.Height)
+        ' Keep all actions in one compact toolbar, independent of table widths.
+        Set button = ws.Shapes.AddShape(5, area.Left + i * (BUTTON_WIDTH + BUTTON_GAP), area.Top, BUTTON_WIDTH, area.Height)
         button.Name = "NMDC_FileReview_" & CStr(i)
         button.OnAction = "'" & Replace(ThisWorkbook.Name, "'", "''") & "'!" & actions(i)
         button.TextFrame.Characters.Text = labels(i)
         NMDC_FormatSourceButton button, RGB(20, 108, 148)
     Next i
-    table.ListColumns("Accept Update?").Range.ColumnWidth = 15
-    table.ListColumns("Project No.").Range.ColumnWidth = 16
-    table.ListColumns("Source File").Range.ColumnWidth = 48
-    table.ListColumns("Owner Note").Range.ColumnWidth = 32
-    ws.Columns("I:L").ColumnWidth = 14
 End Sub
 
 Public Sub NMDC_ViewChangeDetails()
@@ -161,7 +167,7 @@ Private Sub NMDC_FormatSourceButton(ByVal button As Shape, ByVal fillColor As Lo
         .TextFrame.Characters.Font.Size = 8.5
         .TextFrame.Characters.Font.Bold = True
         .TextFrame.Characters.Font.Color = RGB(255, 255, 255)
-        .Placement = xlMoveAndSize
+        .Placement = xlFreeFloating
     End With
 End Sub
 

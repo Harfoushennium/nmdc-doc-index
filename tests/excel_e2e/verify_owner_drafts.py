@@ -123,6 +123,21 @@ End Function
                flags.ListRows.Count == 2 and
                str(flags.ListColumns("Event Key").DataBodyRange.Cells(1, 1).Value) == "fixture-event-0")
 
+        # Reproduce the owner-visible fit failure at the actual Excel seam.
+        # The normal window must expose notes and all six actions at 100% zoom.
+        review_sheet = book.Worksheets("File Review")
+        review_sheet.Activate()
+        excel.WindowState = -4137  # xlMaximized
+        book.Windows(1).Zoom = 100
+        book.Windows(1).ScrollColumn = 1
+        available_width = float(book.Windows(1).UsableWidth)
+        note_range = review_sheet.ListObjects("FileReview").ListColumns("Owner Note").Range
+        record("file note fully visible at 100 percent", float(note_range.Left + note_range.Width) <= available_width)
+        record("all file review actions visible at 100 percent", all(
+            float(review_sheet.Shapes(f"NMDC_FileReview_{i}").Left + review_sheet.Shapes(f"NMDC_FileReview_{i}").Width) <= available_width
+            for i in range(6)
+        ))
+
         def source_cell(field, index=1):
             return book.Worksheets("File Review").ListObjects("FileReview").ListColumns(field).DataBodyRange.Cells(index, 1)
 
