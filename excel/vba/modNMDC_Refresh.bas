@@ -183,6 +183,9 @@ Public Function NMDC_LoadCsvToTable(ByVal csvPath As String, ByVal sheetName As 
             Err.Raise vbObjectError + 321, "NMDC CSV Refresh", _
                 "Excel could not create a data row for table " & tableName & "."
         End If
+        ' CSV fields are strings. Protect identifiers before Excel can coerce
+        ' leading zeros/long numbers; typed counts/dates are converted below.
+        table.DataBodyRange.NumberFormat = "@"
         table.DataBodyRange.Value2 = data
     Else
         If table.ListRows.Count = 0 Then table.ListRows.Add

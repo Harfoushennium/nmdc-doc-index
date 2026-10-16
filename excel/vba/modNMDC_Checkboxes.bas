@@ -89,6 +89,9 @@ Private Function NMDC_LoadSourceSelectionPanel(ByVal table As ListObject, ByVal 
 
     If dataCount > 0 Then
         If table.DataBodyRange Is Nothing Then table.ListRows.Add
+        ' Set text before assignment: formatting afterward cannot undo Excel's
+        ' numeric coercion of project identifiers on the first proposal load.
+        table.DataBodyRange.NumberFormat = "@"
         table.DataBodyRange.Value2 = data
     Else
         If table.ListRows.Count = 0 Then table.ListRows.Add

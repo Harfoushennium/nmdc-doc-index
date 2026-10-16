@@ -98,6 +98,7 @@ End Function
         for index, row in enumerate(source_rows):
             row.update({"Accept Update?": "TRUE", "Project No.": "9999", "Source File": f"METHODS/Fixture-{index}.xlsx",
                         "Change Type": "NEW", "Added": "1", "Modified": "0", "Removed": "0"})
+        source_rows[0]["Project No."] = "0009999"
         flag_rows = [dict.fromkeys(FLAG_FIELDS, "") for _ in range(2)]
         for index, row in enumerate(flag_rows):
             row.update({"Select?": "FALSE", "Flag Code": "UNCLASSIFIED", "Source File": source_rows[index]["Source File"],
@@ -107,12 +108,17 @@ End Function
         for index, row in enumerate(pending_rows):
             row.update({"Change Type": "ADDED", "Project No.": "9999", "Document No.": f"TEST-{index}",
                         "Revision": "A", "Record Identity": f"fixture-record-{index}"})
+        pending_rows[0]["Document No."] = "00001234567890123456789"
         headers, dashboard = read_csv(exchange / "dashboard.csv")
         dashboard[0].update({"Pending Run ID": run_a, "Pending Status": "STAGED", "Pending Added": "3", "Review Flags": "2"})
         write_csv(exchange / "dashboard.csv", headers, dashboard)
         write_csv(exchange / "file_review.csv", SOURCE_FIELDS, source_rows)
         write_csv(exchange / "flags.csv", FLAG_FIELDS, flag_rows)
         write_csv(exchange / "pending_update.csv", PENDING_FIELDS, pending_rows[:3])
+        # A first-load destination must not rely on a previous refresh having
+        # left Text formatting behind. General reproduces Excel's coercion.
+        for sheet_name, table_name in (("File Review", "FileReview"), ("Change Details", "PendingUpdate")):
+            book.Worksheets(sheet_name).ListObjects(table_name).DataBodyRange.NumberFormat = "General"
         book.Worksheets("Home").Range("H7").Value = ""
         record("unbound workbook dashboard refresh", excel.Run(prefix + "NMDC_RefreshDashboardOnlyFast"))
         pending = book.Worksheets("Change Details")
@@ -141,6 +147,19 @@ End Function
         # Exercise the real target-switch chain, including the textbox event.
         # A source-file search must not constrain a subsequent Change Type search.
         review_table = review_sheet.ListObjects("FileReview")
+        record("first load preserves project identifier text",
+               review_table.ListColumns("Project No.").DataBodyRange.Cells(1, 1).Value2 == "0009999")
+        record("first load preserves long document identifier text",
+               pending.ListObjects("PendingUpdate").ListColumns("Document No.").DataBodyRange.Cells(1, 1).Value2 == "00001234567890123456789")
+        record("counts remain numeric after text-safe import",
+               isinstance(review_table.ListColumns("Added").DataBodyRange.Cells(1, 1).Value2, (int, float)))
+        excel.Run(prefix + "NMDC_LiveFilterSelectColumnByName", "File Review", "Project No.")
+        search_box = review_sheet.OLEObjects("TxtBox_Search").Object
+        search_box.ForeColor = 0
+        search_box.Value = "9999"
+        record("first load project search includes both numeric-looking identifiers",
+               sum(not bool(row.Range.EntireRow.Hidden) for row in review_table.ListRows) == 2)
+        excel.Run(prefix + "NMDC_LiveFilterClear")
         excel.Run(prefix + "NMDC_LiveFilterSelectColumnByName", "File Review", "Source File")
         search_box = review_sheet.OLEObjects("TxtBox_Search").Object
         search_box.ForeColor = 0
