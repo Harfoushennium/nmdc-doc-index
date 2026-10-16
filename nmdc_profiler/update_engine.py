@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Sequence, Tuple
 
 ENGINE_SCHEMA_VERSION = "1"
-DEFAULT_PARSER_VERSION = "cycle3-extractor-v1"
+DEFAULT_PARSER_VERSION = "cycle3-extractor-v2"
 NON_OVERRIDABLE_CONFLICT_CODES = {
     "SOURCE_HASH_ERROR",
     "PARSER_ERROR",
@@ -20,6 +20,7 @@ NON_OVERRIDABLE_CONFLICT_CODES = {
 
 Record = Dict[str, Any]
 Processor = Callable[[Path, str], Sequence[Mapping[str, Any]]]
+FlagProvider = Callable[[], Sequence[Mapping[str, Any]]]
 
 
 @dataclass(frozen=True)
@@ -98,14 +99,36 @@ def fingerprint_paths(paths: Sequence[Path]) -> str:
     return h.hexdigest()
 
 
-def _flag(level: str, code: str, message: str, source: str = "", action: str = "") -> Dict[str, str]:
-    return {
+def _flag(
+    level: str,
+    code: str,
+    message: str,
+    source: str = "",
+    action: str = "",
+    *,
+    record: Mapping[str, Any] | None = None,
+) -> Dict[str, str]:
+    flag = {
         "level": level,
         "code": code,
         "message": message,
         "source": source,
         "recommended_action": action,
     }
+    if record:
+        flag.update(
+            {
+                "project_no": str(record.get("Project No.", "")),
+                "document_no": str(record.get("Document No.", "")),
+                "revision": str(record.get("Revision", "")),
+                "source_sheet": str(record.get("Source Sheet", "")),
+                "source_row": str(record.get("Source Row", "")),
+                "source_cell": str(record.get("Source Cell", "")),
+                "event_key": str(record.get("Event_Key", "")),
+                "resolution_status": "OPEN",
+            }
+        )
+    return flag
 
 
 def scan_sources(data_dir: Path) -> Tuple[List[Dict[str, Any]], List[Dict[str, str]]]:
@@ -117,7 +140,13 @@ def scan_sources(data_dir: Path) -> Tuple[List[Dict[str, Any]], List[Dict[str, s
         raise FileNotFoundError(f"Data folder not found: {data_dir}")
 
     files = sorted(
-        (p for p in data_dir.rglob("*") if p.is_file() and p.suffix.lower() in {".xlsx", ".xlsm"}),
+        (
+            p
+            for p in data_dir.rglob("*")
+            if p.is_file()
+            and p.suffix.lower() in {".xlsx", ".xlsm"}
+            and not p.name.startswith("~$")
+        ),
         key=lambda p: p.relative_to(data_dir).as_posix().casefold(),
     )
     for path in files:
@@ -208,9 +237,9 @@ def compare_manifests(
         content_changed = now.get("sha256") != before.get("sha256")
         if full_rescan:
             decisions.append(SourceDecision(rel, "CHANGED" if content_changed else "UNCHANGED", "REPROCESS", "FULL_RESCAN"))
-        elif parser_changed:
+        elif parser_changed or before.get("parser_version", approved.get("parser_version")) != current.get("parser_version"):
             decisions.append(SourceDecision(rel, "CHANGED" if content_changed else "UNCHANGED", "REPROCESS", "PARSER_VERSION_CHANGED"))
-        elif config_changed:
+        elif config_changed or before.get("config_fingerprint", approved.get("config_fingerprint")) != current.get("config_fingerprint"):
             decisions.append(SourceDecision(rel, "CHANGED" if content_changed else "UNCHANGED", "REPROCESS", "CONFIG_CHANGED"))
         elif content_changed:
             decisions.append(SourceDecision(rel, "CHANGED", "REPROCESS", "SOURCE_CHANGED"))
@@ -225,6 +254,15 @@ def compare_manifests(
 def _cache_key(relative_path: str, file_hash: str, parser_version: str, config_fingerprint: str) -> str:
     raw = "\0".join((relative_path, file_hash, parser_version, config_fingerprint)).encode("utf-8", "surrogatepass")
     return hashlib.sha256(raw).hexdigest()[:32]
+
+
+def _cache_flags_path(cache_path: Path) -> Path:
+    return cache_path.with_suffix(".flags.json")
+
+
+def _cached_flags(cache_path: Path) -> List[Dict[str, Any]]:
+    value = _read_json(_cache_flags_path(cache_path), [])
+    return [dict(row) for row in value] if isinstance(value, list) else []
 
 
 def _canonical_record(record: Mapping[str, Any]) -> str:
@@ -254,6 +292,7 @@ def _index_records(rows: Sequence[Mapping[str, Any]], side: str) -> Tuple[Dict[s
                     f"Duplicate canonical record key found in {side} dataset: {base}.",
                     str(row.get("Source File", "")),
                     "Review duplicate document/revision/event rows before approval.",
+                    record=row,
                 )
             )
         index[key] = dict(row)
@@ -337,6 +376,8 @@ def stage_update(
     parser_version: str = DEFAULT_PARSER_VERSION,
     full_rescan: bool = False,
     selection_statuses: Mapping[str, str] | None = None,
+    initial_flags: Sequence[Mapping[str, Any]] = (),
+    post_process_flags: FlagProvider | None = None,
 ) -> Dict[str, Any]:
     """Create a proposed update without changing the approved dataset."""
     data_dir = Path(data_dir)
@@ -346,6 +387,7 @@ def stage_update(
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     config_fingerprint = fingerprint_paths([Path(p) for p in config_paths])
     scanned, flags = scan_sources(data_dir)
+    flags.extend(dict(flag) for flag in initial_flags)
     current_manifest = build_manifest(
         scanned,
         parser_version=parser_version,
@@ -360,6 +402,7 @@ def stage_update(
     cache_index: Dict[str, str] = {}
     staged_rows: List[Record] = []
     effective_decisions: List[SourceDecision] = []
+    reprocessed_sources: List[str] = []
 
     for original_decision in decisions:
         decision = original_decision
@@ -418,6 +461,7 @@ def stage_update(
                 rows = _read_jsonl(cache_path)
                 staged_rows.extend(rows)
                 cache_index[rel] = cache_file
+                flags.extend(_cached_flags(cache_path))
                 _set_manifest_processed_run(current_manifest, rel, str(old.get("last_processed_run", approved_manifest.get("run_id", ""))))
                 effective_decisions.append(decision)
                 continue
@@ -428,6 +472,7 @@ def stage_update(
             if cache_file and cache_path.exists():
                 staged_rows.extend(_read_jsonl(cache_path))
                 cache_index[rel] = cache_file
+                flags.extend(_cached_flags(cache_path))
             _set_manifest_processed_run(current_manifest, rel, str(old.get("last_processed_run", approved_manifest.get("run_id", ""))))
             effective_decisions.append(decision)
             continue
@@ -452,6 +497,7 @@ def stage_update(
                 _write_jsonl(state_dir / cache_rel, rows)
                 cache_index[rel] = cache_rel
                 staged_rows.extend(rows)
+                reprocessed_sources.append(rel)
                 _set_manifest_processed_run(current_manifest, rel, run_id)
             except Exception as exc:
                 flags.append(
@@ -468,6 +514,7 @@ def stage_update(
                 if old_cache and old_cache_path.exists():
                     staged_rows.extend(_read_jsonl(old_cache_path))
                     cache_index[rel] = old_cache
+                    flags.extend(_cached_flags(old_cache_path))
                 _set_manifest_processed_run(current_manifest, rel, str(old.get("last_processed_run", approved_manifest.get("run_id", ""))))
             effective_decisions.append(decision)
 
@@ -481,6 +528,19 @@ def stage_update(
             str(r.get("Source Row", "")),
         )
     )
+    processor_flags = [dict(flag) for flag in post_process_flags()] if post_process_flags is not None else []
+    flags.extend(processor_flags)
+    flags_by_source: Dict[str, List[Dict[str, Any]]] = {}
+    for flag in processor_flags:
+        flags_by_source.setdefault(str(flag.get("source", "")), []).append(flag)
+    for rel in reprocessed_sources:
+        cache_file = cache_index.get(rel, "")
+        if cache_file:
+            _write_json(
+                _cache_flags_path(state_dir / cache_file),
+                flags_by_source.get(rel, []),
+            )
+
     record_changes, record_flags = compare_records(approved_rows, staged_rows)
     flags.extend(record_flags)
     blocking = sum(1 for f in flags if f.get("level") == "CONFLICT")
@@ -516,6 +576,7 @@ def stage_update(
         "record_counts": record_changes["counts"],
         "staged_records": len(staged_rows),
         "approved_records_before": len(approved_rows),
+        "approved_base_run_id": str(approved_manifest.get("run_id", "")),
     }
     _write_json(stage_dir / "summary.json", summary)
     _write_json(state_dir / "staging" / "latest.json", {"run_id": run_id})
@@ -536,7 +597,8 @@ def _resolve_stage(state_dir: Path, run_id: str | None) -> Tuple[str, Path]:
     return run_id, stage_dir
 
 
-def approve_stage(state_dir: Path, run_id: str | None = None, *, allow_conflicts: bool = False) -> Dict[str, Any]:
+def approve_stage(state_dir: Path, run_id: str | None = None, *, allow_conflicts: bool = False,
+                  require_file_review: bool = False) -> Dict[str, Any]:
     """Promote one staged package into approved state after explicit user approval."""
     state_dir = Path(state_dir)
     run_id, stage_dir = _resolve_stage(state_dir, run_id)
@@ -559,6 +621,14 @@ def approve_stage(state_dir: Path, run_id: str | None = None, *, allow_conflicts
     if blocking and not allow_conflicts:
         raise ValueError(f"Staged update has {blocking} blocking conflict flag(s); approval is not allowed without an explicit override.")
 
+    from .file_review import merge_deferred_files, validated_review
+    review = validated_review(state_dir, run_id, required=require_file_review)
+    merged = merge_deferred_files(state_dir, stage_dir, review) if review else None
+    if merged:
+        _, merge_flags = compare_records([], merged[2])
+        if merge_flags:
+            raise ValueError("File choices would produce duplicate record keys. Stage a corrected proposal before approval.")
+
     approved_dir = state_dir / "approved"
     version_dir = approved_dir / "versions" / run_id
     version_dir.mkdir(parents=True, exist_ok=True)
@@ -567,11 +637,18 @@ def approve_stage(state_dir: Path, run_id: str | None = None, *, allow_conflicts
         if not src.exists():
             raise FileNotFoundError(f"Staged package is incomplete: {name}")
         shutil.copy2(src, version_dir / name)
+    if merged:
+        manifest, cache, rows = merged
+        _write_json(version_dir / "manifest.json", manifest)
+        _write_json(version_dir / "cache_index.json", cache)
+        _write_jsonl(version_dir / "records.jsonl", rows)
+        _write_json(version_dir / "file_review.json", review)
     approval = {
         "run_id": run_id,
         "decision": "APPROVED",
         "approved_at": utc_now(),
         "allow_conflicts": bool(allow_conflicts),
+        "deferred_files": [source for source, choice in review.get("choices", {}).items() if not choice["accept"]],
     }
     _write_json(version_dir / "approval.json", approval)
     # The pointer is the commit marker. Old approved versions stay intact until

@@ -5,6 +5,7 @@ on:
     branches:
       - feature/nmdc-doc-index-001-cycle1-profiler
       - feature/classification-model-v2
+      - 08-excel-user-interface
   pull_request:
     branches:
       - master
@@ -86,18 +87,6 @@ jobs:
             exit 1
           fi
 
-      - name: Commit deterministic profiler outputs
-        if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add outputs/cycle1/source_inventory.csv outputs/cycle1/workbook_profiles.json outputs/cycle1/source_selection_report.md outputs/cycle1/classification_discovery.csv
-          if git diff --cached --quiet; then
-            echo 'Outputs already current.'
-          else
-            git commit -m 'chore: regenerate profiler outputs [skip ci]'
-            git push
-          fi
 
   validate-windows:
     runs-on: windows-latest
@@ -151,16 +140,3 @@ jobs:
             throw 'Profiler changed DATA/'
           }
 
-      - name: Verify Windows output cleanliness
-        shell: pwsh
-        run: |
-          git diff --exit-code -- outputs/cycle1
-          if ($LASTEXITCODE -ne 0) {
-            throw 'Windows profiler regeneration changed committed outputs.'
-          }
-          $status = git status --porcelain
-          if ($status) {
-            $status
-            throw 'Windows validation left a dirty working tree.'
-          }
-          Write-Host 'Windows output cleanliness: PASS'

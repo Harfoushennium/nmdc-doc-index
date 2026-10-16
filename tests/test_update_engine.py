@@ -173,6 +173,30 @@ class UpdateEngineTests(unittest.TestCase):
         self.assertEqual(changes["counts"]["modified"], 1)
         self.assertEqual(flags, [])
 
+    def test_duplicate_record_flag_preserves_row_context(self) -> None:
+        duplicate = {
+            "Event_Key": "E1",
+            "Project No.": "2705",
+            "Document No.": "D1",
+            "Revision": "00",
+            "Source File": "TECH/2705.xlsx",
+            "Source Sheet": "Documents",
+            "Source Row": 17,
+            "Source Cell": "B17",
+        }
+        changes, flags = compare_records([], [duplicate, dict(duplicate)])
+        self.assertEqual(changes["counts"]["added"], 2)
+        self.assertEqual(len(flags), 1)
+        flag = flags[0]
+        self.assertEqual(flag["code"], "DUPLICATE_RECORD_KEY")
+        self.assertEqual(flag["project_no"], "2705")
+        self.assertEqual(flag["document_no"], "D1")
+        self.assertEqual(flag["revision"], "00")
+        self.assertEqual(flag["source_sheet"], "Documents")
+        self.assertEqual(flag["source_row"], "17")
+        self.assertEqual(flag["source_cell"], "B17")
+        self.assertEqual(flag["event_key"], "E1")
+
     def test_arbitrary_external_data_folder_is_supported(self) -> None:
         external = self.root / "somewhere" / "outside" / "project-registers"
         external.mkdir(parents=True)

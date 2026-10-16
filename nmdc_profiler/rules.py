@@ -41,7 +41,7 @@ def load_rules(path: Path) -> List[Rule]:
                 int(row["Priority"]),
                 row["Source_Family"].strip().upper(),
                 row["Match_Scope"].strip().upper(),
-                row["Match_Type"].strip().upper(),
+                row["Match_Type"].strip().upper().replace(" ", "_"),
                 row["Match_Words"],
                 row.get("Exclude_Words", ""),
                 row.get("Path_Qualifier", "").strip(),
@@ -55,12 +55,11 @@ def load_rules(path: Path) -> List[Rule]:
                 row.get("Stop_On_Match", "NO").strip().upper() == "YES",
                 row.get("Notes", "").strip(),
             )
+            # REGEX remains readable only for backward compatibility with old user
+            # configuration files. The shipped rules and normal Excel editor use
+            # plain-text match types instead.
             if rule.match_type == "REGEX":
                 re.compile(rule.words)
-            if rule.exclude_words:
-                re.compile(rule.exclude_words)
-            if rule.path_qualifier:
-                re.compile(rule.path_qualifier, flags=re.I)
             rules.append(rule)
 
     ids = [r.rule_id for r in rules]
@@ -77,10 +76,16 @@ def _canonical_evidence(scope: str, text: str) -> str:
     return text
 
 
+def _split_plain_terms(value: str) -> List[str]:
+    """Split optional plain-text alternatives without treating them as regex."""
+    return [part.strip() for part in str(value or "").split("|") if part.strip()]
+
+
 def _path_allowed(rule: Rule, evidence: Dict[str, str]) -> bool:
     if not rule.path_qualifier:
         return True
-    return re.search(rule.path_qualifier, evidence.get("FILE", "") or "", flags=re.I) is not None
+    actual = norm_text(evidence.get("FILE", "") or "")
+    return all(norm_text(term) in actual for term in _split_plain_terms(rule.path_qualifier))
 
 
 def _required_value_allowed(required: str, actual: object) -> bool:
@@ -97,20 +102,36 @@ def _context_allowed(rule: Rule, result: Dict[str, object]) -> bool:
     )
 
 
-def _match(rule: Rule, text: str) -> bool:
-    if rule.exclude_words and re.search(rule.exclude_words, text, flags=re.I):
+def _plain_exclusion_matches(rule: Rule, text: str) -> bool:
+    if not rule.exclude_words:
         return False
+    normalized = norm_text(text)
+    return any(norm_text(term) in normalized for term in _split_plain_terms(rule.exclude_words))
+
+
+def _match(rule: Rule, text: str) -> bool:
+    if _plain_exclusion_matches(rule, text):
+        return False
+
+    actual = norm_text(text)
+    expected = norm_text(rule.words)
     if rule.match_type == "EXACT":
-        return norm_text(text) == norm_text(rule.words)
+        return actual == expected
     if rule.match_type == "CONTAINS":
-        return norm_text(rule.words) in norm_text(text)
-    if rule.match_type == "REGEX":
-        return re.search(rule.words, text) is not None
+        return expected in actual
+    if rule.match_type == "STARTS_WITH":
+        return actual.startswith(expected)
+    if rule.match_type == "ENDS_WITH":
+        return actual.endswith(expected)
     if rule.match_type == "FUZZY":
         from difflib import SequenceMatcher
 
         threshold = rule.min_confidence * 100 if rule.min_confidence <= 1 else rule.min_confidence
-        return SequenceMatcher(None, norm_text(text), norm_text(rule.words)).ratio() * 100 >= threshold
+        return SequenceMatcher(None, actual, expected).ratio() * 100 >= threshold
+    if rule.match_type == "REGEX":
+        # Legacy-only compatibility. New rules should use EXACT / CONTAINS /
+        # STARTS_WITH / ENDS_WITH so non-coders can understand and edit them.
+        return re.search(rule.words, text, flags=re.I) is not None
     return False
 
 
