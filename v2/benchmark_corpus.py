@@ -1,0 +1,68 @@
+"""Read-only diagnostic of the corpus already present in the repository. No raw records in output."""
+import hashlib, json, os, tempfile, time
+from pathlib import Path
+from nmdc_profiler.runtime_engine import stage_runtime_update
+from nmdc_profiler.source_access import install_resilient_source_access
+from nmdc_profiler.layout_compat import install_layout_compatibility
+from nmdc_profiler.excel_bridge import load_latest_stage, build_event_rows
+from nmdc_profiler.file_review import affected_files, save_file_review
+from nmdc_profiler.update_engine import approve_stage
+from v2.launcher import App, ordered_fields, export_bytes, filter_rows
+import csv, io, zipfile
+
+def hashes(root):
+    return {str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in root.rglob("*") if p.is_file() and p.suffix.lower() in (".xlsx",".xlsm",".xls") and not p.name.startswith("~$")}
+def measure(f):
+    t=time.perf_counter();r=f();return r,round(time.perf_counter()-t,3)
+def run():
+    root=Path(__file__).resolve().parents[1]/"DATA"
+    report={"scope":"read-only repository corpus; scratch state only; no Excel UI or two-PC comparison","status":"NOT_RUN"}
+    if not root.is_dir():return dict(report,reason="DATA unavailable")
+    before=hashes(root)
+    if not before:return dict(report,reason="No workbook files in checkout")
+    report["workbook_count"]=len(before)
+    install_resilient_source_access();install_layout_compatibility()
+    try:
+        with tempfile.TemporaryDirectory(prefix="nmdc-v2-benchmark-") as d:
+            app=App(Path(d)/"workspace")
+            try:
+                result,elapsed=measure(lambda:stage_runtime_update(data_dir=root,state_dir=app.state,config_dir=app.config,full_rescan=True))
+                s=load_latest_stage(app.state);rows=s["records"]
+                ids=[r.get("Event_Key") for r in rows]
+                report.update({"status":"MEASURED","full_stage_seconds":elapsed,"events":len(rows),
+                    "historical_reference_events":40494,"matches_historical_reference":len(rows)==40494,
+                    "legacy_event_view_count":len(build_event_rows(rows)),"unique_event_keys":len(set(ids)),
+                    "all_keys_nonempty":all(ids),"blocking_flags":result.get("blocking_flags"),"review_flags":result.get("review_flags"),
+                    "source_counts":result.get("source_counts")})
+                # Disposable benchmark state, no owner production state is read or written.
+                if not result.get("blocking_flags") and rows and all(ids) and len(ids)==len(set(ids)):
+                    files=affected_files(app.state,result["run_id"])
+                    p=Path(d)/"choices.csv"
+                    with p.open("w",encoding="utf-8",newline="") as h:
+                        w=csv.DictWriter(h,fieldnames=["Source File","Accept Update?","Owner Note"]);w.writeheader()
+                        for f in files:w.writerow({"Source File":f["Source File"],"Accept Update?":"TRUE","Owner Note":"Disposable benchmark only"})
+                    save_file_review(app.state,result["run_id"],p)
+                    _,approval_time=measure(lambda:approve_stage(app.state,result["run_id"],require_file_review=True,allow_conflicts=False))
+                    approved=app.view("events");report["scratch_approval_seconds"]=approval_time
+                    report["approved_event_ids_match"]=set(r["Event_Key"] for r in approved)==set(ids)
+                    _,querytime=measure(lambda:filter_rows(approved,str(approved[0].get("Document No.","")),"Document No."))
+                    report["query_seconds"]=querytime
+                    try:
+                        data,exporttime=measure(lambda:export_bytes(approved,ordered_fields(approved,"events"),"xlsx"))
+                        with zipfile.ZipFile(io.BytesIO(data)) as z:
+                            assert z.testzip() is None and "xl/tables/table1.xml" in z.namelist()
+                        report.update({"xlsx_seconds":exporttime,"xlsx_bytes":len(data),"xlsx_structural":"PASS"})
+                    except Exception as exc:report["xlsx_structural"]="FAIL: "+type(exc).__name__
+                    next_result,next_time=measure(lambda:stage_runtime_update(data_dir=root,state_dir=app.state,config_dir=app.config,full_rescan=False))
+                    report.update({"incremental_stage_seconds":next_time,"incremental_event_count":next_result.get("staged_records"),"incremental_source_counts":next_result.get("source_counts")})
+                else:report["scratch_approval"]="NOT_RUN: flags or record identity discrepancy"
+            finally:app.lock.close()
+    except Exception as exc:report.update({"status":"ERROR","error_type":type(exc).__name__})
+    report["source_hashes_unchanged"]=hashes(root)==before
+    if not report["source_hashes_unchanged"]:raise RuntimeError("DATA source hash changed")
+    return report
+if __name__=="__main__":
+    report=run()
+    Path("v2-corpus-benchmark.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
+    print(json.dumps(report,indent=2))
