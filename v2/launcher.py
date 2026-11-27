@@ -1,5 +1,6 @@
 """NMDC V2 standalone integration candidate. Existing engine owns approved data."""
 from __future__ import annotations
+import multiprocessing
 import argparse, csv, hashlib, hmac, io, json, os, re, secrets, shlex, shutil, sys, threading, time, webbrowser, zipfile
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -193,7 +194,7 @@ class App:
                     result=unchanged.check(self.state,src,self.config,build)
                 if result is None:
                     before=unchanged.inputs(src,self.config,build)
-                    result=stage_runtime_update(data_dir=src,state_dir=self.state,config_dir=self.config,full_rescan=full,reuse_raw_profiles=True,checkpoint=checkpoint,verify_source_content=True)
+                    result=stage_runtime_update(data_dir=src,state_dir=self.state,config_dir=self.config,full_rescan=full,reuse_raw_profiles=True,checkpoint=checkpoint,verify_source_content=True,extraction_workers=min(4,os.cpu_count() or 1))
                     after=None
                     try:
                         after=unchanged.inputs(src,self.config,build)
@@ -574,4 +575,6 @@ def main():
     finally:
         if "s" in locals():s.server_close()
         app.lock.close()
-if __name__=="__main__":main()
+if __name__=="__main__":
+    multiprocessing.freeze_support()
+    main()
