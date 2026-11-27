@@ -18,6 +18,7 @@ from nmdc_profiler.review_decisions import apply_review_decisions
 from nmdc_profiler.source_selection import set_source_selection, read_source_exclusions
 from nmdc_profiler.rules import load_rules
 from v2.recovery import create_bundle, restore_to_new_workspace, inventory
+from v2 import unchanged
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
 WEB = ROOT / "v2"
@@ -185,9 +186,22 @@ class App:
         def work():
             try:
                 install_resilient_source_access(); install_layout_compatibility()
-                result=stage_runtime_update(data_dir=src,state_dir=self.state,config_dir=self.config,full_rescan=full,reuse_raw_profiles=True,checkpoint=checkpoint)
+                build=unchanged.build_identity()
+                checkpoint("Verify source identity",0,0)
+                result=None
+                if not full and not self.settings.get("requires_rescan"):
+                    result=unchanged.check(self.state,src,self.config,build)
+                if result is None:
+                    before=unchanged.inputs(src,self.config,build)
+                    result=stage_runtime_update(data_dir=src,state_dir=self.state,config_dir=self.config,full_rescan=full,reuse_raw_profiles=True,checkpoint=checkpoint,verify_source_content=True)
+                    try:
+                        after=unchanged.inputs(src,self.config,build)
+                        result["input_proof"]=unchanged.stage_proof(self.state,result["run_id"],before,after,self.config)
+                    except (OSError,ValueError,KeyError,TypeError):result["input_proof"]=False
+                    if before!=after if "after" in locals() else True:
+                        result["requires_rescan"]=True
                 with self.guard:
-                    self.settings["requires_rescan"]=False;self.save_settings()
+                    self.settings["requires_rescan"]=bool(result.get("requires_rescan"));self.save_settings()
                     self.job={"status":"complete","result":result}
             except ScanCancelled as exc:
                 with self.guard:self.job={"status":"cancelled","message":str(exc)}
@@ -286,7 +300,11 @@ class App:
         if any(f["Flag Code"] not in routine and f.get("Resolution Status")!="RESOLVED" for f in p["flags"]):
             raise ValueError("Unresolved flags require correction; candidate does not provide override.")
         result=approve_stage(self.state,p["run"],require_file_review=True,allow_conflicts=False)
-        self.cache={};return result
+        self.cache={}
+        if self.settings.get("data_dir"):
+            try:result["verified_unchanged_eligible"]=unchanged.certify(self.state,self.source(),self.config,unchanged.build_identity())
+            except (OSError,ValueError,KeyError,TypeError):result["verified_unchanged_eligible"]=False
+        return result
 
     def backup(self,reason):
         self.idle()
