@@ -199,7 +199,8 @@ class App:
                     try:
                         after=unchanged.inputs(src,self.config,build)
                         result["input_proof"]=unchanged.stage_proof(self.state,result["run_id"],before,after,self.config)
-                    except (OSError,ValueError,KeyError,TypeError):result["input_proof"]=False
+                    except (OSError,ValueError,KeyError,TypeError):
+                        result["input_proof"]=False;result["requires_rescan"]=True
                     if before!=after:
                         result["requires_rescan"]=True
                 with self.guard:
