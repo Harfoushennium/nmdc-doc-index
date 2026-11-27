@@ -1,6 +1,6 @@
 """NMDC V2 standalone integration candidate. Existing engine owns approved data."""
 from __future__ import annotations
-import argparse, csv, hashlib, hmac, io, json, os, re, secrets, shlex, shutil, sys, threading, time, webbrowser
+import argparse, csv, hashlib, hmac, io, json, os, re, secrets, shlex, shutil, sys, threading, time, webbrowser, zipfile
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -66,6 +66,33 @@ def filter_rows(rows, query="", column="", sort="", desc=False):
     if sort: result.sort(key=lambda r: str(r.get(sort, "")).casefold(), reverse=desc)
     return result
 
+MAX_EXCEL_ROWS=1048575
+MAX_EXCEL_LINKS=65530
+def native_link(row,fields):
+    v=row.get("Document Link")
+    return "Document Link" in fields and isinstance(v,str) and v.startswith(("https://","http://")) and len(v)<=2079
+
+def partition_plan(rows,fields,row_limit=MAX_EXCEL_ROWS,link_limit=MAX_EXCEL_LINKS):
+    if len(fields)>16384:raise ValueError("Too many Excel columns")
+    result=[];start=0;links=0
+    for i,r in enumerate(rows):
+        count=int(native_link(r,fields))
+        if i-start>=row_limit or links+count>link_limit:
+            result.append((start,i));start=i;links=0
+        links+=count
+    if start<len(rows):result.append((start,len(rows)))
+    return result
+
+def partition_export(rows,fields):
+    parts=partition_plan(rows,fields)
+    if len(parts)<2:raise ValueError("Partitioning is not required")
+    b=io.BytesIO()
+    with zipfile.ZipFile(b,"w",compression=zipfile.ZIP_STORED) as z:
+        for i,(start,end) in enumerate(parts,1):
+            z.writestr(f"NMDC_INDEX_{i:03d}.xlsx",export_bytes(rows[start:end],fields,"xlsx"))
+        z.writestr("manifest.json",json.dumps({"rows":len(rows),"parts":[{"file":f"NMDC_INDEX_{i:03d}.xlsx","rows":end-start} for i,(start,end) in enumerate(parts,1)]},indent=2))
+    return b.getvalue()
+
 def export_bytes(rows, fields, fmt):
     if fmt == "json":
         return json.dumps([{k:r.get(k,"") for k in fields} for r in rows], ensure_ascii=False, default=str).encode("utf-8")
@@ -78,10 +105,10 @@ def export_bytes(rows, fields, fmt):
         w.writerows({k:safe(r.get(k,"")) for k in fields} for r in rows)
         return b.getvalue().encode("utf-8-sig")
     if fmt != "xlsx": raise ValueError("Unknown export format")
-    if len(rows)>1048575 or len(fields)>16384: raise ValueError("Excel limits exceeded; partitioning is not enabled in this candidate. Use JSON or CSV.")
+    if len(rows)>MAX_EXCEL_ROWS or len(fields)>16384: raise ValueError("Excel limits exceeded. Preview and explicitly confirm partitioned export.")
     if not rows: raise ValueError("No records to export in this candidate.")
-    if "Document Link" in fields and sum(isinstance(r.get("Document Link"),str) and r["Document Link"].startswith(("https://","http://")) for r in rows)>65530:
-        raise ValueError("Native hyperlink limit exceeded; no links will be silently omitted. Use JSON/CSV until partitioning is implemented.")
+    if sum(native_link(r,fields) for r in rows)>MAX_EXCEL_LINKS:
+        raise ValueError("Native hyperlink limit exceeded. Preview and explicitly confirm partitioned export.")
     out=io.BytesIO()
     with xlsxwriter.Workbook(out, {"in_memory":True,"strings_to_formulas":False,"strings_to_urls":False}) as book:
         ws=book.add_worksheet("INDEX"); date_fmt=book.add_format({"num_format":"dd/mm/yyyy"}); links=0
@@ -364,7 +391,7 @@ def server_for(app):
                     if path=="/api/sources":return self.send(200,app.manifest_files())
                     if path=="/api/rules":return self.send(200,app.rules())
                     if path=="/api/history":return self.send(200,build_history_rows(app.state)[-500:])
-                    if path in ("/api/index","/api/export"):
+                    if path in ("/api/index","/api/export","/api/export-plan"):
                         scope=q.get("scope","events"); rows=app.view(scope); fields=ordered_fields(rows,scope)
                         rows=filter_rows(rows,q.get("q",""),q.get("column",""),q.get("sort",""),q.get("desc")=="1")
                         if path=="/api/index":
@@ -372,7 +399,14 @@ def server_for(app):
                         selected=q.get("columns","").split("|") if q.get("columns") else fields
                         selected=list(dict.fromkeys(selected+CORE[scope]))
                         if not set(selected)<=set(fields): raise ValueError("Unknown column")
-                        fmt=q.get("format","xlsx"); data=export_bytes(rows,selected,fmt)
+                        fmt=q.get("format","xlsx")
+                        if path=="/api/export-plan":
+                            parts=partition_plan(rows,selected)
+                            return self.send(200,{"rows":len(rows),"parts":len(parts),"run":app.approved()["run_id"]})
+                        if fmt=="xlsx" and len(partition_plan(rows,selected))>1:
+                            if q.get("partition")!="confirmed" or q.get("run")!=app.approved()["run_id"]:raise ValueError("Confirm partitioning for the current approved snapshot.")
+                            return self.send(200,partition_export(rows,selected),"application/zip","NMDC_INDEX_PARTS.zip")
+                        data=export_bytes(rows,selected,fmt)
                         return self.send(200,data,{"xlsx":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","csv":"text/csv","json":"application/json"}[fmt],"NMDC_DOCUMENT_INDEX."+fmt)
                     return self.send(404,{"error":"Unknown route"})
             except PermissionError as e:self.send(403,{"error":str(e)})
@@ -434,6 +468,7 @@ def self_test():
                 assert b'NMDCIndex' in z.read("xl/tables/table1.xml")
                 assert b'<f>' not in z.read("xl/worksheets/sheet1.xml")
             assert filter_rows(rows,"0001 -missing","Document No.")==rows
+            assert partition_plan(rows*5,list(rows[0]),row_limit=2,link_limit=2)==[(0,2),(2,4),(4,5)]
             # Exercise the pinned production update and review engine with an isolated synthetic processor.
             data=Path(d)/"DATA";data.mkdir();source=data/"register.xlsx";source.write_bytes(b"synthetic input")
             before=hashlib.sha256(source.read_bytes()).hexdigest()
