@@ -299,6 +299,7 @@ def stage_runtime_update(
     reuse_raw_profiles: bool = False,
     checkpoint=None,
     verify_source_content: bool = False,
+    extraction_workers: int = 1,
 ) -> Dict[str, Any]:
     phase_times={}
     original_data_dir = Path(data_dir).resolve()
@@ -333,10 +334,11 @@ def stage_runtime_update(
     )
     phase_times["catalog_seconds"]=round(time.perf_counter()-start,3)
     start=time.perf_counter()
-    result = stage_update(
+    def stage(processor):
+        return stage_update(
         data_dir=working_data_dir,
         state_dir=state_dir,
-        processor=catalog.process,
+        processor=processor,
         # Owner source inclusion/exclusion is selection metadata, not parser
         # configuration. It intentionally does not invalidate extraction caches.
         config_paths=[rules_path, overrides_path],
@@ -347,6 +349,14 @@ def stage_runtime_update(
         post_process_flags=catalog.drain_processor_flags,
         checkpoint=checkpoint,
     )
+    if full_rescan and extraction_workers>1 and len(catalog.work_items)>1:
+        from .parallel_extract import FullScanPool
+        with FullScanPool(catalog,min(4,extraction_workers)) as pool:
+            result=stage(pool.process)
+        phase_times["extraction_workers"]=min(4,extraction_workers)
+    else:
+        result=stage(catalog.process)
+        phase_times["extraction_workers"]=1
     phase_times["stage_update_seconds"]=round(time.perf_counter()-start,3)
     run_id = str(result.get("run_id", ""))
     _restore_original_data_path(state_dir, run_id, original_data_dir)
