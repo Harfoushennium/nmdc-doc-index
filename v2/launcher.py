@@ -1,12 +1,12 @@
 """NMDC V2 standalone integration candidate. Existing engine owns approved data."""
 from __future__ import annotations
-import argparse, csv, hashlib, hmac, io, json, os, secrets, shlex, shutil, sys, threading, time, webbrowser
+import argparse, csv, hashlib, hmac, io, json, os, re, secrets, shlex, shutil, sys, threading, time, webbrowser
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
 import xlsxwriter
-from nmdc_profiler.excel_bridge import load_approved_state, load_latest_stage, build_document_rows, build_revision_rows, build_flag_rows
+from nmdc_profiler.excel_bridge import load_approved_state, load_latest_stage, build_document_rows, build_revision_rows, build_flag_rows, build_history_rows, resolve_document_target
 from nmdc_profiler.extractor import OUTPUT_FIELDS
 from nmdc_profiler.file_review import affected_files, save_file_review, validated_review
 from nmdc_profiler.update_engine import approve_stage, reject_stage, hold_stage, _write_json_atomic, stage_update
@@ -14,6 +14,9 @@ from nmdc_profiler.runtime_engine import stage_runtime_update
 from nmdc_profiler.runtime_admin import undo_last_approval
 from nmdc_profiler.source_access import install_resilient_source_access
 from nmdc_profiler.layout_compat import install_layout_compatibility
+from nmdc_profiler.review_decisions import apply_review_decisions
+from nmdc_profiler.source_selection import set_source_selection, read_source_exclusions
+from nmdc_profiler.rules import load_rules
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
 WEB = ROOT / "v2"
@@ -47,10 +50,18 @@ def ordered_fields(rows, scope):
     return list(dict.fromkeys(base + [k for r in rows for k in r] + CORE[scope]))
 
 def filter_rows(rows, query="", column="", sort="", desc=False):
-    tokens = shlex.split(query.replace("+", " ")) if query else []
+    tokens = []
+    for m in re.finditer(r'(-?)"([^"]+)"|([^\s+]+)',query):
+        if m.group(2) is not None: tokens.append((bool(m.group(1)),True,m.group(2).casefold()))
+        else:
+            value=m.group(3)
+            if value=="-": continue
+            tokens.append((value.startswith("-"),False,value.lstrip("-").casefold()))
     def matches(row):
-        text = str(row.get(column, "")).casefold() if column else " ".join(str(v) for v in row.values()).casefold()
-        return all((t[1:].casefold() not in text) if t.startswith("-") else (t.casefold() in text) for t in tokens)
+        values=[str(row.get(column,"")).casefold()] if column else [str(v).casefold() for v in row.values()]
+        text=" ".join(values)
+        return all((not found if negative else found) for negative,exact,value in tokens
+                   for found in [value in values if exact else value in text])
     result = [r for r in rows if matches(r)] if tokens else list(rows)
     if sort: result.sort(key=lambda r: str(r.get(sort, "")).casefold(), reverse=desc)
     return result
@@ -140,7 +151,9 @@ class App:
             try:
                 install_resilient_source_access(); install_layout_compatibility()
                 result=stage_runtime_update(data_dir=src,state_dir=self.state,config_dir=self.config,full_rescan=full)
-                with self.guard:self.job={"status":"complete","result":result}
+                with self.guard:
+                    self.settings["requires_rescan"]=False;self.save_settings()
+                    self.job={"status":"complete","result":result}
             except Exception as exc:
                 with self.guard:self.job={"status":"error","message":str(exc)}
         threading.Thread(target=work,daemon=True).start()
@@ -166,6 +179,7 @@ class App:
                     r["Original_Hyperlink_Target"]=orig.get("Original_Hyperlink_Target","")
             for r in rows:
                 r["Source Workbook Path"]=str(Path(source_root)/str(r.get("Source File",""))) if source_root else str(r.get("Source File",""))
+                if r.get("Document Link"):r["Document Link"]=resolve_document_target(r["Document Link"],r.get("Source File",""),source_root)
             views[scope]=rows
         return views[scope]
     def proposal(self):
@@ -197,6 +211,7 @@ class App:
         finally: f.unlink(missing_ok=True)
     def approve(self,body):
         self.idle(); p=self.proposal()
+        if self.settings.get("requires_rescan"): raise ValueError("Configuration changed; rescan before approval.")
         if not p["run"] or body.get("run")!=p["run"]: raise ValueError("Proposal changed")
         # Conservative candidate: no override and no unresolved non-routine flag approval.
         routine={"SOURCE_NEW","SOURCE_CHANGED","PARSER_VERSION_CHANGED","CONFIG_CHANGED","CACHE_MISSING"}
@@ -204,6 +219,74 @@ class App:
             raise ValueError("Unresolved flags require correction; candidate does not provide override.")
         result=approve_stage(self.state,p["run"],require_file_review=True,allow_conflicts=False)
         self.cache={};return result
+
+    def manifest_files(self):
+        self.idle()
+        s=load_latest_stage(self.state)
+        manifest=s.get("manifest") or self.approved().get("manifest",{})
+        excluded=read_source_exclusions(self.config/"source_exclusions.csv")
+        return [dict(r,owner_excluded=str(r.get("relative_path","")).replace("\\","/").lstrip("/").casefold() in excluded) for r in manifest.get("files",[])]
+    def source_choice(self,body):
+        self.idle()
+        rel=body.get("source","")
+        if rel not in {r["relative_path"] for r in self.manifest_files()}: raise ValueError("Source not in current inventory")
+        if type(body.get("include")) is not bool:raise ValueError("Invalid scope choice")
+        result=set_source_selection(self.config,rel,include=body["include"],reason=str(body.get("note","")))
+        self.settings["requires_rescan"]=True;self.save_settings()
+        return result
+    def rules(self):
+        self.idle()
+        p=self.config/"classification_rules.csv"
+        with p.open(encoding="utf-8-sig",newline="") as h:
+            r=csv.DictReader(h)
+            return {"columns":r.fieldnames,"rows":list(r)}
+    def save_rules(self,body):
+        self.idle(); current=self.rules();columns=current["columns"]
+        if body.get("columns")!=columns or not isinstance(body.get("rows"),list):raise ValueError("Rule schema mismatch")
+        rows=body["rows"]
+        if len(rows)>5000 or any(set(r)!=set(columns) for r in rows):raise ValueError("Invalid rule rows")
+        target=self.config/"classification_rules.csv";tmp=target.with_suffix(".tmp")
+        try:
+            with tmp.open("w",encoding="utf-8-sig",newline="") as h:
+                w=csv.DictWriter(h,fieldnames=columns);w.writeheader();w.writerows(rows)
+            load_rules(tmp)
+            history=self.root/"config-history";history.mkdir(exist_ok=True)
+            shutil.copy2(target,history/("classification_rules-"+secrets.token_hex(8)+".csv"))
+            os.replace(tmp,target)
+        finally:tmp.unlink(missing_ok=True)
+        self.settings["requires_rescan"]=True;self.save_settings()
+        return {"saved":len(rows),"requires_rescan":True}
+    def report_flags(self,body):
+        self.idle();p=self.proposal()
+        if not p["run"] or p["run"]!=body.get("run"):raise ValueError("Proposal changed")
+        # Select server-known flag identities only. Reporting cannot resolve flags or authorize approval.
+        indices=body.get("indices")
+        if not isinstance(indices,list) or not indices or any(type(i) is not int or not 0<=i<len(p["flags"]) for i in indices):raise ValueError("Invalid flag selection")
+        report_parent=self.root.parent/"NMDC_V2_Reports"
+        report_root=report_parent/"PARSER_FIX_REPORTS"
+        if self.settings.get("data_dir"):
+            source=self.source()
+            if source==report_root or source in report_root.parents or report_root in source.parents:raise ValueError("Report path overlaps DATA")
+        keys=["Flag Code","Source File","Worksheet Name","Event Key","Project No.","Document No.","Revision","User Decision","User Comment","Resolution Status"]
+        path=self.root/"flag-decisions.csv"
+        try:
+            with path.open("w",encoding="utf-8",newline="") as h:
+                w=csv.DictWriter(h,fieldnames=keys);w.writeheader()
+                for i in sorted(set(indices)):
+                    r=p["flags"][i];row={k:r.get(k,"") for k in keys}
+                    row.update({"User Decision":"NEEDS PARSER/MAPPING FIX","User Comment":str(body.get("comment","")),"Resolution Status":"OPEN"})
+                    w.writerow(row)
+            return apply_review_decisions(self.state,path,request_dir=report_parent,expected_run_id=p["run"])
+        finally:path.unlink(missing_ok=True)
+    def profile(self,body):
+        scope=body.get("scope");name=str(body.get("name","")).strip()
+        if not name or len(name)>100 or scope not in CORE:raise ValueError("Invalid profile")
+        fields=ordered_fields(self.view(scope),scope)
+        cols=body.get("columns")
+        if not isinstance(cols,list) or not all(isinstance(x,str) and x in fields for x in cols):raise ValueError("Invalid profile columns")
+        profiles=self.settings.setdefault("export_profiles",{})
+        profiles[name]={"scope":scope,"columns":list(dict.fromkeys(cols+CORE[scope]))}
+        self.save_settings();return profiles
 
 def server_for(app):
     class Handler(BaseHTTPRequestHandler):
@@ -237,6 +320,9 @@ def server_for(app):
                         a=app.approved()
                         return self.send(200,{"job":app.job,"settings":app.settings,"approved_run":a["run_id"],"events":len(a["records"])})
                     if path=="/api/review":return self.send(200,app.proposal())
+                    if path=="/api/sources":return self.send(200,app.manifest_files())
+                    if path=="/api/rules":return self.send(200,app.rules())
+                    if path=="/api/history":return self.send(200,build_history_rows(app.state)[-500:])
                     if path in ("/api/index","/api/export"):
                         scope=q.get("scope","events"); rows=app.view(scope); fields=ordered_fields(rows,scope)
                         rows=filter_rows(rows,q.get("q",""),q.get("column",""),q.get("sort",""),q.get("desc")=="1")
@@ -264,11 +350,17 @@ def server_for(app):
                     elif path=="/api/scan":result=app.start(body.get("full") is True)
                     elif path=="/api/save-choices":result=app.save_choices(body)
                     elif path=="/api/approve":result=app.approve(body)
+                    elif path=="/api/source-choice":result=app.source_choice(body)
+                    elif path=="/api/rules":result=app.save_rules(body)
+                    elif path=="/api/report":result=app.report_flags(body)
+                    elif path=="/api/profile":result=app.profile(body)
                     elif path=="/api/undo":
                         app.idle();result=undo_last_approval(app.state);app.cache={}
                     elif path=="/api/preferences":
                         if body.get("theme") not in ("light","dark"):raise ValueError("Invalid theme")
-                        app.settings["theme"]=body["theme"];app.save_settings();result=app.settings
+                        app.settings["theme"]=body["theme"]
+                        if body.get("density") in ("compact","comfortable"):app.settings["density"]=body["density"]
+                        app.save_settings();result=app.settings
                     elif path=="/api/exit":
                         app.idle();result={"status":"closing"};threading.Thread(target=self.server.shutdown,daemon=True).start()
                     else:return self.send(404,{"error":"Unknown route"})
@@ -314,6 +406,12 @@ def self_test():
             assert app.approved()["records"][0]["Event_Key"]=="E1"
             assert hashlib.sha256(source.read_bytes()).hexdigest()==before
             assert app.view("events")[0]["Document No."]=="D1"
+            assert filter_rows(rows,'"0001"',"Document No.")==rows
+            assert not filter_rows(rows,'"001"',"Document No.")
+            profiles=app.profile({"name":"Test","scope":"events","columns":["Document No."]})
+            assert "Event_Key" in profiles["Test"]["columns"] and "Test" in read_json(app.settings_path,{})["export_profiles"]
+            assert len(app.manifest_files())==1
+            assert app.rules()["columns"]
             print("Standalone HTTP/auth/XLSX and production update/review smoke PASS")
         finally:s.shutdown();s.server_close();app.lock.close()
 def main():
