@@ -121,7 +121,7 @@ class RuntimeCatalog:
         return flags
 
 
-def _profile_workbooks_cached(files, data_dir, cache_dir, version):
+def _profile_workbooks_cached(files, data_dir, cache_dir, version, refresh=False):
     """Reuse only raw READABLE profiles of exactly matching local file bytes.
     Classification and selection always run fresh on independent profile objects.
     Cache is disposable, never an approved record store; invalid entries fall back.
@@ -135,6 +135,7 @@ def _profile_workbooks_cached(files, data_dir, cache_dir, version):
         entry=cache_dir/(key+".json")
         profile=None
         try:
+            if refresh:raise FileNotFoundError("Full rescan bypasses cached profile")
             payload=json.loads(entry.read_text(encoding="utf-8"))
             candidate=payload["profile"]
             encoded=json.dumps(candidate,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
@@ -163,7 +164,7 @@ def build_runtime_catalog(
     overrides_path: Path,
     exclusions_path: Path,
     profile_output_dir: Path,
-    *, profile_cache_dir: Path | None = None, profile_cache_version: str = "", timings: dict | None = None,
+    *, profile_cache_dir: Path | None = None, profile_cache_version: str = "", timings: dict | None = None, refresh_profiles: bool = False,
 ) -> RuntimeCatalog:
     data_dir = Path(data_dir).resolve()
     rules = load_rules(rules_path)
@@ -181,7 +182,7 @@ def build_runtime_catalog(
     if profile_cache_dir is None:
         workbooks = [profile_workbook(path, data_dir, data_dir) for path in files]; hits=0
     else:
-        workbooks,hits = _profile_workbooks_cached(files,data_dir,profile_cache_dir,profile_cache_version)
+        workbooks,hits = _profile_workbooks_cached(files,data_dir,profile_cache_dir,profile_cache_version,refresh_profiles)
     if timings is not None:timings.update(profile_seconds=round(time.perf_counter()-start,3),profile_cache_hits=hits,profile_cache_misses=len(files)-hits)
     start = time.perf_counter()
     exact_groups, version_groups = assign_selection(workbooks, rules)
@@ -323,6 +324,7 @@ def stage_runtime_update(
         profile_cache_dir=(state_dir/"profile"/"raw-v1") if reuse_raw_profiles else None,
         profile_cache_version="raw-v1:"+parser_version,
         timings=phase_times,
+        refresh_profiles=full_rescan,
     )
     phase_times["catalog_seconds"]=round(time.perf_counter()-start,3)
     start=time.perf_counter()
