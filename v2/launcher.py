@@ -194,11 +194,12 @@ class App:
                 if result is None:
                     before=unchanged.inputs(src,self.config,build)
                     result=stage_runtime_update(data_dir=src,state_dir=self.state,config_dir=self.config,full_rescan=full,reuse_raw_profiles=True,checkpoint=checkpoint,verify_source_content=True)
+                    after=None
                     try:
                         after=unchanged.inputs(src,self.config,build)
                         result["input_proof"]=unchanged.stage_proof(self.state,result["run_id"],before,after,self.config)
                     except (OSError,ValueError,KeyError,TypeError):result["input_proof"]=False
-                    if before!=after if "after" in locals() else True:
+                    if before!=after:
                         result["requires_rescan"]=True
                 with self.guard:
                     self.settings["requires_rescan"]=bool(result.get("requires_rescan"));self.save_settings()
