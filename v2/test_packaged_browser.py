@@ -18,7 +18,8 @@ def test(exe):
                 "Source Row":2,"Source Cell":"A2","Event Date":"2026-11-28"}])
         finally:app.lock.close()
         env=os.environ.copy();env.pop("PYTHONPATH",None)
-        env["PATH"]=os.pathsep.join([str(Path(env["SystemRoot"])/"System32"),env["SystemRoot"]])
+        system_root=env.get("SYSTEMROOT",env.get("SystemRoot",env.get("WINDIR",r"C:\Windows")))
+        env["PATH"]=os.pathsep.join([str(Path(system_root)/"System32"),system_root])
         proc=subprocess.Popen([str(exe),"--workspace",str(workspace),"--no-browser"],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,env=env)
         try:
             line=proc.stdout.readline()
