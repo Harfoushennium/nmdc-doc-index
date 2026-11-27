@@ -378,6 +378,7 @@ def stage_update(
     selection_statuses: Mapping[str, str] | None = None,
     initial_flags: Sequence[Mapping[str, Any]] = (),
     post_process_flags: FlagProvider | None = None,
+    checkpoint: Callable[[str, int, int], None] | None = None,
 ) -> Dict[str, Any]:
     """Create a proposed update without changing the approved dataset."""
     data_dir = Path(data_dir)
@@ -404,7 +405,8 @@ def stage_update(
     effective_decisions: List[SourceDecision] = []
     reprocessed_sources: List[str] = []
 
-    for original_decision in decisions:
+    for position, original_decision in enumerate(decisions):
+        if checkpoint is not None: checkpoint("Process sources", position, len(decisions))
         decision = original_decision
         rel = decision.relative_path
         now = current_map.get(rel, {})
@@ -518,6 +520,7 @@ def stage_update(
                 _set_manifest_processed_run(current_manifest, rel, str(old.get("last_processed_run", approved_manifest.get("run_id", ""))))
             effective_decisions.append(decision)
 
+    if checkpoint is not None: checkpoint("Reconcile records", len(decisions), len(decisions))
     staged_rows.sort(
         key=lambda r: (
             str(r.get("Project No.", "")),
@@ -579,7 +582,8 @@ def stage_update(
         "approved_base_run_id": str(approved_manifest.get("run_id", "")),
     }
     _write_json(stage_dir / "summary.json", summary)
-    _write_json(state_dir / "staging" / "latest.json", {"run_id": run_id})
+    if checkpoint is not None: checkpoint("Publish proposal", 1, 1)
+    _write_json_atomic(state_dir / "staging" / "latest.json", {"run_id": run_id})
     _append_log(state_dir, {"event": "STAGED", "at": utc_now(), **summary})
     return summary
 
