@@ -150,7 +150,7 @@ class App:
         def work():
             try:
                 install_resilient_source_access(); install_layout_compatibility()
-                result=stage_runtime_update(data_dir=src,state_dir=self.state,config_dir=self.config,full_rescan=full)
+                result=stage_runtime_update(data_dir=src,state_dir=self.state,config_dir=self.config,full_rescan=full,reuse_raw_profiles=True)
                 with self.guard:
                     self.settings["requires_rescan"]=False;self.save_settings()
                     self.job={"status":"complete","result":result}
