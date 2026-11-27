@@ -258,8 +258,8 @@ class App:
         rel=body.get("source","")
         if rel not in {r["relative_path"] for r in self.manifest_files()}: raise ValueError("Source not in current inventory")
         if type(body.get("include")) is not bool:raise ValueError("Invalid scope choice")
-        result=set_source_selection(self.config,rel,include=body["include"],reason=str(body.get("note","")))
         self.settings["requires_rescan"]=True;self.save_settings()
+        result=set_source_selection(self.config,rel,include=body["include"],reason=str(body.get("note","")))
         return result
     def rules(self):
         self.idle()
@@ -279,6 +279,7 @@ class App:
             load_rules(tmp)
             history=self.root/"config-history";history.mkdir(exist_ok=True)
             shutil.copy2(target,history/("classification_rules-"+secrets.token_hex(8)+".csv"))
+            self.settings["requires_rescan"]=True;self.save_settings()
             os.replace(tmp,target)
         finally:tmp.unlink(missing_ok=True)
         self.settings["requires_rescan"]=True;self.save_settings()
@@ -446,17 +447,29 @@ def self_test():
             assert "Event_Key" in profiles["Test"]["columns"] and "Test" in read_json(app.settings_path,{})["export_profiles"]
             assert len(app.manifest_files())==1
             assert app.rules()["columns"]
+            # New isolated synthetic proposal with a parser flag, no approval.
+            source.write_bytes(b"synthetic input changed")
+            result=stage_update(data_dir=data,state_dir=app.state,processor=processor,
+                post_process_flags=lambda:[{"level":"REVIEW","code":"UNRECOGNIZED_LAYOUT","source":"register.xlsx","source_sheet":"Register","message":"Synthetic test"}])
+            p=app.proposal()
+            idx=next(i for i,r in enumerate(p["flags"]) if r["Flag Code"]=="UNRECOGNIZED_LAYOUT")
+            report=app.report_flags({"run":p["run"],"indices":[idx],"comment":"Synthetic expected mapping"})
+            assert report["parser_mapping_fix_requests"]==1
+            report_dir=Path(d)/"NMDC_V2_Reports"/"PARSER_FIX_REPORTS"/"0001"
+            assert (report_dir/"PARSER_FIX_REQUEST.md").exists()
+            assert app.approved()["records"][0]["Event_Key"]=="E1"
             print("Standalone HTTP/auth/XLSX and production update/review smoke PASS")
         finally:s.shutdown();s.server_close();app.lock.close()
 def main():
-    p=argparse.ArgumentParser();p.add_argument("--self-test",action="store_true");p.add_argument("--workspace",type=Path)
+    p=argparse.ArgumentParser();p.add_argument("--self-test",action="store_true");p.add_argument("--workspace",type=Path);p.add_argument("--no-browser",action="store_true")
     args=p.parse_args()
     if args.self_test:self_test();return
     root=args.workspace or Path(os.environ.get("LOCALAPPDATA",Path.home()))/"NMDCIndexV2"
     app=App(root)
     try:
         s=server_for(app);url="http://127.0.0.1:"+str(s.server_port)+"/#"+app.token
-        print("NMDC V2 running. Close using Exit in the app. "+url,flush=True);webbrowser.open(url)
+        print("NMDC V2 running. Close using Exit in the app. "+url,flush=True)
+        if not args.no_browser:webbrowser.open(url)
         s.serve_forever()
     finally:
         if "s" in locals():s.server_close()
