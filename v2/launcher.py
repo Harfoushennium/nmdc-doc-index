@@ -8,7 +8,7 @@ from urllib.parse import urlsplit, parse_qs
 import xlsxwriter
 from nmdc_profiler.excel_bridge import load_approved_state, load_latest_stage, build_document_rows, build_revision_rows, build_flag_rows, build_history_rows, resolve_document_target
 from nmdc_profiler.extractor import OUTPUT_FIELDS
-from nmdc_profiler.file_review import affected_files, save_file_review, validated_review
+from nmdc_profiler.file_review import affected_files, save_file_review, validated_review, _baseline
 from nmdc_profiler.update_engine import approve_stage, reject_stage, hold_stage, _write_json_atomic, stage_update
 from nmdc_profiler.runtime_engine import stage_runtime_update
 from nmdc_profiler.runtime_admin import undo_last_approval
@@ -195,11 +195,35 @@ class App:
         if valid:
             for f in files:
                 c=saved["choices"][f["Source File"]]; f["Accept Update?"]=c["accept"]; f["Owner Note"]=c["note"]
-        return {"run":run,"files":files,"flags":build_flag_rows(s),"summary":s["summary"],"saved":valid}
+        baseline=_baseline(self.state,s["stage_dir"])
+        draft=read_json(s["stage_dir"]/"web_draft.json",{})
+        version=0;dirty=False
+        if draft.get("baseline")==baseline and draft.get("run")==run:
+            version=int(draft.get("version",0));dirty=bool(draft.get("dirty",False))
+            choices=draft.get("choices",{})
+            if dirty and set(choices)=={f["Source File"] for f in files}:
+                for f in files:
+                    ch=choices[f["Source File"]];f["Accept Update?"]=ch["accept"];f["Owner Note"]=ch["note"]
+            elif dirty:raise ValueError("Saved web draft does not match current files")
+        return {"run":run,"files":files,"flags":build_flag_rows(s),"summary":s["summary"],"saved":valid and not dirty,"draft_dirty":dirty,"draft_version":version,"baseline":baseline}
+    def draft_choices(self,body,dirty=True):
+        self.idle();p=self.proposal()
+        if not p["run"] or body.get("run")!=p["run"]:raise ValueError("Proposal changed")
+        if body.get("draft_version",0)!=p["draft_version"]:raise ValueError("Review was edited elsewhere. Reload before editing.")
+        choices={}
+        for r in body["files"]:
+            source=r["Source File"]
+            if source in choices or type(r["Accept Update?"]) is not bool:raise ValueError("Invalid or duplicate file choice")
+            choices[source]={"accept":r["Accept Update?"],"note":str(r.get("Owner Note",""))}
+        if set(choices)!={f["Source File"] for f in p["files"]}:raise ValueError("Missing or unknown file choices")
+        payload={"run":p["run"],"baseline":p["baseline"],"version":p["draft_version"]+1,"dirty":dirty,"choices":choices}
+        _write_json_atomic(self.state/"staging"/p["run"]/"web_draft.json",payload)
+        return {"draft_version":payload["version"],"dirty":dirty}
     def save_choices(self,body):
         self.idle()
         p=self.proposal()
         if body.get("run")!=p["run"] or not p["run"]: raise ValueError("Proposal has changed")
+        if body.get("draft_version",0)!=p["draft_version"]:raise ValueError("Review was edited elsewhere. Reload before saving.")
         f=self.root/"choices.csv"
         try:
             with f.open("w",encoding="utf-8",newline="") as h:
@@ -207,12 +231,15 @@ class App:
                 for r in body["files"]:
                     if type(r["Accept Update?"]) is not bool: raise ValueError("Invalid choice")
                     w.writerow({"Source File":r["Source File"],"Accept Update?":str(r["Accept Update?"]).upper(),"Owner Note":str(r.get("Owner Note",""))})
-            return save_file_review(self.state,p["run"],f)
+            result=save_file_review(self.state,p["run"],f)
+            self.draft_choices(body,dirty=False)
+            return result
         finally: f.unlink(missing_ok=True)
     def approve(self,body):
         self.idle(); p=self.proposal()
         if self.settings.get("requires_rescan"): raise ValueError("Configuration changed; rescan before approval.")
         if not p["run"] or body.get("run")!=p["run"]: raise ValueError("Proposal changed")
+        if not p["saved"]:raise ValueError("Save all file choices before approval.")
         # Conservative candidate: no override and no unresolved non-routine flag approval.
         routine={"SOURCE_NEW","SOURCE_CHANGED","PARSER_VERSION_CHANGED","CONFIG_CHANGED","CACHE_MISSING"}
         if any(f["Flag Code"] not in routine and f.get("Resolution Status")!="RESOLVED" for f in p["flags"]):
@@ -348,6 +375,7 @@ def server_for(app):
                     path=urlsplit(self.path).path
                     if path=="/api/select":result=app.select()
                     elif path=="/api/scan":result=app.start(body.get("full") is True)
+                    elif path=="/api/draft":result=app.draft_choices(body)
                     elif path=="/api/save-choices":result=app.save_choices(body)
                     elif path=="/api/approve":result=app.approve(body)
                     elif path=="/api/source-choice":result=app.source_choice(body)
@@ -401,7 +429,13 @@ def self_test():
             try:app.approve({"run":p["run"]})
             except ValueError:pass
             else:raise AssertionError("Unsaved approval permitted")
-            app.save_choices({"run":p["run"],"files":p["files"]})
+            draft=app.draft_choices({"run":p["run"],"files":p["files"],"draft_version":0})
+            assert app.proposal()["draft_dirty"]
+            try:app.approve({"run":p["run"]})
+            except ValueError:pass
+            else:raise AssertionError("Draft approval permitted")
+            app.save_choices({"run":p["run"],"files":p["files"],"draft_version":draft["draft_version"]})
+            assert app.proposal()["saved"]
             app.approve({"run":p["run"]})
             assert app.approved()["records"][0]["Event_Key"]=="E1"
             assert hashlib.sha256(source.read_bytes()).hexdigest()==before
