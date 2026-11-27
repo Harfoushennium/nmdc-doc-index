@@ -74,6 +74,7 @@ class Store:
         with self.tx():
             base=self.current()
             if not base:raise ValueError("No approved baseline")
+            self.db.execute("UPDATE proposal SET state='SUPERSEDED' WHERE state='STAGED'")
             self.db.execute("INSERT INTO proposal VALUES(?,?,'STAGED',0,?)",(proposal,base,canonical(list(flags))))
             for source,value in changes.items():
                 v=self.version(source,*value) if value is not None else None
