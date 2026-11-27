@@ -17,6 +17,7 @@ from nmdc_profiler.layout_compat import install_layout_compatibility
 from nmdc_profiler.review_decisions import apply_review_decisions
 from nmdc_profiler.source_selection import set_source_selection, read_source_exclusions
 from nmdc_profiler.rules import load_rules
+from v2.recovery import create_bundle, restore_to_new_workspace, inventory
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
 WEB = ROOT / "v2"
@@ -287,6 +288,20 @@ class App:
         result=approve_stage(self.state,p["run"],require_file_review=True,allow_conflicts=False)
         self.cache={};return result
 
+    def backup(self,reason):
+        self.idle()
+        return create_bundle(self.root,reason)
+    def restore_copy(self):
+        self.idle()
+        import tkinter as tk
+        from tkinter import filedialog
+        root=tk.Tk();root.withdraw();root.attributes("-topmost",True)
+        try: value=filedialog.askopenfilename(parent=root,title="Select verified NMDC recovery ZIP",filetypes=[("Recovery bundle","*.zip")])
+        finally:root.destroy()
+        if not value:return {"status":"cancelled"}
+        target=self.root.parent/(self.root.name+"-restored-"+secrets.token_hex(5))
+        if self.settings.get("data_dir") and target.is_relative_to(self.source()):raise ValueError("Recovery destination overlaps DATA")
+        return restore_to_new_workspace(value,target)
     def manifest_files(self):
         self.idle()
         s=load_latest_stage(self.state)
@@ -431,8 +446,10 @@ def server_for(app):
                     elif path=="/api/rules":result=app.save_rules(body)
                     elif path=="/api/report":result=app.report_flags(body)
                     elif path=="/api/profile":result=app.profile(body)
+                    elif path=="/api/backup":result=app.backup("Manual recovery snapshot")
+                    elif path=="/api/restore-copy":result=app.restore_copy()
                     elif path=="/api/undo":
-                        app.idle();result=undo_last_approval(app.state);app.cache={}
+                        app.idle();app.backup("Before undo");result=undo_last_approval(app.state);app.cache={}
                     elif path=="/api/preferences":
                         if body.get("theme") not in ("light","dark"):raise ValueError("Invalid theme")
                         app.settings["theme"]=body["theme"]
@@ -515,6 +532,13 @@ def self_test():
             except ScanCancelled:pass
             else:raise AssertionError("Cancellation not respected")
             assert marker.read_bytes()==prior and app.approved()["records"][0]["Event_Key"]=="E1"
+            backup=app.backup("Synthetic recovery test")
+            recovered=Path(d)/"restored"
+            restore_to_new_workspace(backup["path"],recovered)
+            assert inventory(recovered)==inventory(app.root)
+            try:restore_to_new_workspace(backup["path"],recovered)
+            except ValueError:pass
+            else:raise AssertionError("Restore overwrote existing folder")
             print("Standalone HTTP/auth/XLSX and production update/review smoke PASS")
         finally:s.shutdown();s.server_close();app.lock.close()
 def main():
