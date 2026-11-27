@@ -1,0 +1,31 @@
+name: NMDC incremental architecture research
+on:
+  pull_request:
+    branches: [feature/nmdc-v2-web-app]
+    paths: ['research/architecture/**', '.github/workflows/nmdc-architecture-research.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-corpus:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Research dependencies (CI only)
+        run: python -m pip install xlsxwriter==3.2.9
+      - name: Benchmark architecture alternatives
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = (Get-Location).Path
+          python research/architecture/benchmark.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --exit-code -- DATA
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NMDC-architecture-research-metrics
+          path: architecture-research-metrics.json
+          if-no-files-found: error
