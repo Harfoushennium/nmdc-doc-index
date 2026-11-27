@@ -1,0 +1,7 @@
+# NMDC V2 standalone development candidate
+
+Not production accepted. Use the Windows CI artifact, not this source folder, for standalone testing. Extract the entire ZIP and double-click Launch.exe. A supported installed browser is used; Python, pip, Excel, Node and WebView2 installations are not required by the packaged app. Runtime data is stored in a separate local NMDCIndexV2 folder under LOCALAPPDATA. Do not use production data until independent acceptance.
+
+This increment integrates the actual existing engine for read-only scan, proposal-bound save/approve (no overrides), approved index views, undo, search, and one-table XLSX/CSV/JSON export. It includes a local session-authenticated HTTP host and a workspace writer lock. It does not implement all W04/W05 requirements: derived SQLite, durable unsaved drafts, cancel/reconnect job recovery, source exclusion/rules/custom field editing, flag decisions/report generation, profile persistence/order/grouping, partitioning, migration, backup/rollback, native local hyperlinks, and full Windows/real-corpus QA remain outstanding. Export requires records and uses the browser download destination. CSV is formula-prefix neutralized; JSON preserves literal raw values. No production cutover or legacy issue closure.
+
+Build only on Windows using the standalone candidate workflow. Developer tools are build-only, not user prerequisites. No operational DATA belongs in the package.
