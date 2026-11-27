@@ -2,6 +2,9 @@
 #include <expat.h>
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <sstream>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -48,20 +51,39 @@ static void doctype(void* ptr,const XML_Char*,const XML_Char*,const XML_Char*,in
 }
 void field(ostream& o,const string& s){if(s.size()>0xffffffffu)throw runtime_error("oversize field");uint32_t n=(uint32_t)s.size();for(int i=0;i<4;i++)o.put(char((n>>(8*i))&255));o.write(s.data(),s.size());}
 void number(ostream& o,uint64_t n){field(o,to_string(n));}
-int main(int argc,char**argv){
- try{
- if(argc!=3)throw runtime_error("usage: scan input.xml output.bin");
- ifstream in(argv[1],ios::binary);if(!in)throw runtime_error("input open failed");
- Scan s;s.parser=XML_ParserCreateNS(nullptr,'|');if(!s.parser)throw runtime_error("parser allocation failed");
+static bool parse(istream& in,Scan& s){
+ s.parser=XML_ParserCreateNS(nullptr,'|');if(!s.parser)return false;
  XML_SetUserData(s.parser,&s);XML_SetElementHandler(s.parser,start,end);XML_SetCharacterDataHandler(s.parser,chars);XML_SetStartDoctypeDeclHandler(s.parser,doctype);
  char buffer[65536];bool ok=true;
  do{in.read(buffer,sizeof(buffer));auto count=in.gcount();if(XML_Parse(s.parser,buffer,(int)count,in.eof())==XML_STATUS_ERROR){ok=false;break;}}while(!in.eof()&&in);
- XML_ParserFree(s.parser);if(!ok||s.failed||in.bad())throw runtime_error("invalid or unsupported XML");
- ofstream out(argv[2],ios::binary);if(!out)throw runtime_error("output open failed");
+ XML_ParserFree(s.parser);return ok&&!s.failed&&!in.bad();
+}
+static void write_scan(ostream& out,Scan& s){
  field(out,"NMDC-SCAN-1");field(out,s.dimension);number(out,s.hidden_rows);number(out,s.hidden_columns);
  number(out,s.rows.size());for(auto&r:s.rows){field(out,r.number);number(out,r.cells.size());for(auto&c:r.cells){field(out,c.ref);field(out,c.type);field(out,c.value);field(out,c.formula);field(out,c.inline_text);}}
  number(out,s.merges.size());for(auto&m:s.merges)field(out,m);
  number(out,s.links.size());for(auto&l:s.links)for(auto&v:l)field(out,v);
- if(!out)throw runtime_error("output failure");return 0;
+ if(!out)throw runtime_error("output failure");
+}
+extern "C" int nmdc_scan_xml(const char* data,size_t size,void** output,size_t* output_size){
+ if(!output||!output_size)return 1;
+ *output=nullptr;*output_size=0;
+ try{
+ if(!data||size>256u*1024u*1024u)return 1;
+ istringstream in(string(data,size),ios::binary|ios::in);Scan s;
+ if(!parse(in,s))return 2;
+ ostringstream out(ios::binary|ios::out);write_scan(out,s);string raw=out.str();
+ void* mem=malloc(raw.size());if(!mem)return 3;
+ memcpy(mem,raw.data(),raw.size());*output=mem;*output_size=raw.size();return 0;
+ }catch(...){return 4;}
+}
+extern "C" void nmdc_scan_free(void* p){free(p);}
+int main(int argc,char**argv){
+ try{
+ if(argc!=3)throw runtime_error("usage: scan input.xml output.bin");
+ ifstream in(argv[1],ios::binary);if(!in)throw runtime_error("input open failed");
+ Scan s;if(!parse(in,s))throw runtime_error("invalid or unsupported XML");
+ ofstream out(argv[2],ios::binary);if(!out)throw runtime_error("output open failed");
+ write_scan(out,s);return 0;
  }catch(const exception&e){cerr<<e.what()<<'\n';return 1;}
 }
