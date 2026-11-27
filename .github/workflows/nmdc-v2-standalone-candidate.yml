@@ -1,0 +1,54 @@
+name: NMDC V2 standalone candidate
+on:
+  pull_request:
+    branches: [planning/nmdc-v2-standalone]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-package:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: x64
+      - name: Build dependencies (CI only)
+        run: python -m pip install pyinstaller==6.16.0 xlsxwriter==3.2.9
+      - name: Source smoke
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = (Get-Location).Path
+          python v2/launcher.py --self-test
+          node --check v2/app.js
+      - name: Windows standalone build
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onedir --name Launch --paths . --add-data "v2/index.html;v2" --add-data "v2/app.js;v2" --add-data "v2/style.css;v2" --add-data "config/classification_rules.csv;config" --add-data "config/project_identity_overrides.csv;config" --add-data "config/source_exclusions.csv;config" v2/launcher.py
+          Copy-Item v2/README.md dist/Launch/README.md
+      - name: Packaged executable smoke with restricted PATH
+        shell: pwsh
+        run: |
+          $old = $env:PATH
+          try {
+            $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+            Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+            & .\dist\Launch\Launch.exe --self-test
+            if ($LASTEXITCODE -ne 0) { throw "Packaged smoke failed: $LASTEXITCODE" }
+          } finally { $env:PATH = $old }
+      - name: Manifest and portable candidate ZIP
+        shell: pwsh
+        run: |
+          $root = (Resolve-Path dist/Launch).Path
+          $rows = @(Get-ChildItem $root -Recurse -File | Sort-Object FullName | ForEach-Object {
+            @{ path = $_.FullName.Substring($root.Length+1).Replace('\','/'); bytes = $_.Length; sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
+          })
+          @{ status = "development-candidate"; commit = $env:GITHUB_SHA; files = $rows } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $root "manifest.json") -Encoding utf8
+          Compress-Archive -Path dist/Launch/* -DestinationPath NMDC_V2_Standalone_Candidate_Windows.zip -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NMDC-V2-Standalone-Candidate-Windows
+          path: NMDC_V2_Standalone_Candidate_Windows.zip
+          if-no-files-found: error
