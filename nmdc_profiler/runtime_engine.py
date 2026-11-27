@@ -298,6 +298,7 @@ def stage_runtime_update(
     parser_version: str = DEFAULT_PARSER_VERSION,
     reuse_raw_profiles: bool = False,
     checkpoint=None,
+    verify_source_content: bool = False,
 ) -> Dict[str, Any]:
     phase_times={}
     original_data_dir = Path(data_dir).resolve()
@@ -314,6 +315,7 @@ def stage_runtime_update(
     working_data_dir, cache_stats = prepare_local_source_cache(
         original_data_dir,
         state_dir / "source_cache",
+        verify_content=verify_source_content,
     )
     if checkpoint is not None: checkpoint("Profile and classify", 0, 0)
     phase_times["mirror_seconds"]=round(time.perf_counter()-start,3)
