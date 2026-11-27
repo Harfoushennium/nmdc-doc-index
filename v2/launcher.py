@@ -9,7 +9,7 @@ import xlsxwriter
 from nmdc_profiler.excel_bridge import load_approved_state, load_latest_stage, build_document_rows, build_revision_rows, build_flag_rows
 from nmdc_profiler.extractor import OUTPUT_FIELDS
 from nmdc_profiler.file_review import affected_files, save_file_review, validated_review
-from nmdc_profiler.update_engine import approve_stage, reject_stage, hold_stage, _write_json_atomic
+from nmdc_profiler.update_engine import approve_stage, reject_stage, hold_stage, _write_json_atomic, stage_update
 from nmdc_profiler.runtime_engine import stage_runtime_update
 from nmdc_profiler.runtime_admin import undo_last_approval
 from nmdc_profiler.source_access import install_resilient_source_access
@@ -69,6 +69,8 @@ def export_bytes(rows, fields, fmt):
     if fmt != "xlsx": raise ValueError("Unknown export format")
     if len(rows)>1048575 or len(fields)>16384: raise ValueError("Excel limits exceeded; partitioning is not enabled in this candidate. Use JSON or CSV.")
     if not rows: raise ValueError("No records to export in this candidate.")
+    if "Document Link" in fields and sum(isinstance(r.get("Document Link"),str) and r["Document Link"].startswith(("https://","http://")) for r in rows)>65530:
+        raise ValueError("Native hyperlink limit exceeded; no links will be silently omitted. Use JSON/CSV until partitioning is implemented.")
     out=io.BytesIO()
     with xlsxwriter.Workbook(out, {"in_memory":True,"strings_to_formulas":False,"strings_to_urls":False}) as book:
         ws=book.add_worksheet("INDEX"); date_fmt=book.add_format({"num_format":"dd/mm/yyyy"}); links=0
@@ -297,7 +299,22 @@ def self_test():
                 assert b'NMDCIndex' in z.read("xl/tables/table1.xml")
                 assert b'<f>' not in z.read("xl/worksheets/sheet1.xml")
             assert filter_rows(rows,"0001 -missing","Document No.")==rows
-            print("Standalone HTTP/auth/XLSX smoke PASS")
+            # Exercise the pinned production update and review engine with an isolated synthetic processor.
+            data=Path(d)/"DATA";data.mkdir();source=data/"register.xlsx";source.write_bytes(b"synthetic input")
+            before=hashlib.sha256(source.read_bytes()).hexdigest()
+            def processor(path,rel):
+                return [{"Event_Key":"E1","Source File":rel,"Project No.":"0001","Document No.":"D1","Document Title":"Fixture","Revision":"A","Revision_Key":"R1","Global_Document_Key":"D1","Source Sheet":"Register","Source Row":2,"Source Cell":"A2","Event Date":"2026-11-28"}]
+            staged=stage_update(data_dir=data,state_dir=app.state,processor=processor)
+            p=app.proposal();assert p["run"]==staged["run_id"] and len(p["files"])==1
+            try:app.approve({"run":p["run"]})
+            except ValueError:pass
+            else:raise AssertionError("Unsaved approval permitted")
+            app.save_choices({"run":p["run"],"files":p["files"]})
+            app.approve({"run":p["run"]})
+            assert app.approved()["records"][0]["Event_Key"]=="E1"
+            assert hashlib.sha256(source.read_bytes()).hexdigest()==before
+            assert app.view("events")[0]["Document No."]=="D1"
+            print("Standalone HTTP/auth/XLSX and production update/review smoke PASS")
         finally:s.shutdown();s.server_close();app.lock.close()
 def main():
     p=argparse.ArgumentParser();p.add_argument("--self-test",action="store_true");p.add_argument("--workspace",type=Path)
