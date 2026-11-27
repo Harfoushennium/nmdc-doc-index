@@ -297,6 +297,7 @@ def stage_runtime_update(
     full_rescan: bool,
     parser_version: str = DEFAULT_PARSER_VERSION,
     reuse_raw_profiles: bool = False,
+    checkpoint=None,
 ) -> Dict[str, Any]:
     phase_times={}
     original_data_dir = Path(data_dir).resolve()
@@ -308,11 +309,13 @@ def stage_runtime_update(
     # Process from a persistent local mirror. The OneDrive/source tree is only
     # opened when a workbook is new or changed; profiling, hashing and extraction
     # then run against the local cache.
+    if checkpoint is not None: checkpoint("Prepare local source cache", 0, 0)
     start=time.perf_counter()
     working_data_dir, cache_stats = prepare_local_source_cache(
         original_data_dir,
         state_dir / "source_cache",
     )
+    if checkpoint is not None: checkpoint("Profile and classify", 0, 0)
     phase_times["mirror_seconds"]=round(time.perf_counter()-start,3)
     start=time.perf_counter()
     catalog = build_runtime_catalog(
@@ -340,6 +343,7 @@ def stage_runtime_update(
         selection_statuses=catalog.selection_statuses,
         initial_flags=catalog.initial_flags,
         post_process_flags=catalog.drain_processor_flags,
+        checkpoint=checkpoint,
     )
     phase_times["stage_update_seconds"]=round(time.perf_counter()-start,3)
     run_id = str(result.get("run_id", ""))
