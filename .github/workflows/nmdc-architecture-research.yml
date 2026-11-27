@@ -23,9 +23,13 @@ jobs:
           $env:PYTHONPATH = (Get-Location).Path
           python research/architecture/benchmark.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python research/architecture/benchmark_versioned_store.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git diff --exit-code -- DATA
       - uses: actions/upload-artifact@v4
         with:
           name: NMDC-architecture-research-metrics
-          path: architecture-research-metrics.json
+          path: |
+            architecture-research-metrics.json
+            versioned-store-metrics.json
           if-no-files-found: error
