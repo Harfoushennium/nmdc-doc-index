@@ -1,7 +1,7 @@
 """Research: compare exact structural worksheet evidence, including conversion overhead.
 No workbook contents are emitted. This is not a full extraction/approval equivalence test.
 """
-import argparse, hashlib, io, json, statistics, struct, subprocess, tempfile, time, zipfile
+import argparse, ctypes, hashlib, io, json, statistics, struct, subprocess, tempfile, time, zipfile
 from pathlib import Path
 import xml.etree.ElementTree as ET
 from nmdc_profiler.ooxml import workbook_sheet_map
@@ -35,11 +35,25 @@ def native(xml,exe,root):
     src=root/"sheet.xml";out=root/"sheet.bin";src.write_bytes(xml)
     subprocess.run([str(exe),str(src),str(out)],check=True,capture_output=True,timeout=60)
     return decode(out.read_bytes())
+def shared_scanner(path):
+    lib=ctypes.CDLL(str(path.resolve()))
+    lib.nmdc_scan_xml.argtypes=[ctypes.c_char_p,ctypes.c_size_t,ctypes.POINTER(ctypes.c_void_p),ctypes.POINTER(ctypes.c_size_t)]
+    lib.nmdc_scan_xml.restype=ctypes.c_int
+    lib.nmdc_scan_free.argtypes=[ctypes.c_void_p]
+    lib.nmdc_scan_free.restype=None
+    def scan(xml):
+        out=ctypes.c_void_p();size=ctypes.c_size_t()
+        rc=lib.nmdc_scan_xml(xml,len(xml),ctypes.byref(out),ctypes.byref(size))
+        if rc:raise ValueError("Native shared parser rejected XML")
+        try:return decode(ctypes.string_at(out,size.value))
+        finally:lib.nmdc_scan_free(out)
+    return scan
 def main():
-    p=argparse.ArgumentParser();p.add_argument("exe",type=Path);p.add_argument("--data",type=Path,default=Path("DATA"));a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument("exe",type=Path);p.add_argument("--data",type=Path,default=Path("DATA"));p.add_argument("--library",type=Path,required=True);a=p.parse_args()
     exe=a.exe.resolve();data=a.data.resolve();files=sorted(p for p in data.rglob("*") if p.suffix.lower() in (".xlsx",".xlsm") and not p.name.startswith("~$"))
     before={p:hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
-    totals={"python":[],"native":[]};checked=0;unsupported=0;cells=0;xml_bytes=0;failures=0
+    scan=shared_scanner(a.library)
+    totals={"python":[],"native":[],"shared":[]};checked=0;unsupported=0;cells=0;xml_bytes=0;failures=0
     with tempfile.TemporaryDirectory() as d:
         root=Path(d)
         for f in files:
@@ -54,14 +68,24 @@ def main():
                     except (ValueError,AssertionError,subprocess.SubprocessError,struct.error):failures+=1;continue
                     nt=time.perf_counter()-start
                     if actual!=expected:failures+=1;continue
+                    start=time.perf_counter()
+                    try:direct=scan(xml)
+                    except (ValueError,AssertionError,struct.error):failures+=1;continue
+                    st=time.perf_counter()-start
+                    if direct!=expected:failures+=1;continue
                     checked+=1;cells+=sum(len(r[1]) for r in expected[3]);xml_bytes+=len(xml)
-                    totals["python"].append(pt);totals["native"].append(nt)
+                    totals["python"].append(pt);totals["native"].append(nt);totals["shared"].append(st)
         # Reject malformed XML and DTDs. No native output is trusted on failed parses.
         for xml in (b"<broken>",b"<!DOCTYPE x [<!ENTITY a 'b'>]><x>&a;</x>"):
             (root/"bad.xml").write_bytes(xml)
             r=subprocess.run([str(exe),str(root/"bad.xml"),str(root/"bad.bin")],capture_output=True,timeout=10)
             assert r.returncode!=0
+            try:scan(xml)
+            except ValueError:pass
+            else:raise AssertionError("Shared scanner accepted invalid input")
     report={"scope":"real repository XML structural scan only; no data records emitted","workbooks":len(files),"verified_worksheets":checked,"unsupported":unsupported,"mismatches_or_failures":failures,"verified_cells":cells,"xml_bytes":xml_bytes,"python_total_seconds":round(sum(totals["python"]),4),"native_end_to_end_seconds":round(sum(totals["native"]),4),"native_includes_temp_file_io_process_and_decoding":True,"source_hashes_unchanged":all(hashlib.sha256(p.read_bytes()).hexdigest()==h for p,h in before.items()),"malformed_and_dtd_rejected":True}
+    report["shared_end_to_end_seconds"]=round(sum(totals["shared"]),4)
+    if checked and sum(totals["shared"]):report["shared_speed_ratio"]=round(sum(totals["python"])/sum(totals["shared"]),3)
     if checked and sum(totals["native"]):report["speed_ratio"]=round(sum(totals["python"])/sum(totals["native"]),3)
     Path("native-parser-metrics.json").write_text(json.dumps(report,indent=2),encoding="utf-8");print(json.dumps(report,indent=2))
     assert checked and not failures and report["source_hashes_unchanged"]
