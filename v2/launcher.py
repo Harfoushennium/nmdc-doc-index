@@ -11,7 +11,7 @@ from nmdc_profiler.extractor import OUTPUT_FIELDS
 from nmdc_profiler.file_review import affected_files, save_file_review, validated_review, _baseline
 from nmdc_profiler.update_engine import approve_stage, reject_stage, hold_stage, _write_json_atomic, stage_update
 from nmdc_profiler.runtime_engine import stage_runtime_update
-from nmdc_profiler.runtime_admin import undo_last_approval
+from nmdc_profiler.runtime_admin import undo_last_approval, reset_runtime_state
 from nmdc_profiler.source_access import install_resilient_source_access
 from nmdc_profiler.layout_compat import install_layout_compatibility
 from nmdc_profiler.review_decisions import apply_review_decisions
@@ -104,6 +104,8 @@ def export_bytes(rows, fields, fmt):
         ws.freeze_panes(1,0); ws.set_column(0,len(fields)-1,18)
     return out.getvalue()
 
+class ScanCancelled(Exception): pass
+
 class App:
     def __init__(self, workspace):
         self.root=workspace.resolve(); self.root.mkdir(parents=True,exist_ok=True)
@@ -114,7 +116,7 @@ class App:
             if not dest.exists(): shutil.copy2(p,dest)
         self.settings_path=self.root/"settings.json"
         self.settings=read_json(self.settings_path, {})
-        self.guard=threading.RLock(); self.job={"status":"idle"}; self.cache={}; self.token=secrets.token_urlsafe(32)
+        self.guard=threading.RLock(); self.job={"status":"idle"}; self.cache={}; self.token=secrets.token_urlsafe(32); self.cancel=threading.Event()
     def save_settings(self): _write_json_atomic(self.settings_path,self.settings)
     def source(self):
         v=self.settings.get("data_dir")
@@ -146,18 +148,29 @@ class App:
         self.save_settings(); return self.settings
     def start(self,full):
         self.idle(); src=self.source()
-        self.job={"status":"running","mode":"full" if full else "incremental","started":time.time()}
+        self.cancel.clear()
+        self.job={"status":"running","mode":"full" if full else "incremental","started":time.time(),"phase":"Starting","current":0,"total":0}
+        def checkpoint(phase,current,total):
+            with self.guard:
+                if self.cancel.is_set():raise ScanCancelled("Cancelled before publishing proposal")
+                self.job.update(phase=phase,current=current,total=total)
         def work():
             try:
                 install_resilient_source_access(); install_layout_compatibility()
-                result=stage_runtime_update(data_dir=src,state_dir=self.state,config_dir=self.config,full_rescan=full,reuse_raw_profiles=True)
+                result=stage_runtime_update(data_dir=src,state_dir=self.state,config_dir=self.config,full_rescan=full,reuse_raw_profiles=True,checkpoint=checkpoint)
                 with self.guard:
                     self.settings["requires_rescan"]=False;self.save_settings()
                     self.job={"status":"complete","result":result}
+            except ScanCancelled as exc:
+                with self.guard:self.job={"status":"cancelled","message":str(exc)}
             except Exception as exc:
                 with self.guard:self.job={"status":"error","message":str(exc)}
         threading.Thread(target=work,daemon=True).start()
         return self.job
+    def cancel_job(self):
+        if self.job["status"]!="running":raise ValueError("No running scan")
+        if self.job.get("phase")=="Publish proposal":raise ValueError("Publishing is already in progress; wait for completion.")
+        self.cancel.set();self.job["cancel_requested"]=True;return self.job
     def approved(self):
         marker=self.state/"approved"/"current.json"
         key=marker.read_bytes() if marker.exists() else b"legacy"
@@ -376,6 +389,7 @@ def server_for(app):
                     path=urlsplit(self.path).path
                     if path=="/api/select":result=app.select()
                     elif path=="/api/scan":result=app.start(body.get("full") is True)
+                    elif path=="/api/cancel":result=app.cancel_job()
                     elif path=="/api/draft":result=app.draft_choices(body)
                     elif path=="/api/save-choices":result=app.save_choices(body)
                     elif path=="/api/approve":result=app.approve(body)
@@ -458,6 +472,14 @@ def self_test():
             report_dir=Path(d)/"NMDC_V2_Reports"/"PARSER_FIX_REPORTS"/"0001"
             assert (report_dir/"PARSER_FIX_REQUEST.md").exists()
             assert app.approved()["records"][0]["Event_Key"]=="E1"
+            # Cancellation cannot replace the previous staged pointer or the approved version.
+            marker=app.state/"staging"/"latest.json"; prior=marker.read_bytes()
+            def stop(phase,current,total):
+                if phase=="Publish proposal":raise ScanCancelled("test")
+            try:stage_update(data_dir=data,state_dir=app.state,processor=processor,checkpoint=stop)
+            except ScanCancelled:pass
+            else:raise AssertionError("Cancellation not respected")
+            assert marker.read_bytes()==prior and app.approved()["records"][0]["Event_Key"]=="E1"
             print("Standalone HTTP/auth/XLSX and production update/review smoke PASS")
         finally:s.shutdown();s.server_close();app.lock.close()
 def main():
