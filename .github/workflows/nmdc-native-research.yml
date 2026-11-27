@@ -1,0 +1,30 @@
+name: NMDC native XML research
+on:
+  pull_request:
+    branches: [feature/nmdc-v2-web-app]
+    paths: ['research/native/**', '.github/workflows/nmdc-native-research.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-structural-benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build research scanner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libexpat1-dev
+          g++ -std=c++17 -O3 research/native/worksheet_scan.cpp -lexpat -o native_scan
+      - name: Run real worksheet evidence comparison
+        run: PYTHONPATH=. python research/native/benchmark_scan.py ./native_scan
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: NMDC-native-parser-research-metrics
+          path: native-parser-metrics.json
+          if-no-files-found: error
