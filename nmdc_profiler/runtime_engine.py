@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import os
 import sys
+import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence
@@ -23,6 +27,7 @@ from .update_engine import (
     reject_stage,
     stage_update,
     utc_now,
+    sha256_file,
 )
 
 
@@ -116,12 +121,49 @@ class RuntimeCatalog:
         return flags
 
 
+def _profile_workbooks_cached(files, data_dir, cache_dir, version):
+    """Reuse only raw READABLE profiles of exactly matching local file bytes.
+    Classification and selection always run fresh on independent profile objects.
+    Cache is disposable, never an approved record store; invalid entries fall back.
+    """
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    rows=[]; hits=0
+    for path in files:
+        rel=path.relative_to(data_dir).as_posix()
+        digest=sha256_file(path)
+        key=hashlib.sha256((version+"\0"+rel+"\0"+digest).encode()).hexdigest()
+        entry=cache_dir/(key+".json")
+        profile=None
+        try:
+            payload=json.loads(entry.read_text(encoding="utf-8"))
+            candidate=payload["profile"]
+            encoded=json.dumps(candidate,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
+            if (payload["checksum"]==hashlib.sha256(encoded).hexdigest()
+                and candidate.get("sha256")==digest and candidate.get("relative_path")==rel
+                and candidate.get("readability_status")=="READABLE"):
+                profile=candidate
+                hits+=1
+        except (OSError,ValueError,KeyError,TypeError,AttributeError):
+            pass
+        if profile is None:
+            profile=profile_workbook(path,data_dir,data_dir)
+            if profile.get("readability_status")=="READABLE" and profile.get("sha256")==digest:
+                encoded=json.dumps(profile,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
+                temporary=entry.with_suffix(".tmp-"+uuid.uuid4().hex)
+                try:
+                    temporary.write_text(json.dumps({"profile":profile,"checksum":hashlib.sha256(encoded).hexdigest()},ensure_ascii=False),encoding="utf-8")
+                    os.replace(temporary,entry)
+                finally:temporary.unlink(missing_ok=True)
+        rows.append(profile)
+    return rows,hits
+
 def build_runtime_catalog(
     data_dir: Path,
     rules_path: Path,
     overrides_path: Path,
     exclusions_path: Path,
     profile_output_dir: Path,
+    *, profile_cache_dir: Path | None = None, profile_cache_version: str = "", timings: dict | None = None,
 ) -> RuntimeCatalog:
     data_dir = Path(data_dir).resolve()
     rules = load_rules(rules_path)
@@ -135,7 +177,13 @@ def build_runtime_catalog(
         ),
         key=lambda path: path.relative_to(data_dir).as_posix().casefold(),
     )
-    workbooks = [profile_workbook(path, data_dir, data_dir) for path in files]
+    start = time.perf_counter()
+    if profile_cache_dir is None:
+        workbooks = [profile_workbook(path, data_dir, data_dir) for path in files]; hits=0
+    else:
+        workbooks,hits = _profile_workbooks_cached(files,data_dir,profile_cache_dir,profile_cache_version)
+    if timings is not None:timings.update(profile_seconds=round(time.perf_counter()-start,3),profile_cache_hits=hits,profile_cache_misses=len(files)-hits)
+    start = time.perf_counter()
     exact_groups, version_groups = assign_selection(workbooks, rules)
     owner_excluded_sources = sorted(apply_source_exclusions(workbooks, exclusions_path), key=str.casefold)
     discovery = classification_rows(workbooks, rules)
@@ -172,6 +220,7 @@ def build_runtime_catalog(
                 )
             )
 
+    if timings is not None:timings["catalog_selection_seconds"]=round(time.perf_counter()-start,3)
     return RuntimeCatalog(
         data_dir=data_dir,
         rules=rules,
@@ -246,7 +295,9 @@ def stage_runtime_update(
     config_dir: Path,
     full_rescan: bool,
     parser_version: str = DEFAULT_PARSER_VERSION,
+    reuse_raw_profiles: bool = False,
 ) -> Dict[str, Any]:
+    phase_times={}
     original_data_dir = Path(data_dir).resolve()
     state_dir = Path(state_dir).resolve()
     rules_path = resolve_config_file(config_dir, "classification_rules.csv")
@@ -256,17 +307,25 @@ def stage_runtime_update(
     # Process from a persistent local mirror. The OneDrive/source tree is only
     # opened when a workbook is new or changed; profiling, hashing and extraction
     # then run against the local cache.
+    start=time.perf_counter()
     working_data_dir, cache_stats = prepare_local_source_cache(
         original_data_dir,
         state_dir / "source_cache",
     )
+    phase_times["mirror_seconds"]=round(time.perf_counter()-start,3)
+    start=time.perf_counter()
     catalog = build_runtime_catalog(
         working_data_dir,
         rules_path,
         overrides_path,
         exclusions_path,
         state_dir / "profile" / "current",
+        profile_cache_dir=(state_dir/"profile"/"raw-v1") if reuse_raw_profiles else None,
+        profile_cache_version="raw-v1:"+parser_version,
+        timings=phase_times,
     )
+    phase_times["catalog_seconds"]=round(time.perf_counter()-start,3)
+    start=time.perf_counter()
     result = stage_update(
         data_dir=working_data_dir,
         state_dir=state_dir,
@@ -280,6 +339,7 @@ def stage_runtime_update(
         initial_flags=catalog.initial_flags,
         post_process_flags=catalog.drain_processor_flags,
     )
+    phase_times["stage_update_seconds"]=round(time.perf_counter()-start,3)
     run_id = str(result.get("run_id", ""))
     _restore_original_data_path(state_dir, run_id, original_data_dir)
     _suppress_expected_owner_selection_flag(state_dir, run_id, catalog.owner_excluded_sources)
@@ -289,6 +349,7 @@ def stage_runtime_update(
         with summary_path.open(encoding="utf-8") as handle:
             result = json.load(handle)
     result["source_cache"] = cache_stats
+    result["phase_times"] = phase_times
     result["data_dir"] = str(original_data_dir)
     result["owner_excluded_sources"] = list(catalog.owner_excluded_sources)
     return result
