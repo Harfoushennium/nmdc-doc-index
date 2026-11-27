@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import shutil
 import time
@@ -63,7 +64,7 @@ def _copy_with_retries(source: Path, target: Path) -> None:
     ) from last_error
 
 
-def prepare_local_source_cache(data_dir: Path, cache_root: Path) -> Tuple[Path, Dict[str, int]]:
+def prepare_local_source_cache(data_dir: Path, cache_root: Path, *, verify_content: bool = False) -> Tuple[Path, Dict[str, int]]:
     """Build/reuse a local mirror of the source tree for production scanning.
 
     The original DATA folder is only opened when a workbook is new, changed or the
@@ -98,6 +99,12 @@ def prepare_local_source_cache(data_dir: Path, cache_root: Path) -> Tuple[Path, 
         key=lambda path: path.relative_to(data_dir).as_posix().casefold(),
     )
 
+    def digest(path):
+        h=hashlib.sha256()
+        with path.open('rb') as f:
+            for block in iter(lambda:f.read(1024*1024),b''):h.update(block)
+        return h.hexdigest()
+
     reused = 0
     copied = 0
     for source in source_files:
@@ -112,11 +119,16 @@ def prepare_local_source_cache(data_dir: Path, cache_root: Path) -> Tuple[Path, 
             and int(previous.get("size", -1)) == size
             and int(previous.get("modified_ns", -1)) == modified_ns
         )
+        if verify_content:
+            expected=digest(source)
+            reusable=reusable and digest(cached)==expected
         if reusable:
             reused += 1
         else:
             _copy_with_retries(source, cached)
             copied += 1
+        if verify_content and (digest(cached)!=expected or digest(source)!=expected):
+            raise ValueError('Source changed during verified mirror copy: '+rel)
         new_index[rel] = {"size": size, "modified_ns": modified_ns}
 
     # Remove cached files for sources that no longer exist. The original source
