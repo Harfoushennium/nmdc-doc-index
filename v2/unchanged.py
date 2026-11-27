@@ -31,16 +31,16 @@ def inputs(data,config,build):
     return {"version":VERSION,"build":build,"parser":DEFAULT_PARSER_VERSION,"data":str(Path(data).resolve()),
             "source":paths,"config":{p.name:sha256_file(p) for p in sorted(Path(config).glob("*.csv"))}}
 def stage_proof(state,run,before,after,config):
-    if before!=after:return False
+    if before!=after:raise ValueError("Inputs changed while staging")
     stage=state/"staging"/run
     summary=read(stage/"summary.json")
-    if summary.get("review_flags") or summary.get("blocking_flags") or read(stage/"flags.json"):return False
     manifest=read(stage/"manifest.json")
     # A metadata-only source mirror may be stale; never certify it unless actual source hashes agree.
     actual={f["relative_path"]:[f["sha256"],f["size"]] for f in manifest["files"]}
-    if actual!={k:v[:2] for k,v in after["source"].items()}:return False
-    if manifest.get("data_dir")!=after["data"] or manifest.get("parser_version")!=after["parser"]:return False
-    if manifest.get("config_fingerprint")!=fingerprint_paths([config/"classification_rules.csv",config/"project_identity_overrides.csv"]):return False
+    if actual!={k:v[:2] for k,v in after["source"].items()}:raise ValueError("Staged source hashes do not match actual inputs")
+    if manifest.get("data_dir")!=after["data"] or manifest.get("parser_version")!=after["parser"]:raise ValueError("Staged source or parser identity mismatch")
+    if manifest.get("config_fingerprint")!=fingerprint_paths([config/"classification_rules.csv",config/"project_identity_overrides.csv"]):raise ValueError("Staged configuration fingerprint mismatch")
+    if summary.get("review_flags") or summary.get("blocking_flags") or read(stage/"flags.json"):return False
     _write_json_atomic(stage/"input_proof.json",after)
     return True
 def snapshot(state):
