@@ -47,6 +47,19 @@ jobs:
         run: |
           $env:PYTHONPATH = (Get-Location).Path
           python v2/test_packaged_browser.py dist/Launch/Launch.exe
+      - name: Packaged full scan and verified unchanged workflow
+        shell: pwsh
+        timeout-minutes: 8
+        run: |
+          $env:PYTHONPATH = (Get-Location).Path
+          python v2/test_fast_path.py dist/Launch/Launch.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --exit-code -- DATA
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NMDC-V2-fast-path-metrics
+          path: v2-fast-path-metrics.json
+          if-no-files-found: error
       - name: Manifest and portable candidate ZIP
         shell: pwsh
         run: |
