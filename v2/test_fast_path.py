@@ -42,15 +42,20 @@ def main(exe):
                     with urllib.request.urlopen(req,timeout=120) as res:return json.load(res)
                 except urllib.error.HTTPError as exc:
                     raise AssertionError(f"API {path.split('?')[0]} returned {exc.code}: {exc.read().decode(errors='replace')}") from exc
-            def wait_job():
+            def wait_job(expected_status="complete"):
                 end=time.monotonic()+180
                 while time.monotonic()<end:
                     job=api("/api/status")["job"]
                     if job["status"]!="running":
-                        assert job["status"]=="complete",job
-                        return job["result"]
+                        assert job["status"]==expected_status,job
+                        return job.get("result",job)
                     time.sleep(.1)
                 raise TimeoutError("Scan did not complete")
+            # Real packaged cancellation with read-only corpus, then a successful retry.
+            api("/api/scan",{"full":True});api("/api/cancel",{});wait_job("cancelled")
+            assert not (workspace/"state"/"approved"/"current.json").exists()
+            assert not (workspace/"state"/"staging"/"latest.json").exists()
+            assert api("/api/status")["settings"]["requires_rescan"]
             t=time.perf_counter();api("/api/scan",{"full":True});parallel=wait_job();parallel_time=time.perf_counter()-t
             actual=signature(workspace/"state"/"staging"/parallel["run_id"])
             assert expected==actual,"Serial/parallel stage output mismatch"
@@ -98,7 +103,7 @@ def main(exe):
             report={"serial_stage_seconds":round(serial_time,3),"packaged_parallel_job_seconds":round(parallel_time,3),
                     "workers":parallel["phase_times"]["extraction_workers"],"events":parallel["staged_records"],
                     "serial_parallel_exact_stage_parity":True,"packaged_unchanged_api_median_seconds":round(statistics.median(times),3),
-                    "no_new_proposal":True,"config_change_invalidated_gate":True,"indexed_query_parity_cases":indexed_tests,"indexed_api_median_seconds_including_cold_builds":round(statistics.median(query_times),6),"source_hashes_unchanged":hashes(data)==before}
+                    "packaged_cancel_retry_passed":True,"no_new_proposal":True,"config_change_invalidated_gate":True,"indexed_query_parity_cases":indexed_tests,"indexed_api_median_seconds_including_cold_builds":round(statistics.median(query_times),6),"source_hashes_unchanged":hashes(data)==before}
             assert report["source_hashes_unchanged"]
             api("/api/exit",{});assert proc.wait(timeout=15)==0
             Path("v2-fast-path-metrics.json").write_text(json.dumps(report,indent=2),encoding="utf-8");print(json.dumps(report,indent=2))
