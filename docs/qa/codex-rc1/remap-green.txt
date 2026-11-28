@@ -1,0 +1,6 @@
+test_http_migration_source_remapping_sets_moved_data_dir (v2.test_migration.MigrationPublicApiRegression.test_http_migration_source_remapping_sets_moved_data_dir) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.765s
+
+OK

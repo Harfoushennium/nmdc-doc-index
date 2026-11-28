@@ -1,0 +1,14 @@
+{
+  "verification_utc": "2026-11-28T16:01:38.463252+00:00",
+  "role": "Codex publication coordinator; archive re-verification, not independent application QA",
+  "source_commit": "1e70414394a3762e29faedc332688a6b110bc5b0",
+  "archive": "NMDC_V2_RC1_Windows.zip",
+  "archive_bytes": 14475812,
+  "archive_sha256": "1ddb33b7dd1e818bdbe02fc39550403f561c3fe01366833ce2ae612ccd4fe884",
+  "executable_sha256": "4cf651bbfc44323d792417275a6127bd69cccd8dd814bedb3ca6eb795ab0147d",
+  "payload_files": 1012,
+  "acceptance_cases": 46,
+  "payload_hashes_and_lengths": "PASS",
+  "duplicate_free_entries": "PASS",
+  "availability": "Original ZIP retained locally in original Codex audit sandbox; not uploaded as a binary to Git history. Full hosted CI publishes a separately built downloadable package; its hash and build pin must not be substituted for this ZIP."
+}

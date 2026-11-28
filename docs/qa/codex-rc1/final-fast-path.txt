@@ -1,0 +1,14 @@
+{
+  "serial_stage_seconds": 13.816,
+  "packaged_parallel_job_seconds": 8.472,
+  "workers": 4,
+  "events": 40494,
+  "serial_parallel_exact_stage_parity": true,
+  "packaged_unchanged_api_median_seconds": 0.269,
+  "packaged_cancel_retry_passed": true,
+  "no_new_proposal": true,
+  "config_change_invalidated_gate": true,
+  "indexed_query_parity_cases": 15,
+  "indexed_api_median_seconds_including_cold_builds": 0.030291,
+  "source_hashes_unchanged": true
+}

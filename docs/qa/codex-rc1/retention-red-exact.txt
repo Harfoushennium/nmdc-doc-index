@@ -1,0 +1,43 @@
+test_invalid_retention_metadata_is_preserved_and_reported (<run_path>.BackupRetentionTests.test_invalid_retention_metadata_is_preserved_and_reported) ... ERROR
+test_newest_recovery_points_survive_clock_rollback (<run_path>.BackupRetentionTests.test_newest_recovery_points_survive_clock_rollback) ... FAIL
+
+======================================================================
+ERROR: test_invalid_retention_metadata_is_preserved_and_reported (<run_path>.BackupRetentionTests.test_invalid_retention_metadata_is_preserved_and_reported)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<USER_HOME>\AppData\Local\CodexAudits\ag-neon-001\v2\test_backup_retention.py", line 42, in test_invalid_retention_metadata_is_preserved_and_reported
+    result = create_bundle(root, 'new', keep=1)
+  File "<USER_HOME>\AppData\Local\CodexAudits\ag-neon-pinned\v2\recovery.py", line 104, in create_bundle
+    skipped=[];apply_retention(dest,keep=keep,skipped=skipped)
+               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<USER_HOME>\AppData\Local\CodexAudits\ag-neon-pinned\v2\recovery.py", line 122, in apply_retention
+    if not isinstance(created,(int,float)):raise ValueError("Invalid recovery timestamp")
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: Invalid recovery timestamp
+
+======================================================================
+FAIL: test_newest_recovery_points_survive_clock_rollback (<run_path>.BackupRetentionTests.test_newest_recovery_points_survive_clock_rollback)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<USER_HOME>\AppData\Local\CodexAudits\ag-neon-001\v2\test_backup_retention.py", line 27, in test_newest_recovery_points_survive_clock_rollback
+    self.assertEqual(apply_retention(root / 'backups', keep=2), [third['path'], second['path']])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['C:\[79 chars]2702-c05662a5.zip', '<USER_HOME>[71 chars]zip'] != ['C:\[79 chars]2702-69bcca3b.zip', '<USER_HOME>[71 chars]zip']
+
+First differing element 0:
+'C:\\[33 chars]ocal\\Temp\\tmp2w2xjtvd\\backups\\20261128-172702-c05662a5.zip'
+'C:\\[33 chars]ocal\\Temp\\tmp2w2xjtvd\\backups\\20261128-172702-69bcca3b.zip'
+
+- ['<USER_HOME>\\AppData\\Local\\Temp\\tmp2w2xjtvd\\backups\\20261128-172702-c05662a5.zip',
+-  '<USER_HOME>\\AppData\\Local\\Temp\\tmp2w2xjtvd\\backups\\20261128-172702-69bcca3b.zip']
+? ^                                                                                                     ^
+
++ ['<USER_HOME>\\AppData\\Local\\Temp\\tmp2w2xjtvd\\backups\\20261128-172702-69bcca3b.zip',
+? ^                                                                                                     ^
+
++  '<USER_HOME>\\AppData\\Local\\Temp\\tmp2w2xjtvd\\backups\\20261128-172702-182745fd.zip']
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.066s
+
+FAILED (failures=1, errors=1)

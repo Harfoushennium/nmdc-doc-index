@@ -1,0 +1,15 @@
+test_http_migration_source_remapping_sets_moved_data_dir (v2.test_migration.MigrationPublicApiRegression.test_http_migration_source_remapping_sets_moved_data_dir) ... FAIL
+
+======================================================================
+FAIL: test_http_migration_source_remapping_sets_moved_data_dir (v2.test_migration.MigrationPublicApiRegression.test_http_migration_source_remapping_sets_moved_data_dir)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<USER_HOME>\AppData\Local\CodexAudits\ag-neon-001\v2\test_migration.py", line 451, in test_http_migration_source_remapping_sets_moved_data_dir
+    self.assertEqual(rejected, 400, error)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 200 != 400 : {'workspace': '<USER_HOME>\\AppData\\Local\\Temp\\tmpp6q9oznl\\active-workspace-migrated-a8b6b9b613', 'preview_sha256': '8db81f5f9a2fad225b149d082406fedf1b13faf97a0400c37f8fcc2b84bcce1d', 'approved_run': '20261128T131629Z-b5c830d1', 'approved_events': 1, 'source_files_verified': 21, 'requires_rescan': True}
+
+----------------------------------------------------------------------
+Ran 1 test in 0.634s
+
+FAILED (failures=1)
