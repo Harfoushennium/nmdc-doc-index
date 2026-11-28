@@ -15,7 +15,7 @@ def test(exe):
                 "Event_Key":"E-UI-1","Global_Document_Key":"D-UI-1","Revision_Key":"R-UI-1",
                 "Document No.":"UI-0001","Document Title":"Synthetic browser smoke",
                 "Project No.":"0001","Revision":"A","Source File":rel,"Source Sheet":"Register",
-                "Source Row":2,"Source Cell":"A2","Event Date":"2026-11-28"}])
+                "Source Row":2,"Source Cell":"A2","Event Date":"2026-11-28"}],initial_flags=[{"level":"REVIEW","code":"SOURCE_NEW","source":"register.xlsx","source_sheet":"Register","source_row":2,"source_cell":"A2","message":"Fixture source review"}])
         finally:app.lock.close()
         env=os.environ.copy();env.pop("PYTHONPATH",None)
         system_root=env.get("SYSTEMROOT",env.get("SystemRoot",env.get("WINDIR",r"C:\Windows")))
@@ -44,6 +44,15 @@ def test(exe):
                 expect(page.get_by_placeholder("Owner note")).to_have_value("Retained across reload")
                 expect(page.get_by_role("button",name="Approve saved choices",exact=True)).to_be_disabled()
                 page.get_by_role("button",name="Save file choices",exact=True).click()
+                expect(page.get_by_role("button",name="Approve saved choices",exact=True)).to_be_enabled()
+                flag_note=page.get_by_placeholder("Flag owner comment").first
+                flag_note.fill("Checked source evidence")
+                expect(page.locator("#notice")).to_contain_text("Flag draft retained")
+                page.reload()
+                page.get_by_role("button",name="File review & flags",exact=True).click()
+                expect(page.get_by_placeholder("Flag owner comment").first).to_have_value("Checked source evidence")
+                expect(page.get_by_role("button",name="Approve saved choices",exact=True)).to_be_disabled()
+                page.get_by_role("button",name="Save flag decisions",exact=True).click()
                 expect(page.get_by_role("button",name="Approve saved choices",exact=True)).to_be_enabled()
                 page.get_by_role("button",name="Approve saved choices",exact=True).click()
                 expect(page.get_by_text("No pending proposal",exact=True)).to_be_visible()
