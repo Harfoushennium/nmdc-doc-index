@@ -62,7 +62,8 @@ def main(exe):
             assert parallel["phase_times"]["extraction_workers"]>1
             assert parallel["input_proof"] and not parallel.get("requires_rescan")
             proposal=api("/api/review");api("/api/save-choices",{"run":proposal["run"],"files":proposal["files"],"draft_version":proposal["draft_version"]})
-            approval=api("/api/approve",{"run":proposal["run"]})
+            proposal=api("/api/review")
+            approval=api("/api/approve",{k:proposal[k] for k in ("run","draft_version","flag_version")})
             assert approval["verified_unchanged_eligible"],approval
             # Compare indexed API results against the existing Python query semantics.
             scratch=App(root/"query-reference")
