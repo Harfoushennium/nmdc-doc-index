@@ -368,10 +368,20 @@ class App:
         model=models[scope]
         try:return model.page(query,column,sort,desc,filters,page,group)
         except NotImplementedError:
-            matched=apply_filters(filter_rows(rows,query,column,sort,desc),filters or {},model.fields)
-            counts=Counter(str(r.get(group,"")).casefold() for r in matched) if group else {}
+            if sort and sort not in model.fields:raise ValueError("Unknown sort field")
             if group and group not in model.fields:raise ValueError("Unknown grouping field")
-            return {"count":len(matched),"fields":model.fields,"rows":matched[page*100:(page+1)*100],"groups":[{"value":k,"count":v} for k,v in sorted(counts.items(),key=lambda kv:(-kv[1],kv[0]))[:100]]}
+            matched=apply_filters(filter_rows(rows,query,column),filters or {},model.fields)
+            groups=[]
+            if group:
+                counts=Counter();labels={}
+                for r in matched:
+                    raw=r.get(group,"")
+                    key=str(raw).casefold()
+                    counts[key]+=1
+                    if key not in labels:labels[key]=raw
+                groups=[{"value":labels[k],"count":v} for k,v in sorted(counts.items(),key=lambda kv:(-kv[1],kv[0]))[:100]]
+            if sort:matched.sort(key=lambda r:str(r.get(sort,"")).casefold(),reverse=desc)
+            return {"count":len(matched),"fields":model.fields,"rows":matched[page*100:(page+1)*100],"groups":groups}
     def prepare_views(self):
         # This work belongs to measured startup/promotion, before the UI becomes
         # ready. Queries never construct a cold model after a normal approval.
