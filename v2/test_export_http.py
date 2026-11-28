@@ -22,7 +22,7 @@ class ExportHTTPAcceptance(unittest.TestCase):
         data = root / 'DATA'; data.mkdir(); (data / 'a.xlsx').write_text('fixture')
         stage_update(data_dir=data, state_dir=self.app.state,
                      processor=lambda p, r: [{'Event_Key': 'E1', 'Document No.': '0001',
-                         'Document Link': 'javascript:bad', 'Source File': r,
+                         'Document Link': 'javascript:bad', 'Event Date':'1899-12-31', 'Source File': r,
                          'Source Sheet': 'Register', 'Source Row': 7, 'Source Cell': 'C7'}])
         p = self.app.proposal(); self.app.save_choices(p); self.app.approve(p)
         self.server = server_for(self.app)
@@ -47,6 +47,7 @@ class ExportHTTPAcceptance(unittest.TestCase):
         status, body = self.get('/api/export-plan', q); self.assertEqual(status, 200)
         plan = json.loads(body)
         self.assertIn('not been checked',plan['availability'])
+        self.assertEqual(plan['date_exceptions'][0]['value'],'1899-12-31')
         self.assertEqual(plan['exceptions'][0]['worksheet'], 'Register')
         self.assertEqual(plan['exceptions'][0]['cell'], 'C7')
         q['preview'] = plan['preview']

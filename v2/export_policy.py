@@ -37,3 +37,19 @@ def link_exceptions(rows, fields, target):
                     'reason': 'Target is unsupported, unsafe or exceeds native hyperlink limits; retained literally.',
                 })
     return exceptions
+
+
+def date_exceptions(rows, fields):
+    from datetime import datetime
+    exceptions=[]
+    for index,row in enumerate(rows,1):
+        for field in ('Event Date','Latest Event Date','Source Modified Date'):
+            value=row.get(field)
+            if field not in fields or not isinstance(value,str) or len(value)!=10 or value>='1900-01-01':continue
+            try:datetime.strptime(value,'%Y-%m-%d')
+            except ValueError:continue
+            exceptions.append({'export_row':index,'field':field,'value':value,
+                               'source':row.get('Source File',''),'worksheet':row.get('Source Sheet',''),
+                               'row':row.get('Source Row',''),'cell':row.get('Source Cell',''),
+                               'reason':'Date precedes the Excel 1900 date system; preserved exactly as ISO text.'})
+    return exceptions

@@ -25,7 +25,7 @@ from v2.migration import import_package
 from v2 import unchanged
 from v2.read_model import ReadModel, apply_filters
 from v2 import custom_fields
-from v2.export_policy import preview_token, link_exceptions
+from v2.export_policy import preview_token, link_exceptions, date_exceptions
 from v2.flag_review import FlagReview
 from collections import Counter
 
@@ -102,7 +102,9 @@ def _excel_target(value):
     return None
 @lru_cache(maxsize=4096)
 def excel_date(value):
-    try:return datetime.strptime(value,"%Y-%m-%d")
+    try:
+        date=datetime.strptime(value,"%Y-%m-%d")
+        return date if date.year>=1900 else None
     except ValueError:return None
 
 def native_link(row,fields):
@@ -160,7 +162,10 @@ def export_bytes(rows, fields, fmt):
                 if isinstance(v,str) and len(v)>32767: raise ValueError("Cell exceeds Excel text limit: "+k)
                 if k in ("Event Date","Latest Event Date","Source Modified Date") and isinstance(v,str) and len(v)==10:
                     dt=excel_date(v)
-                    if dt is not None:ws.write_datetime(i,j,dt,date_fmt);continue
+                    if dt is not None:
+                        # Excel's 1900 system contains the fictional 29 February.
+                        serial=(dt-datetime(1899,12,31)).days+(1 if dt>=datetime(1900,3,1) else 0)
+                        ws.write_number(i,j,serial,date_fmt);continue
                 target=excel_target(v) if k in LINK_FIELDS else None
                 if target is not None:
                     rc=ws.write_url(i,j,target,string=v)
@@ -767,7 +772,7 @@ def server_for(app):
                         fmt=q.get("format","xlsx")
                         if path=="/api/export-plan":
                             parts=partition_plan(rows,selected)
-                            return self.send(200,{"rows":len(rows),"parts":len(parts),"run":app.approved()["run_id"],"preview":preview_token(app,q,selected),"links":link_summary(rows,selected),"exceptions":link_exceptions(rows,selected,excel_target),"availability":"Targets have not been checked for availability. Native/formula eligibility verifies syntax only; verify actual clicks on both PCs."})
+                            return self.send(200,{"rows":len(rows),"parts":len(parts),"run":app.approved()["run_id"],"preview":preview_token(app,q,selected),"links":link_summary(rows,selected),"exceptions":link_exceptions(rows,selected,excel_target),"date_exceptions":date_exceptions(rows,selected),"availability":"Targets have not been checked for availability. Native/formula eligibility verifies syntax only; verify actual clicks on both PCs."})
                         if not hmac.compare_digest(q.get("preview",""),preview_token(app,q,selected)):
                             raise ValueError("Export preview changed; preview the current snapshot, configuration and filters again.")
                         if fmt=="xlsx":

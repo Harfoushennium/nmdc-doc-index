@@ -23,7 +23,13 @@ try {
     if ($owner.Application.ActiveWorkbook.Name -ne $source.Name) { throw 'Source hyperlink did not activate the target' }
     $empty=Open-OwnedExcelWorkbook -Owner $owner -Path (Join-Path $fixture 'empty.xlsx') -ReadOnly $true
     if ($empty.Worksheets.Item(1).ListObjects.Count -ne 1 -or $empty.Worksheets.Item(1).UsedRange.Rows.Count -gt 2) { throw 'Empty INDEX table invalid' }
-    @{ status='PASS'; excel_version=$owner.Application.Version; excel_build=$owner.Application.Build; fixture='synthetic local XLSX'; normal_open=$true; document_follow=$true; source_follow=$true; physical_owner_uat='NOT RUN'; machine='development PC' } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $fixture 'evidence.json') -Encoding utf8
+    $dates=Open-OwnedExcelWorkbook -Owner $owner -Path (Join-Path $fixture 'dates.xlsx') -ReadOnly $true
+    $dateSheet=$dates.Worksheets.Item(1)
+    if ($dateSheet.Cells.Item(2,1).Value2 -cne '1899-12-31') { throw 'Pre-1900 literal date changed' }
+    foreach ($check in @(@(3,'01/01/1900'),@(4,'28/02/1900'),@(5,'01/03/1900'))) {
+        if ($dateSheet.Cells.Item($check[0],1).Text -cne $check[1]) { throw 'Native Excel date boundary changed' }
+    }
+    @{ status='PASS'; excel_version=$owner.Application.Version; excel_build=$owner.Application.Build; fixture='synthetic local XLSX'; normal_open=$true; document_follow=$true; source_follow=$true; pre1900_literal=$true; native_1900_boundaries=$true; physical_owner_uat='NOT RUN'; machine='development PC' } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $fixture 'evidence.json') -Encoding utf8
 } finally {
     if ($owner) { Close-OwnedExcelApplication -Owner $owner }
 }

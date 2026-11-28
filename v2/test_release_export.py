@@ -5,6 +5,13 @@ from v2.launcher import export_bytes, partition_plan
 NS="{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 REL="{http://schemas.openxmlformats.org/package/2006/relationships}"
 class ExportAcceptance(unittest.TestCase):
+    def test_excel_date_epoch_preserves_pre1900_literals_and_calendar_boundaries(self):
+        rows=[{'Event Date':value} for value in ('1899-12-31','1900-01-01','1900-02-28','1900-03-01','2026-11-28')]
+        with zipfile.ZipFile(io.BytesIO(export_bytes(rows,['Event Date'],'xlsx'))) as archive:
+            cells=ET.fromstring(archive.read('xl/worksheets/sheet1.xml')).findall('.//'+NS+'sheetData/'+NS+'row')[1:]
+            first=cells[0].find(NS+'c');self.assertEqual(first.get('t'),'s')
+            self.assertIn('1899-12-31',''.join(ET.fromstring(archive.read('xl/sharedStrings.xml')).itertext()))
+            self.assertEqual([float(row.find(NS+'c').find(NS+'v').text) for row in cells[1:4]],[1,59,61])
     def test_empty_workbook_has_one_valid_table_no_fabricated_record(self):
         fields=["Event_Key","Document No.","Source Workbook Path"]
         with zipfile.ZipFile(io.BytesIO(export_bytes([],fields,"xlsx"))) as z:
