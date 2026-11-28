@@ -38,7 +38,10 @@ def main(exe):
                 headers={"Authorization":"Bearer "+token}
                 if body is not None:headers.update({"Origin":url,"Content-Type":"application/json"})
                 req=urllib.request.Request(url+path,data=None if body is None else json.dumps(body).encode(),headers=headers)
-                with urllib.request.urlopen(req,timeout=120) as res:return json.load(res)
+                try:
+                    with urllib.request.urlopen(req,timeout=120) as res:return json.load(res)
+                except urllib.error.HTTPError as exc:
+                    raise AssertionError(f"API {path.split('?')[0]} returned {exc.code}: {exc.read().decode(errors='replace')}") from exc
             def wait_job():
                 end=time.monotonic()+180
                 while time.monotonic()<end:
@@ -68,14 +71,14 @@ def main(exe):
                     for query,col,sort,desc,filters in [
                         ('"'+doc+'"',"Document No.","",False,{}),
                         (doc[:4],"","Document No.",True,{}),
-                        ("-__no_match_fixture__","", "Revision",False,{}),
+                        ("-__no_match_fixture__","", "Latest Revision" if scope=="documents" else "Revision",False,{}),
                         ("","", "Document No.",False,{"Project No.":[str(first["Project No."])]}),
                         ("__no_match_fixture__","","",False,{})]:
                         from urllib.parse import urlencode
                         params=urlencode({"scope":scope,"q":query,"column":col,"sort":sort,"desc":int(desc),"filters":json.dumps(filters)})
                         t=time.perf_counter();answer=api("/api/index?"+params);query_times.append(time.perf_counter()-t)
                         expected_rows=apply_filters(filter_rows(reference,query,col,sort,desc),filters,fields)
-                        assert answer["count"]==len(expected_rows) and answer["rows"]==expected_rows[:100],(scope,query,col,sort)
+                        assert answer["count"]==len(expected_rows) and answer["rows"]==expected_rows[:100],(scope,col,sort,indexed_tests)
                         indexed_tests+=1
                 assert api("/api/index-view",{"name":"Test view","scope":"events","columns":["Document No."],"filters":{}})["Test view"]["columns"]==["Document No."]
             finally:scratch.invalidate();scratch.lock.close()
