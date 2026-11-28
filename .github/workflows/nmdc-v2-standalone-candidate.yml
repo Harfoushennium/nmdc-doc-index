@@ -46,6 +46,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python v2/launcher.py --self-test
           node --check v2/app.js
+          python -c "from pathlib import Path; [p.read_text(encoding='utf-8') for p in Path('v2').iterdir() if p.suffix in ('.py','.js','.html','.md','.ps1')]"
       - name: Windows standalone build
         shell: pwsh
         run: |

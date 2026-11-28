@@ -6,7 +6,7 @@ Authority: RP-NMDC-V2-001 v1.0, spec #32. Independent static reviewers used sepa
 |---|---|---|---|
 | R01 | P1 / implementation | Stale HTTP Hold/Reject/discard accepted after a second tab changed review revisions. Require exact run/file/flag versions. | Red: three failed assertions. Public HTTP suite green; #33 closed at 6156310. |
 | R02 | P1 / implementation | Same-size/same-mtime source edit after review could be approved. Rehash source and config at promotion. | Red before fix; public job/review suites green. |
-| R03 | P1 / standards | Reset followed a state junction and deleted an external fixture's profile area. Validate workspace ancestors before inventory or mutation. | Independent static finding reproduced with a Windows junction. Red before fix; source-preservation regression green. |
+| R03 | P1 / standards | Reset followed a state junction and deleted an external fixture's profile area. Validate the complete workspace ancestry before inventory or mutation; also test a junction above the workspace root. | Independent static finding reproduced with a Windows junction. Red before fix; source-preservation regression green. |
 | R04 | P1 / standards | A→B→undo→A→C→undo restored B. Replay approval/undo/reset history to find the actual predecessor. | Independent static finding reproduced; red before fix, exact A restoration green. |
 | R05 | P1 / standards | Import without a source override could write under the declared DATA. Validate declared source isolation, including short/long Windows aliases. | Public isolated-import rejection green; destination absent. |
 | R06 | P2 / standards | Mixed `*` and `?` patterns were accepted but single-star extraction treated question marks literally. Explicitly reject unsupported mixed extraction. | Configuration regression green. Compatibility report blocks affected legacy mappings; no silent approximation. |
@@ -18,3 +18,7 @@ Authority: RP-NMDC-V2-001 v1.0, spec #32. Independent static reviewers used sepa
 The Windows environment could not create a symbolic link for one inherited migration test, which is recorded as SKIPPED. A separate Windows junction regression executes and verifies source preservation. Linux CI must run the symlink case. No skipped case is represented as passed.
 
 Actual owner legacy-package preview was attempted read-only. Its cloud-backed files returned Windows `OSError 22` on reads; zero files could be hash verified. Preview now reports each inaccessible file explicitly and blocks import. Full details stay local in `sandbox/owner-legacy-preview.json`; no operational contents are published. Owner-workspace migration and work/home physical UAT remain genuine external gates.
+
+R11 (P2, independent correction review): migration copied live config directories while rechecking only expected files. Complete source fingerprint re-enumeration now runs before/after copying, and destination files reconcile against confirmed inputs plus explicitly generated files. A copy-boundary added-config regression passes.
+
+Build verification found mixed Windows/UTF-8 bytes in three UI/test files. These were normalized to UTF-8 and CI now checks every V2 text source before packaging. The extended real packaged browser test includes custom-field edit/save/reopen, derived search, saved index view and persistent theme.

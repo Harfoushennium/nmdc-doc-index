@@ -14,6 +14,42 @@ from v2.recovery import reset_workspace, undo_approval
 
 
 class MigrationPublicApiRegression(unittest.TestCase):
+    def test_reset_rejects_junction_above_workspace_root(self):
+        import os,subprocess
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);external=root/'external';workspace=external/'workspace'
+            (workspace/'state'/'profile').mkdir(parents=True)
+            original=workspace/'state'/'profile'/'protected.xlsx';original.write_bytes(b'protected')
+            alias=root/'alias'
+            try:alias.symlink_to(external,target_is_directory=True)
+            except OSError:
+                if os.name!='nt':self.skipTest('Symlink unavailable')
+                result=subprocess.run(['cmd','/c','mklink','/J',str(alias),str(external)],capture_output=True)
+                if result.returncode:self.skipTest('Junction unavailable')
+            try:
+                with self.assertRaisesRegex(ValueError,'reparse|[Ss]ymlink'):
+                    reset_workspace(alias/'workspace','RESET')
+                self.assertEqual(original.read_bytes(),b'protected')
+            finally:alias.rmdir() if os.name=='nt' else alias.unlink()
+
+    def test_import_refuses_configuration_added_during_copy(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);legacy=root/'legacy';legacy.mkdir();data=root/'DATA';data.mkdir()
+            (data/'a.xlsx').write_text('fixture');template=App(root/'template')
+            try:shutil.copytree(template.config,legacy/'config')
+            finally:template.invalidate();template.lock.close()
+            staged=stage_update(data_dir=data,state_dir=legacy/'runtime',processor=lambda p,r:[{'Event_Key':'E1','Source File':r}])
+            approve_stage(legacy/'runtime',staged['run_id']);report=preview_package(legacy)
+            real_copy=shutil.copytree
+            def copy(source,target,*args,**kwargs):
+                if Path(source).resolve()==(legacy/'config').resolve():
+                    (legacy/'config'/'custom_fields.json').write_text('{"fields":[],"mappings":[]}')
+                return real_copy(source,target,*args,**kwargs)
+            with patch('v2.migration.shutil.copytree',side_effect=copy):
+                with self.assertRaisesRegex(ValueError,'changed|unconfirmed'):
+                    import_package(legacy,root/'new-workspace',report['preview_sha256'])
+            self.assertFalse((root/'new-workspace').exists())
     def test_import_protects_declared_data_without_explicit_source_override(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);legacy=root/'legacy';legacy.mkdir();data=root/'DATA';data.mkdir()

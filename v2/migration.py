@@ -53,17 +53,10 @@ def import_package(package, target, confirmed_fingerprint, *, source_root=None):
     # Re-hash before copying and after copying. The preview fingerprint alone is not
     # a substitute for checking every inventoried source byte at both boundaries.
     def source_inventory():
-        result={}
-        for name in report["files"]:
-            path=package/name
-            unsafe=path.is_symlink() or _is_reparse(path)
-            for parent in path.parents:
-                if parent==package.parent:break
-                if parent.is_symlink() or _is_reparse(parent):unsafe=True
-            if unsafe or not path.resolve().is_relative_to(package):
-                raise ValueError("Legacy inventory path became unsafe; import cancelled.")
-            result[name]={"bytes":path.stat().st_size,"sha256":_sha256(path)}
-        return result
+        fresh=preview_package(package)
+        if fresh["preview_sha256"]!=report["preview_sha256"]:
+            raise ValueError("Legacy inventory changed after preview; import cancelled.")
+        return fresh["files"]
 
     expected = report["files"]
     if source_inventory() != expected:
@@ -109,14 +102,20 @@ def import_package(package, target, confirmed_fingerprint, *, source_root=None):
                     "source_inventory": expected, "approved_run": report["approved_run"],
                     "approved_events": report["approved_events"], "imported_at": None}
         (scratch / "migration-manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        expected_copies=set()
         for name,meta in expected.items():
             if name.startswith("runtime/") and name.split("/")[1] in ("approved","staging","cache","logs","user_flags"):
                 copied=scratch/"state"/name.removeprefix("runtime/")
             elif name.startswith(("config/","config-history/")):copied=scratch/name
             elif name.startswith("runtime/profile/"):continue  # Rebuildable profiler output; original retained.
             else:copied=evidence/name
+            expected_copies.add(copied.relative_to(scratch).as_posix())
             if not copied.is_file() or copied.stat().st_size!=meta["bytes"] or _sha256(copied)!=meta["sha256"]:
                 raise ValueError("Copied migration inventory failed exact hash reconciliation: "+name)
+        generated={"settings.json","migration-manifest.json","config/custom_fields.json"}
+        if translation:generated.add("state/staging/"+translation["run"]+"/web_draft.json")
+        actual={p.relative_to(scratch).as_posix() for p in scratch.rglob("*") if p.is_file()}
+        if actual-expected_copies-generated:raise ValueError("Migration copied unconfirmed extra files")
         if source_inventory() != expected:
             raise ValueError("Legacy package changed during import; destination was not published.")
         if target.exists():

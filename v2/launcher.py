@@ -813,6 +813,10 @@ def server_for(app):
                     elif path=="/api/reset":result=app.reset(body)
                     elif path=="/api/migration-preview":result=app.preview_legacy()
                     elif path=="/api/migration-import":result=app.migrate_legacy(body)
+                    elif path=="/api/backup-policy":
+                        keep=body.get("keep")
+                        if type(keep) is not int or not 1<=keep<=100:raise ValueError("Backup retention must be an integer from 1 to 100")
+                        app.idle();app.settings["backup_retention"]=keep;app.save_settings();result={"keep":keep}
                     elif path=="/api/preferences":
                         if body.get("theme") not in ("light","dark"):raise ValueError("Invalid theme")
                         app.settings["theme"]=body["theme"]

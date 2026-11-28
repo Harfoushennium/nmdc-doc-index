@@ -18,7 +18,6 @@ def assert_workspace_paths(root):
     for path in (root,root/"state",root/"config",root/"config-history"):
         for parent in (path,*path.parents):
             if parent.is_symlink() or _is_reparse(parent):raise ValueError("Symlink or reparse point in workspace ancestry: "+str(parent))
-            if parent==root:break
     return root.resolve()
 
 def inventory(root):
@@ -57,8 +56,12 @@ def verify_bundle(path):
                 for chunk in iter(lambda:f.read(1024*1024),b""):h.update(chunk);size+=len(chunk)
             if h.hexdigest()!=meta["sha256"] or size!=meta["bytes"]:raise ValueError("Recovery hash mismatch")
         return manifest
-def create_bundle(root,reason):
+def create_bundle(root,reason,keep=None):
     root=assert_workspace_paths(root); dest=root/"backups"
+    if keep is None:
+        settings=root/"settings.json"
+        keep=json.loads(settings.read_text(encoding="utf-8")).get("backup_retention",10) if settings.exists() else 10
+    if type(keep) is not int or not 1<=keep<=100:raise ValueError("Backup retention must be an integer from 1 to 100")
     if dest.is_symlink() or _is_reparse(dest):raise ValueError("Backup destination must not be a reparse point")
     dest.mkdir(exist_ok=True)
     before=inventory(root)
@@ -73,7 +76,7 @@ def create_bundle(root,reason):
         verify_bundle(tmp)
         if inventory(root)!=before:raise ValueError("Workspace changed during backup")
         os.replace(tmp,final)
-        apply_retention(dest,keep=10)
+        apply_retention(dest,keep=keep)
         return {"path":str(final),"files":len(before),"bytes":final.stat().st_size}
     finally:tmp.unlink(missing_ok=True)
 def apply_retention(directory,keep=10):
