@@ -21,6 +21,7 @@ from nmdc_profiler.rules import load_rules
 from v2.recovery import create_bundle, restore_to_new_workspace, inventory
 from v2 import unchanged
 from v2.read_model import ReadModel, apply_filters
+from v2 import custom_fields
 from collections import Counter
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
@@ -51,7 +52,7 @@ def read_json(p, default):
     return json.loads(p.read_text(encoding="utf-8")) if p.exists() else default
 
 def ordered_fields(rows, scope):
-    base = list(OUTPUT_FIELDS) if scope == "events" else []
+    base = list(OUTPUT_FIELDS) if scope == "events" else list(custom_fields.DOC_COLUMNS) if scope=="documents" else ["Flag Level","Project No.","Document No.","Document Title","Revision","Is Latest Revision","Revision Key","Document Link","Source File","Source Sheet","Source Row","Source Cell"]
     return list(dict.fromkeys(base + [k for r in rows for k in r] + CORE[scope]))
 
 def filter_rows(rows, query="", column="", sort="", desc=False):
@@ -283,6 +284,7 @@ class App:
             for r in rows:
                 r["Source Workbook Path"]=str(Path(source_root)/str(r.get("Source File",""))) if source_root else str(r.get("Source File",""))
                 if r.get("Document Link"):r["Document Link"]=resolve_document_target(r["Document Link"],r.get("Source File",""),source_root)
+            if scope=="documents":custom_fields.enrich(rows,self.custom_fields())
             views[scope]=rows
         return views[scope]
     def query_page(self,scope,query="",column="",sort="",desc=False,filters=None,page=0,group=""):
@@ -445,6 +447,43 @@ class App:
         self.settings["requires_rescan"]=True;self.save_settings()
         result=set_source_selection(self.config,rel,include=body["include"],reason=str(body.get("note","")))
         return result
+    def custom_fields(self):
+        return custom_fields.validate(read_json(self.config/"custom_fields.json",{"fields":[],"mappings":[]}),list(OUTPUT_FIELDS)+[k for fields in CORE.values() for k in fields])
+    def save_custom_fields(self,body):
+        self.idle()
+        payload=custom_fields.validate(body,list(OUTPUT_FIELDS)+[k for fields in CORE.values() for k in fields])
+        path=self.config/"custom_fields.json"
+        if path.exists():
+            history=self.root/"config-history";history.mkdir(exist_ok=True)
+            shutil.copy2(path,history/("custom_fields-"+secrets.token_hex(8)+".json"))
+        _write_json_atomic(path,payload)
+        self.invalidate()
+        _append_log(self.state,{"event":"CUSTOM_FIELDS_SAVED","at":utc_now(),"fields":len(payload["fields"]),"mappings":len(payload["mappings"])})
+        return payload
+    def project_mappings(self):
+        self.idle();p=self.config/"project_identity_overrides.csv"
+        with p.open(encoding="utf-8-sig",newline="") as h:
+            r=csv.DictReader(h);return {"columns":r.fieldnames,"rows":list(r)}
+    def save_project_mappings(self,body):
+        self.idle();current=self.project_mappings();columns=current["columns"];rows=body.get("rows")
+        if body.get("columns")!=columns or not isinstance(rows,list) or len(rows)>5000:raise ValueError("Project mapping schema mismatch")
+        seen=set()
+        for r in rows:
+            if not isinstance(r,dict) or set(r)!=set(columns) or not all(isinstance(v,str) for v in r.values()):raise ValueError("Invalid project mapping row")
+            source=r.get("Source File","").strip();status=r.get("Decision Status","").strip().upper()
+            if not source or source in seen or not r.get("Approved Project No.","").strip() and status=="APPROVED":raise ValueError("Duplicate, missing or incomplete approved project mapping")
+            seen.add(source)
+        target=self.config/"project_identity_overrides.csv";tmp=target.with_suffix(".tmp")
+        try:
+            with tmp.open("w",encoding="utf-8-sig",newline="") as h:
+                w=csv.DictWriter(h,fieldnames=columns);w.writeheader();w.writerows(rows)
+            from nmdc_profiler.project_identity import load_project_identity_overrides
+            load_project_identity_overrides(tmp)
+            history=self.root/"config-history";history.mkdir(exist_ok=True)
+            shutil.copy2(target,history/("project_identity-"+secrets.token_hex(8)+".csv"))
+            self.settings["requires_rescan"]=True;self.save_settings();os.replace(tmp,target)
+        finally:tmp.unlink(missing_ok=True)
+        return {"saved":len(rows),"requires_rescan":True}
     def rules(self):
         self.idle()
         p=self.config/"classification_rules.csv"
@@ -536,6 +575,8 @@ def server_for(app):
                     if path=="/api/draft-history":return self.send(200,app.draft_history())
                     if path=="/api/sources":return self.send(200,app.manifest_files())
                     if path=="/api/rules":return self.send(200,app.rules())
+                    if path=="/api/custom-fields":return self.send(200,app.custom_fields())
+                    if path=="/api/project-mappings":return self.send(200,app.project_mappings())
                     if path=="/api/history":return self.send(200,build_history_rows(app.state)[-500:])
                     if path in ("/api/index","/api/export","/api/export-plan"):
                         scope=q.get("scope","events");filters=json.loads(q.get("filters","{}"))
@@ -581,6 +622,8 @@ def server_for(app):
                     elif path=="/api/approve":result=app.approve(body)
                     elif path=="/api/source-choice":result=app.source_choice(body)
                     elif path=="/api/rules":result=app.save_rules(body)
+                    elif path=="/api/custom-fields":result=app.save_custom_fields(body)
+                    elif path=="/api/project-mappings":result=app.save_project_mappings(body)
                     elif path=="/api/report":result=app.report_flags(body)
                     elif path=="/api/profile":result=app.profile(body)
                     elif path=="/api/index-view":result=app.save_view(body)
