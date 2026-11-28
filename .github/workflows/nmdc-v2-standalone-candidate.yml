@@ -38,7 +38,7 @@ jobs:
         shell: pwsh
         run: |
           $env:PYTHONPATH = (Get-Location).Path
-          python -m unittest v2.test_release_review v2.test_release_jobs v2.test_release_export v2.test_release_custom_fields
+          python -m unittest v2.test_release_review v2.test_release_jobs v2.test_release_export v2.test_release_custom_fields v2.test_release_flags
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python v2/launcher.py --self-test
           node --check v2/app.js
