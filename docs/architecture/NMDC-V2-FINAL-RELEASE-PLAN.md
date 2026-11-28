@@ -1,6 +1,6 @@
 # NMDC V2 — Final release and approval plan (RP-NMDC-V2-001 v1.0)
 
-Status: proposed execution/acceptance contract, 2026-11-28. Owner approval of release architecture and criteria is pending. Governing project: #22; delivery PR #29. This supersedes the implementation sequence (not the requirements) of NMDC-V2-standalone-implementation-plan.md. No production cutover, merge, or source edits authorized by this plan.
+Status: OWNER APPROVED execution/acceptance contract, 2026-11-28. D1–D5 approved; implementation and evidence-based closeout authorized; final application approval not granted. Governing project: #22; delivery PR #29. This supersedes the implementation sequence (not the requirements) of NMDC-V2-standalone-implementation-plan.md. No production cutover, merge, or source edits authorized by this plan.
 
 ## 1. Baseline and finite scope
 
@@ -137,12 +137,12 @@ Deliver versioned portable ZIP, SHA256, manifest, exact commit, release notes, u
 | #22 | RP6 | All applicable requirements and dispositions complete, approval decision |
 | PR #29 | RP4–RP6 | Keep open/draft until pinned RC evidence and owner approval; merge only after authorization |
 
-## 5. Decisions requested with plan approval
+## 5. Approved owner decisions
 
-D1: Freeze hybrid architecture for V2.0; defer canonical SQLite and C++ research. Alternative: mandate new canonical store now, extending RP2/RP4 with complete dual-candidate migration and crash/parity testing, never dual authority.
-D2: Proposed release ceilings vs stretch targets as above; approve changed-source/approval ceilings after measured comparable baseline. No silent waivers.
-D3: Side-by-side read-only migration and backups before mutation; configurable local storage/report/export paths and retention; no destructive cutover before acceptance.
-D4: Legacy tickets closed only after verified replacement and explicit supersession approval or original acceptance, not blanket "fixed."
-D5: Mandatory two-PC UAT before final readiness; owner may expressly change target environments, never fabricate results.
+D1: Freeze the proven hybrid architecture; defer experimental canonical SQLite.
+D2: Use mandatory release limits and separate optimization targets; changed-source/approval ceilings require measured baseline.
+D3: Side-by-side migration, verified backups and reversible cutover.
+D4: Close after verified replacement and explicit supersession approval.
+D5: Complete both-PC acceptance before final approval readiness.
 
 Approval of this plan authorizes implementation/tests and evidence-based closeout; does not itself approve application or production cutover.
