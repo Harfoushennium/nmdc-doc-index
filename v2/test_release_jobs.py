@@ -4,6 +4,22 @@ from pathlib import Path
 from v2.launcher import App
 
 class JobRecovery(unittest.TestCase):
+    def test_source_changed_after_review_cannot_be_approved(self):
+        from nmdc_profiler.update_engine import stage_update
+        import os
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);data=root/'DATA';data.mkdir();source=data/'a.xlsx';source.write_text('before')
+            app=App(root/'workspace')
+            try:
+                app.settings['data_dir']=str(data);app.save_settings()
+                stage_update(data_dir=data,state_dir=app.state,processor=lambda p,r:[{'Event_Key':'E1','Source File':r,'Document No.':'0001'}])
+                p=app.proposal();app.save_choices(p)
+                stat=source.stat();source.write_text('after!');os.utime(source,ns=(stat.st_atime_ns,stat.st_mtime_ns))
+                with self.assertRaisesRegex(ValueError,'changed.*rescan'):
+                    app.approve({'run':p['run']})
+                self.assertEqual(app.approved()['records'],[])
+                self.assertTrue(app.settings['requires_rescan'])
+            finally:app.invalidate();app.lock.close()
     def test_interrupted_job_requires_fresh_scan_and_retains_state(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d)/"workspace"

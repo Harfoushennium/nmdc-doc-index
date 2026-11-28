@@ -5,6 +5,30 @@ from nmdc_profiler.update_engine import stage_update
 from v2.launcher import App
 
 class FlagAcceptance(unittest.TestCase):
+    def test_report_rejects_overlap_invalid_identity_and_hold_blocks_approval(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);data=root/'project'/'DATA';data.mkdir(parents=True);(data/'a.xlsx').write_text('fixture')
+            app=App(root/'workspace')
+            try:
+                app.settings['data_dir']=str(data);app.save_settings()
+                stage_update(data_dir=data,state_dir=app.state,processor=lambda p,r:[{'Event_Key':'E1','Source File':r}],initial_flags=[{'level':'REVIEW','code':'SOURCE_NEW','source':'a.xlsx','message':'new'}])
+                p=app.proposal();app.save_choices(p);p=app.proposal();flag=p['flags'][0]
+                for folder in (data,data.parent,app.root):
+                    app.settings['report_parent']=str(folder)
+                    with self.assertRaisesRegex(ValueError,'overlap|outside'):
+                        app.report_flags(dict(p,ids=[flag['Flag ID']],comment='check'))
+                    self.assertEqual(app.proposal()['flag_version'],p['flag_version'])
+                app.settings['report_parent']=str(root/'reports')
+                with self.assertRaisesRegex(ValueError,'selection'):
+                    app.report_flags(dict(p,ids=['unknown'],comment='check'))
+                app.edit_flags(dict(p,changes=[{'id':flag['Flag ID'],'decision':'HOLD FOR REVIEW','status':'DEFERRED','comment':'wait'}]),save=True)
+                with self.assertRaisesRegex(ValueError,'Unresolved flags'):app.approve({'run':p['run']})
+                self.assertEqual(app.approved()['records'],[])
+                current=app.proposal();app.decide_proposal(dict(current,decision='HOLD'),require_versions=True)
+                self.assertEqual(app.proposal()['flags'][0]['User Comment'],'wait')
+                app.decide_proposal(dict(current,decision='REJECT'),require_versions=True)
+                self.assertEqual(app.approved()['records'],[])
+            finally:app.invalidate();app.lock.close()
     def test_draft_save_report_clear_retry_preserves_approved_data(self):
         with tempfile.TemporaryDirectory() as d,tempfile.TemporaryDirectory() as reports:
             root=Path(d);data=root/"project"/"DATA";data.mkdir(parents=True)

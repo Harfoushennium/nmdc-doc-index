@@ -6,11 +6,12 @@ from nmdc_profiler.update_engine import stage_update
 from v2.launcher import App
 
 def test(exe):
-    with tempfile.TemporaryDirectory(prefix="nmdc-ui-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="nmdc-ui-") as tmp, tempfile.TemporaryDirectory(prefix="nmdc-reports-") as reports:
         root=Path(tmp);workspace=root/"workspace";data=root/"DATA";data.mkdir()
         (data/"register.xlsx").write_bytes(b"synthetic")
         app=App(workspace)
         try:
+            app.settings["report_parent"]=reports;app.save_settings()
             stage_update(data_dir=data,state_dir=app.state,processor=lambda path,rel:[{
                 "Event_Key":"E-UI-1","Global_Document_Key":"D-UI-1","Revision_Key":"R-UI-1",
                 "Document No.":"UI-0001","Document Title":"Synthetic browser smoke",
@@ -54,10 +55,39 @@ def test(exe):
                 expect(page.get_by_role("button",name="Approve saved choices",exact=True)).to_be_disabled()
                 page.get_by_role("button",name="Save flag decisions",exact=True).click()
                 expect(page.get_by_role("button",name="Approve saved choices",exact=True)).to_be_enabled()
+                page.locator("label").filter(has_text="SOURCE_NEW").locator("input[type=checkbox]").check()
+                page.get_by_role("button",name="Generate parser/mapping fix report",exact=True).click()
+                expect(page.locator("#notice")).to_contain_text("Report created:")
+                assert list(Path(reports).glob("PARSER_FIX_REPORTS/*/PARSER_FIX_REQUEST.json"))
+                page.get_by_role("button",name="Clear decision and comment",exact=True).first.click()
+                page.get_by_role("button",name="Save flag decisions",exact=True).click()
+                expect(page.get_by_role("button",name="Approve saved choices",exact=True)).to_be_enabled()
                 page.get_by_role("button",name="Approve saved choices",exact=True).click()
                 expect(page.get_by_text("No pending proposal",exact=True)).to_be_visible()
                 page.get_by_role("button",name="Consolidated index",exact=True).click()
                 expect(page.get_by_text("UI-0001",exact=True)).to_be_visible()
+                search=page.get_by_placeholder("Search +AND / -EXCLUDE")
+                search.fill("no-match")
+                expect(page.get_by_text("0 matching records",exact=True)).to_be_visible()
+                search.fill('"UI-0001" -absent')
+                expect(page.get_by_text("1 matching records",exact=True)).to_be_visible()
+                expect(search).to_be_focused()
+                page.get_by_role("button",name="Reset filters",exact=True).click()
+                expect(page.get_by_placeholder("Search +AND / -EXCLUDE")).to_have_value("")
+                page.get_by_role("button",name="Dashboard",exact=True).click()
+                expect(page.get_by_text("Approved documents",exact=True)).to_be_visible()
+                expect(page.get_by_text("Documents by Source Family",exact=True)).to_be_visible()
+                page.get_by_role("button",name="Rules & mappings",exact=True).click()
+                rules=page.locator("table").first
+                old_note=rules.locator("tbody tr").first.locator("input").nth(17).input_value()
+                rules.locator("tbody tr").first.locator("input").nth(17).fill("Browser saved rule")
+                page.get_by_role("button",name="Save rules",exact=True).click()
+                expect(page.locator("#notice")).to_contain_text("Rules saved")
+                page.reload()
+                page.get_by_role("button",name="Rules & mappings",exact=True).click()
+                expect(page.locator("table").first.locator("tbody tr").first.locator("input").nth(17)).to_have_value("Browser saved rule")
+                page.get_by_role("button",name="Restore this configuration",exact=True).first.click()
+                expect(page.locator("table").first.locator("tbody tr").first.locator("input").nth(17)).to_have_value(old_note)
                 page.get_by_role("button",name="Export",exact=True).click()
                 with page.expect_download() as download:
                     page.get_by_role("button",name="Download XLSX",exact=True).click()

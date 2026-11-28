@@ -23,6 +23,7 @@ from v2.recovery import create_bundle, restore_to_new_workspace, inventory
 from v2 import unchanged
 from v2.read_model import ReadModel, apply_filters
 from v2 import custom_fields
+from v2.export_policy import preview_token, link_exceptions
 from v2.flag_review import FlagReview
 from collections import Counter
 
@@ -319,6 +320,15 @@ class App:
             counts=Counter(str(r.get(group,"")).casefold() for r in matched) if group else {}
             if group and group not in model.fields:raise ValueError("Unknown grouping field")
             return {"count":len(matched),"fields":model.fields,"rows":matched[page*100:(page+1)*100],"groups":[{"value":k,"count":v} for k,v in sorted(counts.items(),key=lambda kv:(-kv[1],kv[0]))[:100]]}
+    def dashboard(self):
+        self.idle()
+        approved=self.approved()
+        events=self.view("events");documents=self.view("documents");revisions=self.view("revisions")
+        groups={}
+        for field in ("Source Family","Discipline","Category"):
+            counts=Counter(str(r.get(field) or "UNCLASSIFIED") for r in documents)
+            groups[field]=[{"value":k,"count":v} for k,v in sorted(counts.items(),key=lambda item:(-item[1],item[0]))]
+        return {"run":approved["run_id"],"events":len(events),"documents":len(documents),"revisions":len(revisions),"groups":groups}
     def save_view(self,body):
         name=str(body.get("name","")).strip();scope=body.get("scope","events")
         if not name or len(name)>100:raise ValueError("Invalid saved view name")
@@ -438,6 +448,21 @@ class App:
         if require_versions:self.require_review_versions(body,p)
         if not p["saved"]:raise ValueError("Save all file choices before approval.")
         if p["flag_dirty"]:raise ValueError("Save flag decisions before approval.")
+        # The review is an observation of source bytes, not a lock on external files.
+        # Recheck content at the promotion boundary, including same-metadata edits.
+        if self.settings.get("data_dir"):
+            from nmdc_profiler.update_engine import fingerprint_paths
+            manifest=load_latest_stage(self.state)["manifest"]
+            try:
+                current=unchanged.inputs(self.source(),self.config,unchanged.build_identity())
+                expected={r["relative_path"]:[r["sha256"],r["size"]] for r in manifest["files"]}
+                if expected!={k:v[:2] for k,v in current["source"].items()}:raise ValueError("Source changed")
+                fingerprint=manifest.get("config_fingerprint")
+                if fingerprint and fingerprint!=fingerprint_paths([]) and fingerprint!=fingerprint_paths([self.config/"classification_rules.csv",self.config/"project_identity_overrides.csv"]):
+                    raise ValueError("Configuration changed")
+            except (OSError,ValueError,KeyError,TypeError) as exc:
+                self.settings["requires_rescan"]=True;self.save_settings()
+                raise ValueError("Source or configuration changed; rescan before approval.") from exc
         # Conservative candidate: no override and no unresolved non-routine flag approval.
         routine={"SOURCE_NEW","SOURCE_CHANGED","PARSER_VERSION_CHANGED","CONFIG_CHANGED","CACHE_MISSING","SOURCE_REMOVED"}
         if any(f["Flag Code"] not in routine or f.get("User Decision") in ("HOLD FOR REVIEW","NEEDS SOURCE CORRECTION","NEEDS PARSER/MAPPING FIX") for f in p["flags"]):
@@ -526,6 +551,17 @@ class App:
             r=csv.DictReader(h)
             return {"columns":r.fieldnames,"rows":list(r)}
     def validate_rules_file(self,path):
+        with path.open(encoding="utf-8-sig",newline="") as handle:
+            reader=csv.DictReader(handle);rows=list(reader)
+            if reader.fieldnames!=self.rules()["columns"]:raise ValueError("Rule schema mismatch")
+        ids=set()
+        for row in rows:
+            if None in row or None in row.values():raise ValueError("Invalid rule row")
+            key=row["Rule_ID"].strip()
+            if not key or key in ids:raise ValueError("Missing or duplicate rule identity")
+            ids.add(key)
+            if any(row[k].strip().upper() not in ("YES","NO") for k in ("Enabled","Stop_On_Match","Include")):
+                raise ValueError("Rule switches must be YES or NO")
         rules=load_rules(path)
         for r in rules:
             if not r.rule_id or not r.words.strip() or r.match_type not in {"EXACT","CONTAINS","STARTS_WITH","ENDS_WITH","FUZZY","REGEX"} or r.scope not in {"FILE","WORKSHEET","SECTION","HEADER","DOC_NUMBER","TITLE"} or r.family not in {"ANY","METHODS","TECH"} or r.include not in {"YES","NO"} or not 0<=r.min_confidence<=100:raise ValueError("Invalid classification rule: "+r.rule_id)
@@ -655,6 +691,7 @@ def server_for(app):
                         a=app.approved()
                         return self.send(200,{"job":app.job,"settings":app.settings,"approved_run":a["run_id"],"events":len(a["records"])})
                     if path=="/api/review":return self.send(200,app.proposal())
+                    if path=="/api/dashboard":return self.send(200,app.dashboard())
                     if path=="/api/review-details":return self.send(200,app.file_details(q.get("run",""),q.get("source",""),max(0,int(q.get("page","0")))))
                     if path=="/api/draft-history":return self.send(200,app.draft_history())
                     if path=="/api/sources":return self.send(200,app.manifest_files())
@@ -675,7 +712,9 @@ def server_for(app):
                         fmt=q.get("format","xlsx")
                         if path=="/api/export-plan":
                             parts=partition_plan(rows,selected)
-                            return self.send(200,{"rows":len(rows),"parts":len(parts),"run":app.approved()["run_id"],"links":link_summary(rows,selected)})
+                            return self.send(200,{"rows":len(rows),"parts":len(parts),"run":app.approved()["run_id"],"preview":preview_token(app,q,selected),"links":link_summary(rows,selected),"exceptions":link_exceptions(rows,selected,excel_target)})
+                        if not hmac.compare_digest(q.get("preview",""),preview_token(app,q,selected)):
+                            raise ValueError("Export preview changed; preview the current snapshot, configuration and filters again.")
                         if fmt=="xlsx":
                             warnings=sum(v["literal_unverified"] for v in link_summary(rows,selected).values())
                             if warnings and (q.get("literal_links")!="confirmed" or q.get("run")!=app.approved()["run_id"]):raise ValueError("Some hyperlink targets must remain literal. Review export preview and confirm.")
@@ -695,6 +734,7 @@ def server_for(app):
                 if not 0<=size<=2_000_000: raise ValueError("Request too large")
                 if not self.headers.get("Content-Type","").startswith("application/json"):raise ValueError("JSON required")
                 body=json.loads(self.rfile.read(size) or b"{}")
+                if not isinstance(body,dict):raise ValueError("JSON object required")
                 with app.guard:
                     path=urlsplit(self.path).path
                     if path=="/api/select":result=app.select()
