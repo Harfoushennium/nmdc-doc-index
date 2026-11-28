@@ -386,8 +386,9 @@ class App:
             self.draft_choices(body,dirty=False)
             return result
         finally: f.unlink(missing_ok=True)
-    def discard_draft(self,body):
+    def discard_draft(self,body,*,require_versions=False):
         self.idle();p=self.proposal()
+        if require_versions:self.require_review_versions(body,p)
         if not p['run'] or body.get('run')!=p['run'] or body.get('draft_version')!=p['draft_version']:
             raise ValueError('Review changed; reload.')
         if body.get('confirm') is not True:raise ValueError('Confirm discarding the current unsaved choices.')
@@ -418,20 +419,23 @@ class App:
             kind='ADDED' if a is None else 'REMOVED' if b is None else 'MODIFIED'
             changed.append({'identity':key,'type':kind,'before':a,'after':b,'fields':[k for k in sorted(set(a or {})|set(b or {})) if (a or {}).get(k)!=(b or {}).get(k)]})
         return {'count':len(changed),'rows':changed[page*50:(page+1)*50]}
-    def decide_proposal(self,body):
+    def decide_proposal(self,body,*,require_versions=False):
         self.idle();self.require_clean_review();p=self.proposal()
+        if require_versions:self.require_review_versions(body,p)
         if not p['run'] or body.get('run')!=p['run']:raise ValueError('Proposal changed')
         decision=body.get('decision');note=str(body.get('note',''))
         if decision=='HOLD':return hold_stage(self.state,p['run'],note=note)
         if decision=='REJECT':return reject_stage(self.state,p['run'],note=note)
         raise ValueError('Unknown proposal decision')
+    def require_review_versions(self,body,proposal):
+        if not proposal.get("run") or body.get("run")!=proposal["run"] or any(type(body.get(k)) is not int or body[k]!=proposal[k] for k in ("draft_version","flag_version")):
+            raise ValueError("Displayed review version changed; reload and confirm the current saved choices.")
     def approve(self,body,*,require_versions=False):
         self.idle(); p=self.proposal()
         if self.settings.get("requires_rescan"): raise ValueError("Configuration or source state changed; rescan before approval.")
         if self.settings.get("data_dir"):self.source()
         if not p["run"] or body.get("run")!=p["run"]: raise ValueError("Proposal changed")
-        if require_versions and any(type(body.get(k)) is not int or body[k]!=p[k] for k in ("draft_version","flag_version")):
-            raise ValueError("Displayed review version changed; reload and confirm the current saved choices.")
+        if require_versions:self.require_review_versions(body,p)
         if not p["saved"]:raise ValueError("Save all file choices before approval.")
         if p["flag_dirty"]:raise ValueError("Save flag decisions before approval.")
         # Conservative candidate: no override and no unresolved non-routine flag approval.
@@ -697,8 +701,8 @@ def server_for(app):
                     elif path=="/api/scan":result=app.start(body.get("full") is True)
                     elif path=="/api/cancel":result=app.cancel_job()
                     elif path=="/api/draft":result=app.draft_choices(body)
-                    elif path=="/api/discard-draft":result=app.discard_draft(body)
-                    elif path=="/api/proposal-decision":result=app.decide_proposal(body)
+                    elif path=="/api/discard-draft":result=app.discard_draft(body,require_versions=True)
+                    elif path=="/api/proposal-decision":result=app.decide_proposal(body,require_versions=True)
                     elif path=="/api/save-choices":result=app.save_choices(body)
                     elif path=="/api/approve":result=app.approve(body,require_versions=True)
                     elif path=="/api/source-choice":result=app.source_choice(body)
