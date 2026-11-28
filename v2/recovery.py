@@ -2,7 +2,7 @@
 from __future__ import annotations
 import hashlib, json, os, shutil, time, uuid
 from pathlib import Path
-from zipfile import ZipFile, ZIP_DEFLATED
+from zipfile import ZipFile, ZIP_DEFLATED, BadZipFile
 
 AREAS=("state/approved","state/staging","state/cache","state/logs","state/user_flags","state/custom-fields.json","state/derived/custom-fields.json","config","config-history","settings.json","custom-fields.json","derived/custom-fields.json","migration-evidence","migration-manifest.json")
 MAX_FILES=100_000
@@ -37,6 +37,7 @@ def inventory(root):
             out[f.relative_to(root).as_posix()]={"bytes":size,"sha256":digest(f)}
     return out
 def _is_reparse(path):
+    if path.is_symlink():return True
     try:return bool(path.lstat().st_file_attributes & 0x400)
     except (AttributeError,OSError):return False
 def verify_bundle(path):
@@ -44,6 +45,7 @@ def verify_bundle(path):
     if path.is_symlink() or _is_reparse(path) or path.stat().st_size>MAX_TOTAL_BYTES:raise ValueError("Recovery archive is unsafe or exceeds size limits")
     with ZipFile(path) as z:
         if len(z.infolist())>MAX_FILES+1 or sum(i.file_size for i in z.infolist())>MAX_TOTAL_BYTES:raise ValueError("Recovery bundle exceeds size limits")
+        if z.getinfo("recovery-manifest.json").file_size>32*1024**2:raise ValueError("Recovery manifest exceeds size limit")
         manifest=json.loads(z.read("recovery-manifest.json"))
         files=manifest["files"]
         if len(z.namelist())!=len(set(z.namelist())) or set(z.namelist())!=set(files)|{"recovery-manifest.json"}:raise ValueError("Recovery manifest mismatch")
@@ -76,18 +78,22 @@ def create_bundle(root,reason,keep=None):
         verify_bundle(tmp)
         if inventory(root)!=before:raise ValueError("Workspace changed during backup")
         os.replace(tmp,final)
-        apply_retention(dest,keep=keep)
-        return {"path":str(final),"files":len(before),"bytes":final.stat().st_size}
+        skipped=[];apply_retention(dest,keep=keep,skipped=skipped)
+        return {"path":str(final),"files":len(before),"bytes":final.stat().st_size,"retention_skipped":skipped}
     finally:tmp.unlink(missing_ok=True)
-def apply_retention(directory,keep=10):
+def apply_retention(directory,keep=10,skipped=None):
     """Retain newest verified recovery archives; leave unknown files untouched."""
-    directory=Path(directory)
+    directory=Path(directory).absolute()
+    if any(_is_reparse(p) for p in (directory,*directory.parents)):raise ValueError("Backup directory ancestry contains a reparse point")
     if type(keep) is not int or keep<1:raise ValueError("Retention must keep at least one verified backup")
     if directory.is_symlink() or _is_reparse(directory):raise ValueError("Backup directory must not be a reparse point")
     archives=[]
     for path in directory.glob("*.zip"):
         if path.is_symlink() or _is_reparse(path):raise ValueError("Backup archive is a reparse point")
-        manifest=verify_bundle(path)
+        try:manifest=verify_bundle(path)
+        except (OSError,ValueError,KeyError,TypeError,BadZipFile) as error:
+            if skipped is not None:skipped.append({"file":path.name,"reason":type(error).__name__})
+            continue
         created=manifest.get("created_at")
         if created is None:created=path.stat().st_mtime
         if not isinstance(created,(int,float)):raise ValueError("Invalid recovery timestamp")
@@ -133,7 +139,7 @@ def undo_approval(state_dir, confirmation):
     """Safely repoint to the prior immutable approved version, retaining all versions."""
     raw_state=Path(state_dir).absolute()
     if raw_state.is_symlink() or _is_reparse(raw_state):raise ValueError("State directory is a reparse point")
-    state=raw_state.resolve();root=state.parent
+    root=assert_workspace_paths(raw_state.parent);state=root/"state"
     if confirmation != "UNDO":raise ValueError('Type UNDO to confirm restoring the prior approved index.')
     current_path=state/"approved"/"current.json"
     if current_path.is_symlink() or _is_reparse(current_path):raise ValueError("Approved pointer is a reparse point")

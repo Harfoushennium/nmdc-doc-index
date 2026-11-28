@@ -1,6 +1,6 @@
 """Read-only V1 migration preview; no import or active-state mutation."""
 from __future__ import annotations
-import csv, hashlib, json, re, posixpath
+import csv, hashlib, json, re, posixpath, sys
 from pathlib import Path
 from zipfile import ZipFile, BadZipFile
 from xml.etree import ElementTree as ET
@@ -123,6 +123,19 @@ def preview_package(package):
             if p.is_file():add_file(p)
     for name in CONFIGS[:2]:
         if not (config/name).is_file():blockers.append("Missing legacy configuration: "+name)
+    default_config=Path(getattr(sys,"_MEIPASS",Path(__file__).resolve().parents[1]))/"config"
+    for name in CONFIGS:
+        path=config/name
+        if not path.is_file() or "config/"+name not in files:continue
+        try:
+            rows=csv_rows(path)
+            with path.open(encoding="utf-8-sig",newline="") as handle:headers=csv.DictReader(handle).fieldnames
+            with (default_config/name).open(encoding="utf-8-sig",newline="") as handle:expected_headers=csv.DictReader(handle).fieldnames
+            if headers!=expected_headers:raise ValueError("CSV schema mismatch")
+            if name=="classification_rules.csv":
+                from nmdc_profiler.rules import load_rules
+                load_rules(path)
+        except (OSError,ValueError,KeyError,TypeError) as error:blockers.append("Legacy configuration is incompatible: "+name+" ("+type(error).__name__+")")
     for name in ("owner_review_drafts.csv.tmp","owner_review_drafts.csv.bak"):
         if (runtime/name).exists():blockers.append("Interrupted legacy review draft store: "+name)
     # Validate pointer and cache paths before any engine reads.

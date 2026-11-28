@@ -94,6 +94,7 @@ def import_package(package, target, confirmed_fingerprint, *, source_root=None):
         # Store validated custom fields in the current application's canonical schema.
         fields = report.get("custom_fields", {"fields": [], "mappings": []})
         custom_path=config / "custom_fields.json"
+        if custom_path.exists() and "config/custom_fields.json" not in expected:raise ValueError("Migration copied unconfirmed custom configuration")
         if not custom_path.exists():custom_path.write_text(json.dumps(fields, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         settings = {"data_dir": str(source_root) if source_root else report.get("source_path", ""),
                     "requires_rescan": True}

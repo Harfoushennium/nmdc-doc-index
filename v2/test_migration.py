@@ -29,6 +29,8 @@ class MigrationPublicApiRegression(unittest.TestCase):
             try:
                 with self.assertRaisesRegex(ValueError,'reparse|[Ss]ymlink'):
                     reset_workspace(alias/'workspace','RESET')
+                with self.assertRaisesRegex(ValueError,'reparse|[Ss]ymlink'):
+                    undo_approval(alias/'workspace'/'state','UNDO')
                 self.assertEqual(original.read_bytes(),b'protected')
             finally:alias.rmdir() if os.name=='nt' else alias.unlink()
 
@@ -44,12 +46,25 @@ class MigrationPublicApiRegression(unittest.TestCase):
             real_copy=shutil.copytree
             def copy(source,target,*args,**kwargs):
                 if Path(source).resolve()==(legacy/'config').resolve():
-                    (legacy/'config'/'custom_fields.json').write_text('{"fields":[],"mappings":[]}')
+                    extra=legacy/'config'/'custom_fields.json'
+                    extra.write_text('{"unconfirmed":"invalid configuration"}')
+                    result=real_copy(source,target,*args,**kwargs)
+                    extra.unlink()
+                    return result
                 return real_copy(source,target,*args,**kwargs)
             with patch('v2.migration.shutil.copytree',side_effect=copy):
                 with self.assertRaisesRegex(ValueError,'changed|unconfirmed'):
                     import_package(legacy,root/'new-workspace',report['preview_sha256'])
             self.assertFalse((root/'new-workspace').exists())
+
+    def test_retention_preserves_unknown_zip_without_blocking_verified_backup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);backups=root/'backups';backups.mkdir()
+            unknown=backups/'owner-archive.zip';unknown.write_bytes(b'unknown archive')
+            result=create_bundle(root,'verified backup with unrelated archive')
+            self.assertTrue(Path(result['path']).is_file())
+            self.assertEqual(unknown.read_bytes(),b'unknown archive')
+            self.assertEqual(len(result['retention_skipped']),1)
     def test_import_protects_declared_data_without_explicit_source_override(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);legacy=root/'legacy';legacy.mkdir();data=root/'DATA';data.mkdir()
