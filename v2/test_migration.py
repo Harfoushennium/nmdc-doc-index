@@ -470,6 +470,223 @@ class MigrationPublicApiRegression(unittest.TestCase):
             finally:
                 app.invalidate(); app.lock.close()
 
+    def test_ir01_moved_data_resolves_relative_document_links_and_preserves_originals_across_all_views(self):
+        import io, json, os, zipfile
+        from xml.etree import ElementTree as ET
+        from v2.launcher import export_bytes, ordered_fields
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            legacy = root / "legacy"; legacy.mkdir()
+            old_data = root / "old_DATA"; (old_data / "METHODS").mkdir(parents=True)
+            old_wb = old_data / "METHODS" / "fixture.xlsx"; old_wb.write_bytes(b"fixture-ir01")
+            moved_data = root / "moved_DATA"; (moved_data / "METHODS").mkdir(parents=True)
+            moved_wb = moved_data / "METHODS" / "fixture.xlsx"; moved_wb.write_bytes(b"fixture-ir01")
+
+            tpl = App(root / "template")
+            try:
+                shutil.copytree(tpl.config, legacy / "config")
+            finally:
+                tpl.invalidate(); tpl.lock.close()
+
+            rel_link = "../PDFs/Doc 01.pdf"
+            staged = stage_update(
+                data_dir=old_data,
+                state_dir=legacy / "runtime",
+                processor=lambda _p, rel: [{
+                    "Event_Key": "EV-IR01",
+                    "Global_Document_Key": "DOC-IR01",
+                    "Revision_Key": "REV-IR01",
+                    "Document No.": "2701-PR-001",
+                    "Document Title": "Relocated Link Test",
+                    "Project No.": "2701",
+                    "Revision": "01",
+                    "Document_Row_Flag": 1,
+                    "Revision_Row_Flag": 1,
+                    "Is_Latest_Revision": 1,
+                    "Is_Latest_Event": 1,
+                    "Document Link": rel_link,
+                    "Original_Hyperlink_Target": rel_link,
+                    "Source File": rel,
+                    "Source Sheet": "Procedures",
+                    "Source Row": 2,
+                    "Source Cell": "B2",
+                }],
+            )
+            approve_stage(legacy / "runtime", staged["run_id"])
+            report = preview_package(legacy)
+            self.assertEqual(report["blockers"], [])
+
+            target = root / "migrated-ir01"
+            import_package(legacy, target, report["preview_sha256"], source_root=moved_data)
+
+            # Canonical approved records and manifest remain unaltered.
+            approved_state = load_approved_state(target / "state")
+            self.assertEqual(approved_state["manifest"]["data_dir"], str(old_data.resolve()))
+            self.assertEqual(approved_state["records"][0]["Document Link"], rel_link)
+            self.assertEqual(approved_state["records"][0]["Original_Hyperlink_Target"], rel_link)
+
+            expected_doc_link = os.path.abspath(moved_data.resolve() / "PDFs" / "Doc 01.pdf")
+            expected_wb_path = str(moved_wb.resolve())
+
+            migrated = App(target)
+            try:
+                for scope in ("events", "documents", "revisions"):
+                    rows = migrated.view(scope)
+                    self.assertEqual(len(rows), 1, scope)
+                    row = rows[0]
+                    self.assertEqual(row["Source Workbook Path"], expected_wb_path, scope)
+                    self.assertEqual(row["Document Link"], expected_doc_link, scope)
+                    self.assertEqual(row["Original_Hyperlink_Target"], rel_link, scope)
+
+                    fields = ordered_fields(rows, scope)
+                    raw_xlsx = export_bytes(rows, fields, "xlsx")
+                    with zipfile.ZipFile(io.BytesIO(raw_xlsx)) as archive:
+                        self.assertIsNone(archive.testzip())
+                        self.assertIn("xl/tables/table1.xml", archive.namelist())
+                        shared = "".join(ET.fromstring(archive.read("xl/sharedStrings.xml")).itertext())
+                        self.assertIn(rel_link, shared)
+                        self.assertIn(expected_doc_link, shared)
+                        self.assertIn(expected_wb_path, shared)
+                        if os.name == "nt":
+                            rels = ET.fromstring(archive.read("xl/worksheets/_rels/sheet1.xml.rels"))
+                            targets = [e.attrib["Target"] for e in rels if e.attrib["Type"].endswith("/hyperlink")]
+                            self.assertEqual(len(targets), 2, scope)
+            finally:
+                migrated.invalidate()
+                migrated.lock.close()
+
+    def test_ir02_moved_data_subsequent_approval_undo_and_older_migrated_snapshots(self):
+        import os, time, xlsxwriter
+
+        def write_register(path, title, link_target):
+            with xlsxwriter.Workbook(str(path)) as wb:
+                ws = wb.add_worksheet("Procedures")
+                ws.write_row(0, 0, ["Document No.", "Document Title", "Revision", "Event Date"])
+                ws.write_row(1, 0, ["2702-PR-001", title, "01", "2026-01-10"])
+                ws.write_url(1, 0, f"external:{link_target}", string="2702-PR-001")
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            legacy = root / "legacy"; legacy.mkdir()
+            old_data = root / "old_DATA"; (old_data / "METHODS").mkdir(parents=True)
+            old_wb = old_data / "METHODS" / "2702_Methods_Register.xlsx"
+
+            tpl = App(root / "template")
+            try:
+                shutil.copytree(tpl.config, legacy / "config")
+            finally:
+                tpl.invalidate(); tpl.lock.close()
+
+            def record_for(rel, ver):
+                return [{
+                    "Event_Key": f"EV-{ver}",
+                    "Global_Document_Key": "DOC-IR02",
+                    "Revision_Key": f"REV-{ver}",
+                    "Document No.": "2702-PR-001",
+                    "Document Title": f"Version {ver}",
+                    "Project No.": "2702",
+                    "Revision": ver,
+                    "Document_Row_Flag": 1,
+                    "Revision_Row_Flag": 1,
+                    "Is_Latest_Revision": 1,
+                    "Is_Latest_Event": 1,
+                    "Document Link": f"../PDFs/{ver}.pdf",
+                    "Original_Hyperlink_Target": f"../PDFs/{ver}.pdf",
+                    "Source File": rel,
+                    "Source Sheet": "Procedures",
+                    "Source Row": 2,
+                    "Source Cell": "A2",
+                }]
+
+            # Legacy history with two approved snapshots: run_1 (older) -> run_2 (latest at migration).
+            write_register(old_wb, "Version V1", "../PDFs/V1.pdf")
+            s1 = stage_update(data_dir=old_data, state_dir=legacy / "runtime", processor=lambda _p, r: record_for(r, "V1"))
+            approve_stage(legacy / "runtime", s1["run_id"])
+            write_register(old_wb, "Version V2", "../PDFs/V2.pdf")
+            v2_bytes = old_wb.read_bytes()
+            s2 = stage_update(data_dir=old_data, state_dir=legacy / "runtime", processor=lambda _p, r: record_for(r, "V2"))
+            approve_stage(legacy / "runtime", s2["run_id"])
+
+            report = preview_package(legacy)
+            self.assertEqual(report["blockers"], [])
+
+            # Missing workbook in moved DATA must fail closed.
+            moved_missing = root / "moved_missing"; moved_missing.mkdir()
+            with self.assertRaisesRegex(ValueError, "Cannot verify moved DATA workbook"):
+                import_package(legacy, root / "target-missing", report["preview_sha256"], source_root=moved_missing)
+            self.assertFalse((root / "target-missing").exists())
+
+            # Same-size changed workbook in moved DATA must fail closed.
+            moved_data = root / "moved_DATA"; (moved_data / "METHODS").mkdir(parents=True)
+            moved_wb = moved_data / "METHODS" / "2702_Methods_Register.xlsx"
+            altered = bytearray(v2_bytes)
+            altered[-1] ^= 0xFF
+            moved_wb.write_bytes(bytes(altered))
+            self.assertEqual(moved_wb.stat().st_size, len(v2_bytes))
+            with self.assertRaisesRegex(ValueError, "fingerprint"):
+                import_package(legacy, root / "target-changed", report["preview_sha256"], source_root=moved_data)
+            self.assertFalse((root / "target-changed").exists())
+
+            # Verified moved DATA imports cleanly.
+            moved_wb.write_bytes(v2_bytes)
+            target = root / "migrated-ir02"
+            import_package(legacy, target, report["preview_sha256"], source_root=moved_data)
+
+            migrated = App(target)
+            try:
+                self.assertTrue(migrated.settings["requires_rescan"])
+                # Imported run_2 resolves against moved_data across all scopes.
+                for scope in ("events", "documents", "revisions"):
+                    row = migrated.view(scope)[0]
+                    self.assertEqual(row["Source Workbook Path"], str(moved_wb.resolve()), scope)
+                    self.assertEqual(row["Document Link"], os.path.abspath(moved_data.resolve() / "PDFs" / "V2.pdf"), scope)
+                    self.assertEqual(row["Original_Hyperlink_Target"], "../PDFs/V2.pdf", scope)
+
+                # Subsequent full runtime scan & approval (run_3) on moved_data clears requires_rescan and binds manifest to moved_data.
+                write_register(moved_wb, "Version V3", "../PDFs/V3.pdf")
+                migrated.start(False)
+                deadline = time.time() + 15
+                while migrated.job["status"] == "running" and time.time() < deadline:
+                    time.sleep(0.05)
+                self.assertEqual(migrated.job["status"], "complete", migrated.job)
+                p3 = migrated.proposal()
+                self.assertTrue(p3["run"])
+                migrated.save_choices(p3)
+                migrated.approve({"run": p3["run"]})
+                self.assertEqual(migrated.approved()["run_id"], p3["run"])
+                self.assertEqual(migrated.approved()["manifest"]["data_dir"], str(moved_data.resolve()))
+                self.assertFalse(migrated.settings["requires_rescan"])
+                for scope in ("events", "documents", "revisions"):
+                    row = migrated.view(scope)[0]
+                    self.assertEqual(row["Source Workbook Path"], str(moved_wb.resolve()), scope)
+                    self.assertEqual(row["Document Link"], os.path.abspath(moved_data.resolve() / "PDFs" / "V3.pdf"), scope)
+                    self.assertEqual(row["Original_Hyperlink_Target"], r"..\PDFs\V3.pdf", scope)
+
+                # Undo run_3 -> run_2 (even after moved_wb changed/was removed): restores exact run_2 records & forces rescan.
+                moved_wb.unlink()
+                undo_r3 = migrated.undo({"confirm": "UNDO"})
+                self.assertEqual(undo_r3["restored_run_id"], s2["run_id"])
+                self.assertTrue(migrated.settings["requires_rescan"])
+                self.assertEqual(migrated.approved()["records"][0]["Event_Key"], "EV-V2")
+                for scope in ("events", "documents", "revisions"):
+                    row = migrated.view(scope)[0]
+                    self.assertEqual(row["Source Workbook Path"], str(moved_wb.resolve()), scope)
+                    self.assertEqual(row["Document Link"], os.path.abspath(moved_data.resolve() / "PDFs" / "V2.pdf"), scope)
+                    self.assertEqual(row["Original_Hyperlink_Target"], "../PDFs/V2.pdf", scope)
+
+                # Undo run_2 -> older pre-migration snapshot run_1: must NOT silently reinterpret run_1 to moved_data.
+                undo_r2 = migrated.undo({"confirm": "UNDO"})
+                self.assertEqual(undo_r2["restored_run_id"], s1["run_id"])
+                for scope in ("events", "documents", "revisions"):
+                    row = migrated.view(scope)[0]
+                    self.assertEqual(row["Source Workbook Path"], str(old_wb.resolve()), scope)
+                    self.assertEqual(row["Document Link"], os.path.abspath(old_data.resolve() / "PDFs" / "V1.pdf"), scope)
+                    self.assertEqual(row["Original_Hyperlink_Target"], "../PDFs/V1.pdf", scope)
+            finally:
+                migrated.invalidate()
+                migrated.lock.close()
+
 
 if __name__ == "__main__":
     unittest.main()
