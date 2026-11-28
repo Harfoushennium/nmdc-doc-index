@@ -8,9 +8,12 @@ MAP_COLUMNS=("Enabled?","Field Name","Keyword / Pattern","Result","Match Type","
 DOC_COLUMNS=("Flag Level","Project No.","Source Family","Discipline","Category","Subcategory","Document No.","Document Title","Company Document No.","Latest Revision","Latest Event Date","Latest Event Status","Document Link","Source File","Source Sheet","Source Row","Source Cell","Global Document Key","Original_Hyperlink_Target","Source Workbook Path")
 def enabled(v):
     if isinstance(v,bool):return v
-    return str(v).strip().upper() in {"TRUE","YES","Y","1","ON","CHECKED"}
+    value=str(v).strip().upper()
+    if value in {"TRUE","YES","Y","1","ON","CHECKED"}:return True
+    if value in {"FALSE","NO","N","0","OFF","UNCHECKED",""}:return False
+    raise ValueError("Invalid Enabled? value")
 def validate(payload,reserved):
-    if not isinstance(payload,dict):raise ValueError("Invalid custom field configuration")
+    if not isinstance(payload,dict) or set(payload)!={"fields","mappings"}:raise ValueError("Invalid custom field configuration schema")
     fields,maps=payload.get("fields"),payload.get("mappings")
     if not isinstance(fields,list) or not isinstance(maps,list) or len(fields)>200 or len(maps)>5000:raise ValueError("Invalid custom-field table size")
     protected={k.casefold() for k in (*DOC_COLUMNS,*reserved)}
@@ -27,11 +30,14 @@ def validate(payload,reserved):
         f["Separator"]=str(f["Separator"]) or " | "
         clean.append(f);names.add(key)
     available={k.casefold() for k in DOC_COLUMNS}|names
-    for f in clean:
+    field_order={f["Field Name"].casefold():i for i,f in enumerate(clean)}
+    for i,f in enumerate(clean):
         search=f["Search In"]
         if search.upper() not in ("ALL TEXT","*ALL TEXT*"):
             cols=[k.strip().casefold() for k in re.split("[;,]",search) if k.strip()]
             if not cols or not set(cols)<=available or f["Field Name"].casefold() in cols:raise ValueError("Unknown/self-referencing search column")
+            dependencies=[field_order[c] for c in cols if c in field_order]
+            if any(dep>=i for dep in dependencies):raise ValueError("Custom field dependency must refer to a prior field")
     for m in maps:
         if not isinstance(m,dict) or set(m)!=set(MAP_COLUMNS):raise ValueError("Invalid KeywordMappings schema")
         if any(not isinstance(v,(str,bool,int,float)) for v in m.values()):raise ValueError("Invalid mapping value")
