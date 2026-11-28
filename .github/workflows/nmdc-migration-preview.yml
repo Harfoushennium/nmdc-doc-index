@@ -1,0 +1,22 @@
+name: NMDC migration preview acceptance
+on:
+  pull_request:
+    branches: [feature/nmdc-v2-web-app]
+    paths: ['v2/migration_preview.py','v2/test_migration_preview.py','.github/workflows/nmdc-migration-preview.yml']
+permissions:
+  contents: read
+jobs:
+  preview:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install xlsxwriter==3.2.9
+      - run: python -m unittest -v v2.test_migration_preview
+      - run: git diff --exit-code -- DATA
