@@ -2,6 +2,8 @@
 
 ## Mandatory cross-harness collaboration — read first
 
+Automatically load the repository [Cross-Harness Continuity skill](.agents/skills/cross-harness-continuity/SKILL.md) for substantive project work, resumption, reviews, progress checks and handoffs. It is also bundled in Engineering Chief of Staff v1.1.0 for web chats; if not discovered by name, read the repository file directly. Follow the project-specific protocol below. Do not require the owner to remember a prompt.
+
 Follow [CHC-NMDC-001 v1.0](docs/agents/CROSS-HARNESS-COLLABORATION.md) for every implementation, review and handoff, including Codex, Antigravity and future agents. GitHub is authoritative. Verify remote HEAD before editing; publish a checkpoint at session start; commit and push each coherent tested slice promptly with harness/ticket attribution; verify the remote SHA; incrementally document evidence and update the workstream dashboard and parent issue #22. Checkpoint at milestones, at least every 15 minutes of active work when reachable, and before switching harnesses or ending. Unpublished work is not a completed handoff. Preserve branch separation, actual model attribution, independent QA and owner-only merge/release authority. Read the current version of the protocol on the integration branch even from another branch.
 
 ## Active V2 execution — read first
