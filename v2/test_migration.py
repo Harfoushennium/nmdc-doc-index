@@ -14,6 +14,46 @@ from v2.recovery import reset_workspace, undo_approval
 
 
 class MigrationPublicApiRegression(unittest.TestCase):
+    def test_import_protects_declared_data_without_explicit_source_override(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);legacy=root/'legacy';legacy.mkdir();data=root/'DATA';data.mkdir()
+            (data/'a.xlsx').write_text('fixture');template=App(root/'template')
+            try:shutil.copytree(template.config,legacy/'config')
+            finally:template.invalidate();template.lock.close()
+            stage=stage_update(data_dir=data,state_dir=legacy/'runtime',processor=lambda p,r:[{'Event_Key':'E1','Source File':r}])
+            approve_stage(legacy/'runtime',stage['run_id']);report=preview_package(legacy)
+            with self.assertRaisesRegex(ValueError,'declared source'):
+                import_package(legacy,data/'new-workspace',report['preview_sha256'])
+            self.assertFalse((data/'new-workspace').exists())
+    def test_reset_rejects_state_junction_before_touching_external_source(self):
+        import os,subprocess
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);workspace=root/'workspace';workspace.mkdir()
+            source=root/'DATA';(source/'profile').mkdir(parents=True)
+            original=source/'profile'/'source.xlsx';original.write_bytes(b'protected source')
+            try:(workspace/'state').symlink_to(source,target_is_directory=True)
+            except OSError:
+                if os.name!='nt':self.skipTest('Symlink unavailable')
+                result=subprocess.run(['cmd','/c','mklink','/J',str(workspace/'state'),str(source)],capture_output=True)
+                if result.returncode:self.skipTest('Junction unavailable')
+            try:
+                with self.assertRaisesRegex(ValueError,'reparse|Symlink|symlink'):
+                    reset_workspace(workspace,'RESET')
+                self.assertEqual(original.read_bytes(),b'protected source')
+                self.assertFalse((source/'logs').exists())
+            finally:(workspace/'state').rmdir() if os.name=='nt' else (workspace/'state').unlink()
+
+    def test_undo_after_prior_undo_restores_actual_active_predecessor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);data=root/'DATA';data.mkdir();source=data/'source.xlsx'
+            state=root/'state'
+            def approve(value):
+                source.write_text(value)
+                stage=stage_update(data_dir=data,state_dir=state,processor=lambda p,r:[{'Event_Key':value,'Source File':r}])
+                approve_stage(state,stage['run_id']);return stage['run_id']
+            one=approve('A');approve('B');undo_approval(state,'UNDO');approve('C')
+            result=undo_approval(state,'UNDO')
+            self.assertEqual(result['restored_run_id'],one)
     def test_import_requires_confirmed_preview_and_never_overwrites_target(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

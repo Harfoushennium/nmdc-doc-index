@@ -23,6 +23,9 @@ def import_package(package, target, confirmed_fingerprint, *, source_root=None):
     """
     package = Path(package).resolve(strict=True)
     target = Path(target).absolute()
+    for parent in (target,*target.parents):
+        if parent.is_symlink() or _is_reparse(parent):raise ValueError("Migration destination traverses a symlink or reparse point.")
+    target=target.resolve(strict=False)
     if target.exists():
         raise ValueError("Migration destination already exists; select a new workspace.")
     if target == package or target in package.parents or package in target.parents:
@@ -41,6 +44,11 @@ def import_package(package, target, confirmed_fingerprint, *, source_root=None):
         raise ValueError("Migration preview changed or was not confirmed; preview again.")
     if report["blockers"]:
         raise ValueError("Migration is blocked: " + "; ".join(report["blockers"]))
+    declared_source=source_root or report.get("source_path")
+    if declared_source:
+        declared=Path(declared_source).resolve()
+        if target==declared or target in declared.parents or declared in target.parents:
+            raise ValueError("New workspace must be separate from the declared source folder.")
 
     # Re-hash before copying and after copying. The preview fingerprint alone is not
     # a substitute for checking every inventoried source byte at both boundaries.
@@ -101,6 +109,14 @@ def import_package(package, target, confirmed_fingerprint, *, source_root=None):
                     "source_inventory": expected, "approved_run": report["approved_run"],
                     "approved_events": report["approved_events"], "imported_at": None}
         (scratch / "migration-manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        for name,meta in expected.items():
+            if name.startswith("runtime/") and name.split("/")[1] in ("approved","staging","cache","logs","user_flags"):
+                copied=scratch/"state"/name.removeprefix("runtime/")
+            elif name.startswith(("config/","config-history/")):copied=scratch/name
+            elif name.startswith("runtime/profile/"):continue  # Rebuildable profiler output; original retained.
+            else:copied=evidence/name
+            if not copied.is_file() or copied.stat().st_size!=meta["bytes"] or _sha256(copied)!=meta["sha256"]:
+                raise ValueError("Copied migration inventory failed exact hash reconciliation: "+name)
         if source_inventory() != expected:
             raise ValueError("Legacy package changed during import; destination was not published.")
         if target.exists():

@@ -4,7 +4,7 @@ import hashlib, json, os, shutil, time, uuid
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 
-AREAS=("state/approved","state/staging","state/cache","state/logs","state/user_flags","state/custom-fields.json","state/derived/custom-fields.json","config","config-history","settings.json","custom-fields.json","derived/custom-fields.json")
+AREAS=("state/approved","state/staging","state/cache","state/logs","state/user_flags","state/custom-fields.json","state/derived/custom-fields.json","config","config-history","settings.json","custom-fields.json","derived/custom-fields.json","migration-evidence","migration-manifest.json")
 MAX_FILES=100_000
 MAX_FILE_BYTES=512*1024**2
 MAX_TOTAL_BYTES=2*1024**3
@@ -13,8 +13,16 @@ def digest(path):
     with path.open("rb") as f:
         for chunk in iter(lambda:f.read(1024*1024),b""):h.update(chunk)
     return h.hexdigest()
+def assert_workspace_paths(root):
+    root=Path(root).absolute()
+    for path in (root,root/"state",root/"config",root/"config-history"):
+        for parent in (path,*path.parents):
+            if parent.is_symlink() or _is_reparse(parent):raise ValueError("Symlink or reparse point in workspace ancestry: "+str(parent))
+            if parent==root:break
+    return root.resolve()
+
 def inventory(root):
-    root=Path(root).resolve(); out={}; total=0
+    root=assert_workspace_paths(root); out={}; total=0
     for area in AREAS:
         p=root/area
         if p.is_symlink() or _is_reparse(p):raise ValueError("Symlink or reparse point in recovery area: "+str(p))
@@ -50,10 +58,12 @@ def verify_bundle(path):
             if h.hexdigest()!=meta["sha256"] or size!=meta["bytes"]:raise ValueError("Recovery hash mismatch")
         return manifest
 def create_bundle(root,reason):
-    root=Path(root).resolve(); dest=root/"backups"
+    root=assert_workspace_paths(root); dest=root/"backups"
     if dest.is_symlink() or _is_reparse(dest):raise ValueError("Backup destination must not be a reparse point")
     dest.mkdir(exist_ok=True)
     before=inventory(root)
+    required=sum(item["bytes"] for item in before.values())
+    if shutil.disk_usage(dest).free<required+16*1024**2:raise ValueError("Insufficient free space for a verified recovery bundle")
     name=time.strftime("%Y%m%d-%H%M%S")+"-"+uuid.uuid4().hex[:8]+".zip"
     tmp=dest/(name+".tmp"); final=dest/name
     try:
@@ -104,7 +114,7 @@ def restore_to_new_workspace(path,target):
 
 def reset_workspace(root, confirmation):
     """Back up then clear only disposable approved/staged runtime views."""
-    root=Path(root).resolve()
+    root=assert_workspace_paths(root)
     if confirmation != "RESET":raise ValueError('Type RESET to confirm clearing approved and staged runtime state.')
     bundle=create_bundle(root,"Before runtime reset")
     state=root/"state"
@@ -126,6 +136,8 @@ def undo_approval(state_dir, confirmation):
     if current_path.is_symlink() or _is_reparse(current_path):raise ValueError("Approved pointer is a reparse point")
     current=json.loads(current_path.read_text(encoding="utf-8")) if current_path.exists() else {}
     if not current.get("run_id"):raise ValueError("There is no approved update to undo.")
+    import re
+    if not re.fullmatch(r"[A-Za-z0-9_-]+",str(current["run_id"])):raise ValueError("Unsafe approved run pointer")
     versions=state/"approved"/"versions"
     if versions.is_symlink() or _is_reparse(versions):raise ValueError("Approved versions directory is a reparse point")
     for child in versions.iterdir():
@@ -136,16 +148,20 @@ def undo_approval(state_dir, confirmation):
                 raise ValueError("Approved version inventory is inconsistent")
     history=state/"logs"/"history.jsonl"
     if history.is_symlink() or _is_reparse(history):raise ValueError("Approval history is a reparse point")
-    approvals=[]
+    predecessors={};active=""
     if history.exists():
         for line in history.read_text(encoding="utf-8").splitlines():
             row=json.loads(line)
-            if row.get("event")=="APPROVED" and row.get("decision")=="APPROVED":approvals.append(str(row.get("run_id","")))
-    positions=[i for i,run in enumerate(approvals) if run==str(current["run_id"])]
-    if not positions:raise ValueError("Approval history does not reconcile with the current pointer")
-    pos=positions[-1]
-    prior=next((approvals[i] for i in range(pos-1,-1,-1) if approvals[i] and approvals[i]!=str(current["run_id"])),"")
+            if row.get("event")=="APPROVED" and row.get("decision")=="APPROVED":
+                run=str(row.get("run_id",""))
+                if active!=run:predecessors[run]=active
+                active=run
+            elif row.get("event")=="UNDO_APPROVAL":active=str(row.get("restored_run_id",""))
+            elif row.get("event")=="RESET":active=""
+    if active!=str(current["run_id"]):raise ValueError("Approval history does not reconcile with the current pointer")
+    prior=predecessors.get(active,"")
     if not prior:raise ValueError("There is no previous approved version available to restore.")
+    if not re.fullmatch(r"[A-Za-z0-9_-]+",prior):raise ValueError("Unsafe previous approved run")
     if not (versions/prior/"records.jsonl").is_file():raise ValueError("Previous approved version is incomplete")
     backup=create_bundle(root,"Before approval undo")
     _write_pointer(current_path,{"run_id":prior,"version_path":f"versions/{prior}"})

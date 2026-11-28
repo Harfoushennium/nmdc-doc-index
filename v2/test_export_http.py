@@ -46,6 +46,7 @@ class ExportHTTPAcceptance(unittest.TestCase):
         q = {'scope': 'events', 'format': 'json'}
         status, body = self.get('/api/export-plan', q); self.assertEqual(status, 200)
         plan = json.loads(body)
+        self.assertIn('not been checked',plan['availability'])
         self.assertEqual(plan['exceptions'][0]['worksheet'], 'Register')
         self.assertEqual(plan['exceptions'][0]['cell'], 'C7')
         q['preview'] = plan['preview']

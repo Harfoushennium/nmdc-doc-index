@@ -7,6 +7,7 @@ import os
 import re
 import uuid
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
@@ -520,6 +521,10 @@ def build_dashboard_row(approved: Mapping[str, Any], stage: Mapping[str, Any]) -
     }
 
 
+@lru_cache(maxsize=64)
+def _display_source_root(root: str) -> str:
+    return str(Path(root).resolve(strict=False))
+
 def resolve_document_target(target: Any, source_file: Any, data_dir: Any) -> str:
     """Resolve a source-register hyperlink against the selected data folder.
 
@@ -540,7 +545,10 @@ def resolve_document_target(target: Any, source_file: Any, data_dir: Any) -> str
     if source.casefold().startswith("data/"):
         source = source[5:]
     relative_target = value.replace("\\", os.sep).replace("/", os.sep)
-    return str((Path(root) / Path(source).parent / relative_target).resolve(strict=False))
+    # A display hyperlink needs lexical absolute-path resolution, not filesystem
+    # canonicalization. Probing every ancestor per event stalls unavailable shares
+    # and does not prove that the eventual target will be available when clicked.
+    return os.path.abspath(Path(_display_source_root(root)) / Path(source).parent / relative_target)
 
 
 def _resolve_exchange_links(rows: Sequence[Record], data_dir: Any) -> None:

@@ -19,7 +19,9 @@ from nmdc_profiler.layout_compat import install_layout_compatibility
 from nmdc_profiler.review_decisions import apply_review_decisions
 from nmdc_profiler.source_selection import set_source_selection, read_source_exclusions
 from nmdc_profiler.rules import load_rules
-from v2.recovery import create_bundle, restore_to_new_workspace, inventory
+from v2.recovery import create_bundle, restore_to_new_workspace, inventory, reset_workspace, undo_approval, assert_workspace_paths
+from v2.migration_preview import preview_package
+from v2.migration import import_package
 from v2 import unchanged
 from v2.read_model import ReadModel, apply_filters
 from v2 import custom_fields
@@ -29,9 +31,9 @@ from collections import Counter
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
 WEB = ROOT / "v2"
-CORE = {"events": ["Project No.", "Document No.", "Revision", "Event_Key", "Source File", "Source Sheet", "Source Row", "Original_Hyperlink_Target", "Source Workbook Path"],
-        "documents": ["Project No.", "Document No.", "Global Document Key", "Source File", "Source Sheet", "Source Row", "Source Workbook Path", "Original_Hyperlink_Target"],
-        "revisions": ["Project No.", "Document No.", "Revision", "Revision Key", "Source File", "Source Sheet", "Source Row", "Source Workbook Path", "Original_Hyperlink_Target"]}
+CORE = {"events": ["Project No.", "Document No.", "Revision", "Event_Key", "Source File", "Source Sheet", "Source Row", "Original_Hyperlink_Target", "Source Workbook Path", "Document Link"],
+        "documents": ["Project No.", "Document No.", "Global Document Key", "Source File", "Source Sheet", "Source Row", "Source Workbook Path", "Original_Hyperlink_Target", "Document Link"],
+        "revisions": ["Project No.", "Document No.", "Revision", "Revision Key", "Source File", "Source Sheet", "Source Row", "Source Workbook Path", "Original_Hyperlink_Target", "Document Link"]}
 class WorkspaceLock:
     def __init__(self, root):
         self.f = (root / ".writer.lock").open("a+b")
@@ -180,7 +182,7 @@ class ScanCancelled(Exception): pass
 
 class App:
     def __init__(self, workspace):
-        self.root=workspace.resolve(); self.root.mkdir(parents=True,exist_ok=True)
+        self.root=assert_workspace_paths(workspace); self.root.mkdir(parents=True,exist_ok=True)
         self.lock=WorkspaceLock(self.root)
         self.state=self.root/"state"; self.config=self.root/"config"; self.config.mkdir(exist_ok=True)
         for p in (ROOT/"config").glob("*.csv"):
@@ -194,6 +196,7 @@ class App:
             self.job={"status":"interrupted","message":"Previous scan interrupted. Run a new scan before approval."}
             _write_json_atomic(self.job_path,self.job)
             _append_log(self.state,{"event":"SCAN_INTERRUPTED","at":utc_now()})
+        if (self.state/"approved"/"current.json").is_file():self.prepare_views()
     def save_settings(self): _write_json_atomic(self.settings_path,self.settings)
     def save_job(self,job):
         _write_json_atomic(self.job_path,job)
@@ -285,6 +288,12 @@ class App:
         self.cache={}
     def approved(self):
         marker=self.state/"approved"/"current.json"
+        if marker.exists():
+            run=str(read_json(marker,{}).get("run_id",""))
+            if not re.fullmatch(r"[A-Za-z0-9_-]+",run):raise ValueError("Unsafe approved run pointer")
+            base=self.state/"approved"/"versions"
+            version=base/run
+            if not version.resolve().is_relative_to(base.resolve()) or version.is_symlink():raise ValueError("Approved version escapes workspace")
         key=marker.read_bytes() if marker.exists() else b"legacy"
         if self.cache.get("key")!=key:
             self.invalidate()
@@ -320,6 +329,12 @@ class App:
             counts=Counter(str(r.get(group,"")).casefold() for r in matched) if group else {}
             if group and group not in model.fields:raise ValueError("Unknown grouping field")
             return {"count":len(matched),"fields":model.fields,"rows":matched[page*100:(page+1)*100],"groups":[{"value":k,"count":v} for k,v in sorted(counts.items(),key=lambda kv:(-kv[1],kv[0]))[:100]]}
+    def prepare_views(self):
+        # This work belongs to measured startup/promotion, before the UI becomes
+        # ready. Queries never construct a cold model after a normal approval.
+        for scope in CORE:
+            rows=self.view(scope)
+            self.cache["models"][scope]=ReadModel(rows,ordered_fields(rows,scope))
     def dashboard(self):
         self.idle()
         approved=self.approved()
@@ -470,6 +485,9 @@ class App:
         self.backup("Before approval")
         result=approve_stage(self.state,p["run"],require_file_review=True,allow_conflicts=False,review_removals=True)
         self.invalidate()
+        try:self.prepare_views()
+        except (ValueError,OSError,MemoryError) as error:
+            result["index_warning"]="Approved snapshot saved; derived view preparation failed: "+str(error)
         if self.settings.get("data_dir"):
             try:result["verified_unchanged_eligible"]=unchanged.certify(self.state,self.source(),self.config,unchanged.build_identity())
             except (OSError,ValueError,KeyError,TypeError):result["verified_unchanged_eligible"]=False
@@ -489,6 +507,39 @@ class App:
         target=self.root.parent/(self.root.name+"-restored-"+secrets.token_hex(5))
         if self.settings.get("data_dir") and target.is_relative_to(self.source()):raise ValueError("Recovery destination overlaps DATA")
         return restore_to_new_workspace(value,target)
+    def preview_legacy(self):
+        self.idle()
+        import tkinter as tk
+        from tkinter import filedialog
+        root=tk.Tk();root.withdraw();root.attributes("-topmost",True)
+        try:value=filedialog.askdirectory(parent=root,title="Select legacy package for read-only migration preview",mustexist=True)
+        finally:root.destroy()
+        if not value:return {"cancelled":True}
+        self.legacy_preview=preview_package(value)
+        return self.legacy_preview
+    def migrate_legacy(self,body):
+        self.idle()
+        preview=getattr(self,"legacy_preview",None)
+        if body.get("confirm")!="MIGRATE" or not preview or body.get("preview_sha256")!=preview["preview_sha256"]:
+            raise ValueError("Preview the legacy package and type MIGRATE to confirm this exact inventory.")
+        if preview["blockers"]:raise ValueError("Resolve migration compatibility blockers before import.")
+        self.backup("Before side-by-side migration")
+        target=self.root.parent/(self.root.name+"-migrated-"+secrets.token_hex(5))
+        if self.settings.get("data_dir") and (target==self.source() or self.source() in target.parents):raise ValueError("Migration destination overlaps DATA")
+        return import_package(preview["package"],target,preview["preview_sha256"])
+    def reset(self,body):
+        self.idle()
+        if body.get("confirm")!="RESET":raise ValueError("Type RESET to confirm clearing active runtime views.")
+        self.settings["requires_rescan"]=True;self.save_settings()
+        result=reset_workspace(self.root,"RESET");self.invalidate()
+        (self.state/"verified-unchanged.json").unlink(missing_ok=True)
+        return result
+    def undo(self,body):
+        self.idle();self.require_clean_review()
+        result=undo_approval(self.state,body.get("confirm"))
+        self.settings["requires_rescan"]=True;self.save_settings();self.invalidate()
+        (self.state/"verified-unchanged.json").unlink(missing_ok=True)
+        return result
     def manifest_files(self):
         self.idle()
         s=load_latest_stage(self.state)
@@ -712,7 +763,7 @@ def server_for(app):
                         fmt=q.get("format","xlsx")
                         if path=="/api/export-plan":
                             parts=partition_plan(rows,selected)
-                            return self.send(200,{"rows":len(rows),"parts":len(parts),"run":app.approved()["run_id"],"preview":preview_token(app,q,selected),"links":link_summary(rows,selected),"exceptions":link_exceptions(rows,selected,excel_target)})
+                            return self.send(200,{"rows":len(rows),"parts":len(parts),"run":app.approved()["run_id"],"preview":preview_token(app,q,selected),"links":link_summary(rows,selected),"exceptions":link_exceptions(rows,selected,excel_target),"availability":"Targets have not been checked for availability. Native/formula eligibility verifies syntax only; verify actual clicks on both PCs."})
                         if not hmac.compare_digest(q.get("preview",""),preview_token(app,q,selected)):
                             raise ValueError("Export preview changed; preview the current snapshot, configuration and filters again.")
                         if fmt=="xlsx":
@@ -758,8 +809,10 @@ def server_for(app):
                     elif path=="/api/index-view":result=app.save_view(body)
                     elif path=="/api/backup":result=app.backup("Manual recovery snapshot")
                     elif path=="/api/restore-copy":result=app.restore_copy()
-                    elif path=="/api/undo":
-                        app.idle();app.backup("Before undo");result=undo_last_approval(app.state);app.invalidate()
+                    elif path=="/api/undo":result=app.undo(body)
+                    elif path=="/api/reset":result=app.reset(body)
+                    elif path=="/api/migration-preview":result=app.preview_legacy()
+                    elif path=="/api/migration-import":result=app.migrate_legacy(body)
                     elif path=="/api/preferences":
                         if body.get("theme") not in ("light","dark"):raise ValueError("Invalid theme")
                         app.settings["theme"]=body["theme"]

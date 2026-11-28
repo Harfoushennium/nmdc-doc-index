@@ -2,7 +2,7 @@
 from __future__ import annotations
 import csv, hashlib, json, re, posixpath
 from pathlib import Path
-from zipfile import ZipFile
+from zipfile import ZipFile, BadZipFile
 from xml.etree import ElementTree as ET
 from nmdc_profiler.ooxml import workbook_sheet_map,load_shared_strings,cell_value
 from nmdc_profiler.excel_bridge import load_approved_state,load_latest_stage
@@ -98,7 +98,11 @@ def preview_package(package):
         size=path.stat().st_size
         total_bytes+=size
         if size>MAX_INPUT_FILE or total_bytes>MAX_INPUT_BYTES or len(files)>=MAX_INPUT_FILES:raise ValueError("Legacy migration inventory exceeds configured bounds")
-        files[path.relative_to(package).as_posix()]={"bytes":size,"sha256":digest(path)}
+        try:checksum=digest(path)
+        except OSError:
+            blockers.append("Legacy file is unreadable; make it locally available before migration: "+path.relative_to(package).as_posix())
+            return
+        files[path.relative_to(package).as_posix()]={"bytes":size,"sha256":checksum}
     for p in children(runtime,("approved","staging","cache","logs","user_flags","profile","owner_review_drafts.csv","owner_review_drafts.csv.tmp","owner_review_drafts.csv.bak","user_custom_fields.csv","user_keyword_mappings.csv")):
         add_file(p)
     for p in runtime.rglob("*"):
@@ -174,7 +178,11 @@ def preview_package(package):
         p=workbook_paths[0]
         if p.is_symlink() or _is_reparse(p):raise ValueError("Legacy workbook symlink or reparse point")
         workbook=p.name;add_file(p)
-        tables,table_warnings=workbook_tables(p);warnings.extend(table_warnings)
+        try:tables,table_warnings=workbook_tables(p)
+        except (OSError,ValueError,BadZipFile,ET.ParseError,KeyError) as error:
+            tables={};table_warnings=[]
+            blockers.append("Legacy workbook could not be inspected: "+p.name+" ("+type(error).__name__+")")
+        warnings.extend(table_warnings)
         if table_warnings:blockers.append("Formula-backed legacy settings require review")
         unsupported=sorted(name.split(":",1)[1] for name in tables if name.startswith("UNSUPPORTED:"))
         if unsupported:blockers.append("Unsupported workbook tables: "+", ".join(unsupported))

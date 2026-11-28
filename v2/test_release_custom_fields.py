@@ -16,6 +16,8 @@ class CustomFieldAcceptance(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 custom_fields.validate({"fields":[field(enabled=value)],"mappings":[]},[])
         with self.assertRaises(ValueError):custom_fields.validate({"fields":[],"mappings":[],"enabled":True},[])
+        with self.assertRaisesRegex(ValueError,'Mixed star/question'):
+            custom_fields.validate({'fields':[field()], 'mappings':[mapping('A*??','MATCH',kind='WILDCARD')]},[])
 
     def test_vba_like_supported_wildcards_priority_first_unique_and_stable_ties(self):
         rows=[{"Document Title":"prefix ABC-123 suffix Alpha alpha BETA"}]

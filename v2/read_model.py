@@ -57,7 +57,12 @@ class ReadModel:
             c=self.col(group)
             groups=[{"value":self.rows[pos].get(group,""),"count":n} for pos,n in self.db.execute(f"SELECT min(position),count(*) FROM records{where} GROUP BY {c} ORDER BY count(*) DESC,{c} LIMIT 100",args)]
         return {"count":count,"fields":self.fields,"rows":[self.rows[i[0]] for i in ids],"groups":groups}
-    def close(self):self.db.close()
+    def close(self):
+        if self.db is not None:self.db.close();self.db=None
+    def __del__(self):
+        # Destructor cleanup is a fallback for callers that did not own a context.
+        try:self.close()
+        except Exception:pass
 
 def apply_filters(rows,filters,fields):
     if not isinstance(filters,dict):raise ValueError("Invalid filters")

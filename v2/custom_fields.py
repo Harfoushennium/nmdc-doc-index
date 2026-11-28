@@ -51,6 +51,7 @@ def validate(payload,reserved):
         except (ValueError,OverflowError):raise ValueError("Invalid keyword priority")
         # Unsupported VBA Like constructs are never silently approximated.
         if m["Match Type"]=="WILDCARD" and any(ch in m["Keyword / Pattern"] for ch in "[]#"):raise ValueError("Legacy wildcard contains unsupported VBA Like constructs; review mapping")
+        if m["Match Type"]=="WILDCARD" and "*" in m["Keyword / Pattern"] and "?" in m["Keyword / Pattern"]:raise ValueError("Mixed star/question wildcard extraction is unsupported; review mapping")
         out.append(m)
     return {"fields":clean,"mappings":out}
 def wildcard(text,pattern):
