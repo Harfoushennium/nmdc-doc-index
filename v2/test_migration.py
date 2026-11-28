@@ -443,12 +443,28 @@ class MigrationPublicApiRegression(unittest.TestCase):
                     # Omitting source_root while a remapped source is active must fail closed (no silent override).
                     st_omit, _ = post("/api/migration-import", {"confirm": "MIGRATE", "preview_sha256": preview["preview_sha256"]})
                     self.assertEqual(st_omit, 400)
-                    st_imp, imp = post("/api/migration-import", {"confirm": "MIGRATE", "preview_sha256": preview["preview_sha256"], "source_root": src_resp["source_root"]})
-                    self.assertEqual(st_imp, 200)
+                    confirmed = {"confirm": "MIGRATE", "preview_sha256": preview["preview_sha256"],
+                                 "source_root": src_resp["source_root"]}
+                    moved_workbook = moved_data / "fixture.xlsx"
+                    moved_workbook.write_bytes(b"altered")
+                    rejected, error = post("/api/migration-import", confirmed)
+                    self.assertEqual(rejected, 400, error)
+                    self.assertIn("fixture.xlsx", error["error"])
+                    self.assertFalse(list(root.glob("active-workspace-migrated-*")))
+                    self.assertEqual(moved_workbook.read_bytes(), b"altered")
+
+                    moved_workbook.write_bytes(b"fixture")
+                    st_imp, imp = post("/api/migration-import", confirmed)
+                    self.assertEqual(st_imp, 200, imp)
                     self.assertIsNone(app.legacy_source_override)
-                    migrated_settings = json.loads((Path(imp["workspace"]) / "settings.json").read_text(encoding="utf-8"))
-                    self.assertEqual(migrated_settings["data_dir"], str(moved_data.resolve()))
-                    self.assertTrue(migrated_settings["requires_rescan"])
+                    migrated = App(Path(imp["workspace"]))
+                    try:
+                        self.assertEqual(migrated.settings["data_dir"], str(moved_data.resolve()))
+                        self.assertTrue(migrated.settings["requires_rescan"])
+                        self.assertEqual(migrated.view("events")[0]["Source Workbook Path"], str(moved_workbook.resolve()))
+                    finally:
+                        migrated.invalidate()
+                        migrated.lock.close()
                 finally:
                     server.shutdown(); thread.join(); server.server_close()
             finally:

@@ -346,6 +346,8 @@ class App:
             raw=a["records"]
             rows=[dict(r) for r in (raw if scope=="events" else build_document_rows(raw) if scope=="documents" else build_revision_rows(raw))]
             source_root=a.get("manifest",{}).get("data_dir","")
+            migration = read_json(self.root / "migration-manifest.json", {})
+            remap = migration.get("source_remap", {}) if migration.get("approved_run") == a["run_id"] else {}
             if scope!="events":
                 by_source={(r.get("Source File"),r.get("Source Sheet"),str(r.get("Source Row"))):r for r in raw}
                 for r in rows:
@@ -353,8 +355,11 @@ class App:
                     r["Original_Hyperlink_Target"]=orig.get("Original_Hyperlink_Target","")
                     if not r.get("Document Link"):r["Document Link"]=orig.get("Document Link","")
             for r in rows:
-                r["Source Workbook Path"]=str(Path(source_root)/str(r.get("Source File",""))) if source_root else str(r.get("Source File",""))
-                if r.get("Document Link"):r["Document Link"]=resolve_document_target(r["Document Link"],r.get("Source File",""),source_root)
+                source_file = str(r.get("Source File", ""))
+                workbook_root = remap["root"] if source_file in remap.get("workbooks", {}) else source_root
+                r["Source Workbook Path"] = str(Path(workbook_root) / source_file) if workbook_root else source_file
+                if r.get("Document Link"):
+                    r["Document Link"] = resolve_document_target(r["Document Link"], source_file, workbook_root)
             if scope=="documents":custom_fields.enrich(rows,self.custom_fields())
             views[scope]=rows
         return views[scope]
