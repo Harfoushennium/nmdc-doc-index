@@ -34,4 +34,11 @@ class ExportAcceptance(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(export_bytes([row],list(row),"xlsx"))) as z:
             self.assertNotIn("xl/worksheets/_rels/sheet1.xml.rels",z.namelist()) if "xl/worksheets/_rels/sheet1.xml.rels" not in z.namelist() else self.assertNotIn(b"/hyperlink",z.read("xl/worksheets/_rels/sheet1.xml.rels"))
             self.assertIn(b"javascript:alert(1)",z.read("xl/sharedStrings.xml"))
+    def test_all_untrusted_formula_strings_remain_literal(self):
+        row={"Document No.":"0001","Document Title":"{=1+1}","Event Status":"=HYPERLINK(\"https://example.invalid\",\"click\")","Revision":"-01"}
+        with zipfile.ZipFile(io.BytesIO(export_bytes([row],list(row),"xlsx"))) as z:
+            sheet=ET.fromstring(z.read("xl/worksheets/sheet1.xml"))
+            self.assertEqual(sheet.findall(".//"+NS+"f"),[])
+            strings="".join(ET.fromstring(z.read("xl/sharedStrings.xml")).itertext())
+            for value in row.values():self.assertIn(value,strings)
 if __name__=="__main__":unittest.main()
