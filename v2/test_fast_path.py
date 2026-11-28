@@ -4,7 +4,7 @@ from pathlib import Path
 from nmdc_profiler.runtime_engine import stage_runtime_update
 from nmdc_profiler.source_access import install_resilient_source_access
 from nmdc_profiler.layout_compat import install_layout_compatibility
-from v2.launcher import App
+from v2.launcher import App, filter_rows, apply_filters, ordered_fields
 from v2.unchanged import check,build_identity
 
 def hashes(root):
@@ -56,6 +56,29 @@ def main(exe):
             proposal=api("/api/review");api("/api/save-choices",{"run":proposal["run"],"files":proposal["files"],"draft_version":proposal["draft_version"]})
             approval=api("/api/approve",{"run":proposal["run"]})
             assert approval["verified_unchanged_eligible"],approval
+            # Compare indexed API results against the existing Python query semantics.
+            scratch=App(root/"query-reference")
+            try:
+                import shutil
+                shutil.copytree(workspace/"state"/"approved",scratch.state/"approved")
+                indexed_tests=0;query_times=[]
+                for scope in ("events","documents","revisions"):
+                    reference=scratch.view(scope);fields=ordered_fields(reference,scope)
+                    first=reference[0];doc=str(first.get("Document No.",""))
+                    for query,col,sort,desc,filters in [
+                        ('"'+doc+'"',"Document No.","",False,{}),
+                        (doc[:4],"","Document No.",True,{}),
+                        ("-__no_match_fixture__","", "Revision",False,{}),
+                        ("","", "Document No.",False,{"Project No.":[str(first["Project No."])]}),
+                        ("__no_match_fixture__","","",False,{})]:
+                        from urllib.parse import urlencode
+                        params=urlencode({"scope":scope,"q":query,"column":col,"sort":sort,"desc":int(desc),"filters":json.dumps(filters)})
+                        t=time.perf_counter();answer=api("/api/index?"+params);query_times.append(time.perf_counter()-t)
+                        expected_rows=apply_filters(filter_rows(reference,query,col,sort,desc),filters,fields)
+                        assert answer["count"]==len(expected_rows) and answer["rows"]==expected_rows[:100],(scope,query,col,sort)
+                        indexed_tests+=1
+                assert api("/api/index-view",{"name":"Test view","scope":"events","columns":["Document No."],"filters":{}})["Test view"]["columns"]==["Document No."]
+            finally:scratch.invalidate();scratch.lock.close()
             state=workspace/"state";ptr=(state/"approved"/"current.json").read_bytes();latest=(state/"staging"/"latest.json").read_bytes()
             times=[]
             for _ in range(3):
@@ -72,7 +95,7 @@ def main(exe):
             report={"serial_stage_seconds":round(serial_time,3),"packaged_parallel_job_seconds":round(parallel_time,3),
                     "workers":parallel["phase_times"]["extraction_workers"],"events":parallel["staged_records"],
                     "serial_parallel_exact_stage_parity":True,"packaged_unchanged_api_median_seconds":round(statistics.median(times),3),
-                    "no_new_proposal":True,"config_change_invalidated_gate":True,"source_hashes_unchanged":hashes(data)==before}
+                    "no_new_proposal":True,"config_change_invalidated_gate":True,"indexed_query_parity_cases":indexed_tests,"indexed_api_median_seconds_including_cold_builds":round(statistics.median(query_times),6),"source_hashes_unchanged":hashes(data)==before}
             assert report["source_hashes_unchanged"]
             api("/api/exit",{});assert proc.wait(timeout=15)==0
             Path("v2-fast-path-metrics.json").write_text(json.dumps(report,indent=2),encoding="utf-8");print(json.dumps(report,indent=2))
