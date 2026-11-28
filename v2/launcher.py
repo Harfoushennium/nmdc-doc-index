@@ -32,11 +32,12 @@ CORE = {"events": ["Project No.", "Document No.", "Revision", "Event_Key", "Sour
 class WorkspaceLock:
     def __init__(self, root):
         self.f = (root / ".writer.lock").open("a+b")
-        self.f.seek(0)
-        if not self.f.read(1):
-            self.f.write(b"0"); self.f.flush()
-        self.f.seek(0)
         try:
+            # Reading the lock byte itself raises on Windows while another writer holds it.
+            # Inspect metadata only; all lock-file operations are inside the close-on-error guard.
+            if os.fstat(self.f.fileno()).st_size==0:
+                self.f.write(b"0"); self.f.flush()
+            self.f.seek(0)
             if os.name == "nt":
                 import msvcrt
                 msvcrt.locking(self.f.fileno(), msvcrt.LK_NBLCK, 1)
