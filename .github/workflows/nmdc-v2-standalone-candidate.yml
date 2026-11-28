@@ -38,6 +38,8 @@ jobs:
         shell: pwsh
         run: |
           $env:PYTHONPATH = (Get-Location).Path
+          python -m unittest v2.test_release_review
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python v2/launcher.py --self-test
           node --check v2/app.js
       - name: Windows standalone build
