@@ -803,7 +803,7 @@ def server_for(app):
             self.send_header("X-Content-Type-Options","nosniff"); self.send_header("Referrer-Policy","no-referrer")
             self.send_header("Content-Security-Policy","default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
             if name:self.send_header("Content-Disposition",'attachment; filename="'+name+'"')
-            self.end_headers();self.wfile.write(payload)
+            self.end_headers();self.wfile.write(payload);self.wfile.flush()
         def auth(self,api=True):
             expected="127.0.0.1:"+str(self.server.server_port)
             if self.headers.get("Host")!=expected: raise PermissionError("Host rejected")
@@ -903,11 +903,15 @@ def server_for(app):
                         app.idle();app.settings["backup_retention"]=keep;app.save_settings();result={"keep":keep}
                     elif path=="/api/preferences":
                         if body.get("theme") not in ("light","dark"):raise ValueError("Invalid theme")
+                        if "density" in body and body.get("density") not in ("compact","comfortable"):raise ValueError("Invalid density")
                         app.settings["theme"]=body["theme"]
-                        if body.get("density") in ("compact","comfortable"):app.settings["density"]=body["density"]
+                        if "density" in body:app.settings["density"]=body["density"]
                         app.save_settings();result=app.settings
                     elif path=="/api/exit":
-                        app.idle();result={"status":"closing"};threading.Thread(target=self.server.shutdown,daemon=True).start()
+                        app.idle()
+                        self.send(200,{"status":"closing"})
+                        threading.Thread(target=self.server.shutdown,daemon=True).start()
+                        return
                     else:return self.send(404,{"error":"Unknown route"})
                     return self.send(200,result)
             except PermissionError as e:self.send(403,{"error":str(e)})

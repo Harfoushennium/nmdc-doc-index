@@ -1,6 +1,6 @@
 param([ValidateSet('work','home')][string]$MachineRole='work')
 $ErrorActionPreference='Stop'
-$packageRoot=$PSScriptRoot
+$packageRoot=[IO.Path]::GetFullPath($PSScriptRoot).TrimEnd([IO.Path]::DirectorySeparatorChar,[IO.Path]::AltDirectorySeparatorChar)
 $manifest=Get-Content -LiteralPath (Join-Path $packageRoot 'manifest.json') -Raw | ConvertFrom-Json
 foreach ($entry in $manifest.files) {
     $candidate=[IO.Path]::GetFullPath((Join-Path $packageRoot $entry.path))
