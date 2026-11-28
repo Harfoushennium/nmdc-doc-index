@@ -319,9 +319,13 @@ class App:
             if scope=="documents":custom_fields.enrich(rows,self.custom_fields())
             views[scope]=rows
         return views[scope]
+    def view_fields(self,scope,rows=None):
+        fields=ordered_fields(self.view(scope) if rows is None else rows,scope)
+        if scope=="documents":fields=list(dict.fromkeys(fields+[f["Field Name"] for f in self.custom_fields()["fields"]]))
+        return fields
     def query_page(self,scope,query="",column="",sort="",desc=False,filters=None,page=0,group=""):
         rows=self.view(scope);models=self.cache["models"]
-        if scope not in models:models[scope]=ReadModel(rows,ordered_fields(rows,scope))
+        if scope not in models:models[scope]=ReadModel(rows,self.view_fields(scope,rows))
         model=models[scope]
         try:return model.page(query,column,sort,desc,filters,page,group)
         except NotImplementedError:
@@ -334,7 +338,7 @@ class App:
         # ready. Queries never construct a cold model after a normal approval.
         for scope in CORE:
             rows=self.view(scope)
-            self.cache["models"][scope]=ReadModel(rows,ordered_fields(rows,scope))
+            self.cache["models"][scope]=ReadModel(rows,self.view_fields(scope,rows))
     def dashboard(self):
         self.idle()
         approved=self.approved()
@@ -347,7 +351,7 @@ class App:
     def save_view(self,body):
         name=str(body.get("name","")).strip();scope=body.get("scope","events")
         if not name or len(name)>100:raise ValueError("Invalid saved view name")
-        fields=ordered_fields(self.view(scope),scope)
+        fields=self.view_fields(scope)
         settings={k:str(body.get(k,"")) for k in ("query","column","sort","group")}
         if any(settings[k] and settings[k] not in fields for k in ("column","sort","group")):raise ValueError("Unknown view field")
         filters=body.get("filters",{});apply_filters([],filters,fields)
@@ -703,7 +707,7 @@ class App:
     def profile(self,body):
         scope=body.get("scope");name=str(body.get("name","")).strip()
         if not name or len(name)>100 or scope not in CORE:raise ValueError("Invalid profile")
-        fields=ordered_fields(self.view(scope),scope)
+        fields=self.view_fields(scope)
         cols=body.get("columns")
         if not isinstance(cols,list) or not all(isinstance(x,str) and x in fields for x in cols):raise ValueError("Invalid profile columns")
         profiles=self.settings.setdefault("export_profiles",{})
@@ -755,7 +759,7 @@ def server_for(app):
                         scope=q.get("scope","events");filters=json.loads(q.get("filters","{}"))
                         if path=="/api/index":
                             return self.send(200,app.query_page(scope,q.get("q",""),q.get("column",""),q.get("sort",""),q.get("desc")=="1",filters,max(0,int(q.get("page","0"))),q.get("group","")))
-                        rows=app.view(scope); fields=ordered_fields(rows,scope)
+                        rows=app.view(scope); fields=app.view_fields(scope,rows)
                         rows=apply_filters(filter_rows(rows,q.get("q",""),q.get("column",""),q.get("sort",""),q.get("desc")=="1"),filters,fields)
                         selected=q.get("columns","").split("|") if q.get("columns") else fields
                         selected=list(dict.fromkeys(selected+CORE[scope]))

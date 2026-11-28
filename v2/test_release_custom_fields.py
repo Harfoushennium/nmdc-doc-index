@@ -11,6 +11,18 @@ def mapping(pattern,result,priority="10",kind="CONTAINS",enabled=True,name="Deri
     return {"Enabled?":enabled,"Field Name":name,"Keyword / Pattern":pattern,"Result":result,"Match Type":kind,"Priority":priority,"Notes":""}
 
 class CustomFieldAcceptance(unittest.TestCase):
+    def test_derived_schema_survives_empty_index_and_reset(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app=App(Path(directory)/'workspace')
+            try:
+                app.save_custom_fields({'fields':[field()],'mappings':[mapping('fixture','Value')]})
+                result=app.query_page('documents','Value',column='Derived')
+                self.assertEqual(result['count'],0)
+                self.assertIn('Derived',result['fields'])
+                app.profile({'name':'Empty derived','scope':'documents','columns':['Derived']})
+                app.reset({'confirm':'RESET'})
+                self.assertIn('Derived',app.query_page('documents')['fields'])
+            finally:app.invalidate();app.lock.close()
     def test_enabled_and_top_level_schema_are_strict(self):
         for value in ("maybe", "enabled", 2):
             with self.subTest(value=value), self.assertRaises(ValueError):

@@ -44,7 +44,7 @@ def run(executable, data, output):
     assert len(before)==56, 'Unexpected corpus; verify its identity before benchmarking'
     report={'method':'3 fresh-process/workspace trials + 5 same-process/workspace warm trials; no OS cache flush',
             'platform':platform.platform(),'executable_sha256':hashlib.sha256(executable.read_bytes()).hexdigest(),
-            'workbooks':len(before),'cold':[],'warm':[],'queries':[]}
+            'workbooks':len(before),'cold':[],'warm':[],'queries':[],'approved_restart_seconds':[]}
     def measure(operation):
         start=time.perf_counter();result=operation()
         return result,round(time.perf_counter()-start,6)
@@ -103,6 +103,14 @@ def run(executable, data, output):
                             report['queries'].append(elapsed)
                             assert result['count']>0
                 api('/api/exit',{});assert process.wait(timeout=15)==0
+                restart_start=time.perf_counter()
+                process=subprocess.Popen([str(executable),'--workspace',str(workspace),'--no-browser'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,env=env)
+                line=process.stdout.readline();assert 'http://127.0.0.1:' in line,'Approved-workspace restart failed'
+                url,token=line[line.index('http://'):].strip().split('#',1);url=url.rstrip('/')
+                assert api('/api/status')['events']==40494
+                assert api('/api/index?scope=events')['count']==40494
+                report['approved_restart_seconds'].append(round(time.perf_counter()-restart_start,6))
+                api('/api/exit',{});assert process.wait(timeout=15)==0
             finally:
                 if process.poll() is None:process.terminate();process.wait(timeout=15)
         report['scratch_disk_bytes']=sum(p.stat().st_size for p in root.rglob('*') if p.is_file())
@@ -112,7 +120,7 @@ def run(executable, data, output):
     report['medians']={k:statistics.median(row[k] for row in all_trials) for k in ('full','unchanged','approval','export')}
     report['query_p95']=sorted(report['queries'])[int(.95*len(report['queries']))]
     report['release_ceilings']={
-        'startup':max(row['startup'] for row in report['cold'])<=5,
+        'startup':max([row['startup'] for row in report['cold']]+report['approved_restart_seconds'])<=5,
         'full':report['medians']['full']<=15,'unchanged':report['medians']['unchanged']<=3,
         'export':report['medians']['export']<=10,'query':report['query_p95']<=.5}
     report['owner_pc_acceptance']='NOT RUN; local development environment only'
