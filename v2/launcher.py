@@ -452,11 +452,15 @@ class App:
         excluded=read_source_exclusions(self.config/"source_exclusions.csv")
         return [dict(r,owner_excluded=str(r.get("relative_path","")).replace("\\","/").lstrip("/").casefold() in excluded) for r in manifest.get("files",[])]
     def source_choice(self,body):
-        self.idle()
+        self.idle();self.require_clean_review()
         rel=body.get("source","")
         if rel not in {r["relative_path"] for r in self.manifest_files()}: raise ValueError("Source not in current inventory")
         if type(body.get("include")) is not bool:raise ValueError("Invalid scope choice")
         self.settings["requires_rescan"]=True;self.save_settings()
+        target=self.config/"source_exclusions.csv"
+        if target.exists():
+            history=self.root/"config-history";history.mkdir(exist_ok=True)
+            shutil.copy2(target,history/("source_exclusions-"+secrets.token_hex(8)+".csv"))
         result=set_source_selection(self.config,rel,include=body["include"],reason=str(body.get("note","")))
         return result
     def custom_fields(self):
@@ -477,7 +481,7 @@ class App:
         with p.open(encoding="utf-8-sig",newline="") as h:
             r=csv.DictReader(h);return {"columns":r.fieldnames,"rows":list(r)}
     def save_project_mappings(self,body):
-        self.idle();current=self.project_mappings();columns=current["columns"];rows=body.get("rows")
+        self.idle();self.require_clean_review();current=self.project_mappings();columns=current["columns"];rows=body.get("rows")
         if body.get("columns")!=columns or not isinstance(rows,list) or len(rows)>5000:raise ValueError("Project mapping schema mismatch")
         seen=set()
         for r in rows:
@@ -502,16 +506,53 @@ class App:
         with p.open(encoding="utf-8-sig",newline="") as h:
             r=csv.DictReader(h)
             return {"columns":r.fieldnames,"rows":list(r)}
+    def validate_rules_file(self,path):
+        rules=load_rules(path)
+        for r in rules:
+            if not r.rule_id or not r.words.strip() or r.match_type not in {"EXACT","CONTAINS","STARTS_WITH","ENDS_WITH","FUZZY","REGEX"} or r.scope not in {"FILE","WORKSHEET","SECTION","HEADER","DOC_NUMBER","TITLE"} or r.family not in {"ANY","METHODS","TECH"} or r.include not in {"YES","NO"} or not 0<=r.min_confidence<=100:raise ValueError("Invalid classification rule: "+r.rule_id)
+        return rules
+    def configuration_history(self):
+        self.idle();history=self.root/"config-history"
+        types={"classification_rules":"csv","project_identity":"csv","source_exclusions":"csv","custom_fields":"json"}
+        versions=[]
+        for kind,ext in types.items():
+            for path in history.glob(kind+"-*."+ext):
+                if path.is_file() and not path.is_symlink():versions.append({"id":path.name,"kind":kind,"modified":path.stat().st_mtime,"sha256":hashlib.sha256(path.read_bytes()).hexdigest()})
+        return sorted(versions,key=lambda r:r["modified"],reverse=True)
+    def restore_configuration(self,body):
+        self.idle();self.require_clean_review()
+        if body.get("confirm") is not True:raise ValueError("Confirm configuration restoration")
+        record=next((r for r in self.configuration_history() if r["id"]==body.get("id")),None)
+        if not record:raise ValueError("Unknown configuration history version")
+        kind=record["kind"];name={"classification_rules":"classification_rules.csv","project_identity":"project_identity_overrides.csv","source_exclusions":"source_exclusions.csv","custom_fields":"custom_fields.json"}[kind]
+        history=self.root/"config-history";source=history/record["id"];target=self.config/name
+        raw=source.read_bytes()
+        if hashlib.sha256(raw).hexdigest()!=record["sha256"]:raise ValueError("Configuration history changed")
+        tmp=target.with_name(target.name+".restore-"+secrets.token_hex(6))
+        try:
+            tmp.write_bytes(raw)
+            if kind=="classification_rules":self.validate_rules_file(tmp)
+            elif kind=="project_identity":
+                from nmdc_profiler.project_identity import load_project_identity_overrides
+                load_project_identity_overrides(tmp)
+            elif kind=="source_exclusions":read_source_exclusions(tmp)
+            else:custom_fields.validate(read_json(tmp,{}),list(OUTPUT_FIELDS)+[k for fields in CORE.values() for k in fields])
+            if target.exists():shutil.copy2(target,history/(kind+"-"+secrets.token_hex(8)+target.suffix))
+            if kind!="custom_fields":self.settings["requires_rescan"]=True;self.save_settings()
+            os.replace(tmp,target);self.invalidate()
+            _append_log(self.state,{"event":"CONFIGURATION_RESTORED","at":utc_now(),"kind":kind,"version":record["id"]})
+        finally:tmp.unlink(missing_ok=True)
+        return {"restored":record["id"],"requires_rescan":bool(self.settings.get("requires_rescan"))}
     def save_rules(self,body):
-        self.idle(); current=self.rules();columns=current["columns"]
+        self.idle();self.require_clean_review(); current=self.rules();columns=current["columns"]
         if body.get("columns")!=columns or not isinstance(body.get("rows"),list):raise ValueError("Rule schema mismatch")
         rows=body["rows"]
-        if len(rows)>5000 or any(set(r)!=set(columns) for r in rows):raise ValueError("Invalid rule rows")
+        if len(rows)>5000 or any(not isinstance(r,dict) or set(r)!=set(columns) or not all(isinstance(v,str) for v in r.values()) for r in rows):raise ValueError("Invalid rule rows")
         target=self.config/"classification_rules.csv";tmp=target.with_suffix(".tmp")
         try:
             with tmp.open("w",encoding="utf-8-sig",newline="") as h:
                 w=csv.DictWriter(h,fieldnames=columns);w.writeheader();w.writerows(rows)
-            load_rules(tmp)
+            self.validate_rules_file(tmp)
             history=self.root/"config-history";history.mkdir(exist_ok=True)
             shutil.copy2(target,history/("classification_rules-"+secrets.token_hex(8)+".csv"))
             self.settings["requires_rescan"]=True;self.save_settings()
@@ -599,6 +640,7 @@ def server_for(app):
                     if path=="/api/draft-history":return self.send(200,app.draft_history())
                     if path=="/api/sources":return self.send(200,app.manifest_files())
                     if path=="/api/rules":return self.send(200,app.rules())
+                    if path=="/api/config-history":return self.send(200,app.configuration_history())
                     if path=="/api/custom-fields":return self.send(200,app.custom_fields())
                     if path=="/api/project-mappings":return self.send(200,app.project_mappings())
                     if path=="/api/history":return self.send(200,build_history_rows(app.state)[-500:])
@@ -646,6 +688,7 @@ def server_for(app):
                     elif path=="/api/approve":result=app.approve(body)
                     elif path=="/api/source-choice":result=app.source_choice(body)
                     elif path=="/api/rules":result=app.save_rules(body)
+                    elif path=="/api/config-restore":result=app.restore_configuration(body)
                     elif path=="/api/custom-fields":result=app.save_custom_fields(body)
                     elif path=="/api/project-mappings":result=app.save_project_mappings(body)
                     elif path=="/api/report":result=app.report_flags(body)
