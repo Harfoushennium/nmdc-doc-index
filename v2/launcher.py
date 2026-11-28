@@ -425,11 +425,13 @@ class App:
         if decision=='HOLD':return hold_stage(self.state,p['run'],note=note)
         if decision=='REJECT':return reject_stage(self.state,p['run'],note=note)
         raise ValueError('Unknown proposal decision')
-    def approve(self,body):
+    def approve(self,body,*,require_versions=False):
         self.idle(); p=self.proposal()
         if self.settings.get("requires_rescan"): raise ValueError("Configuration or source state changed; rescan before approval.")
         if self.settings.get("data_dir"):self.source()
         if not p["run"] or body.get("run")!=p["run"]: raise ValueError("Proposal changed")
+        if require_versions and any(type(body.get(k)) is not int or body[k]!=p[k] for k in ("draft_version","flag_version")):
+            raise ValueError("Displayed review version changed; reload and confirm the current saved choices.")
         if not p["saved"]:raise ValueError("Save all file choices before approval.")
         if p["flag_dirty"]:raise ValueError("Save flag decisions before approval.")
         # Conservative candidate: no override and no unresolved non-routine flag approval.
@@ -698,7 +700,7 @@ def server_for(app):
                     elif path=="/api/discard-draft":result=app.discard_draft(body)
                     elif path=="/api/proposal-decision":result=app.decide_proposal(body)
                     elif path=="/api/save-choices":result=app.save_choices(body)
-                    elif path=="/api/approve":result=app.approve(body)
+                    elif path=="/api/approve":result=app.approve(body,require_versions=True)
                     elif path=="/api/source-choice":result=app.source_choice(body)
                     elif path=="/api/rules":result=app.save_rules(body)
                     elif path=="/api/config-restore":result=app.restore_configuration(body)
