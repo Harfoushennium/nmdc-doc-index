@@ -2,7 +2,7 @@
 
 Use GitHub issues in `Harfoushennium/nmdc-doc-index` as the issue tracker. Prefer the connected GitHub tools; use `gh` only when installed and authenticated for this repository. Never invent an issue, mutation or authentication result. If no supported tool can perform the operation, prepare the proposed content and report the blocker.
 
-Read the relevant issue and existing discussion before editing it. Follow AGENTS.md for collaboration identifiers, role attribution, numbered PR titles, status dashboards and owner-only merge permission. PR #8 remains the active product stabilization discussion; do not create a duplicate dashboard or overwrite its status as part of an unrelated task.
+Read the relevant issue and existing discussion before editing it. Follow AGENTS.md for collaboration identifiers, role attribution, numbered PR titles, status dashboards and owner-only merge permission. For V2 production readiness, PR #29 is the active integration discussion; spec #32 and tickets #33–41 govern execution, PR #42 is the migration preview branch. Read the V2 Codex handoff and update the single existing PR #29 status dashboard in place. PR #8 remains the legacy stabilization record; do not overwrite its status or create duplicate dashboards.
 
 The triage surface is issues by default. Include pull requests only when the user requests PR triage. Use the canonical mapping in `triage-labels.md`, checking actual remote labels before applying one.
 
