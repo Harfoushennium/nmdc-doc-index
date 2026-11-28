@@ -27,4 +27,25 @@ class CustomFieldAcceptance(unittest.TestCase):
             app=App(root/"workspace")
             try:self.assertEqual(app.view("documents")[0]["Vessels"],"SAFEEN-3000 / DLB-123")
             finally:app.invalidate();app.lock.close()
+    def test_classification_save_reject_and_restore(self):
+        import copy
+        with tempfile.TemporaryDirectory() as d:
+            app=App(Path(d)/"workspace")
+            try:
+                original=app.rules()
+                edited=copy.deepcopy(original)
+                edited["rows"][0]["Notes"]="Release acceptance fixture"
+                app.save_rules(edited)
+                self.assertEqual(app.rules()["rows"][0]["Notes"],"Release acceptance fixture")
+                invalid=copy.deepcopy(edited)
+                enabled=next(r for r in invalid["rows"] if r["Enabled"]=="YES")
+                enabled["Match_Type"]="INVALID"
+                with self.assertRaises(ValueError):app.save_rules(invalid)
+                self.assertEqual(app.rules()["rows"],edited["rows"])
+                versions=app.configuration_history()
+                v=next(x for x in versions if x["kind"]=="classification_rules")
+                app.restore_configuration({"id":v["id"],"confirm":True})
+                self.assertEqual(app.rules(),original)
+                self.assertTrue(app.settings["requires_rescan"])
+            finally:app.invalidate();app.lock.close()
 if __name__=="__main__":unittest.main()
