@@ -20,6 +20,8 @@ from nmdc_profiler.source_selection import set_source_selection, read_source_exc
 from nmdc_profiler.rules import load_rules
 from v2.recovery import create_bundle, restore_to_new_workspace, inventory
 from v2 import unchanged
+from v2.read_model import ReadModel, apply_filters
+from collections import Counter
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
 WEB = ROOT / "v2"
@@ -216,12 +218,16 @@ class App:
         if self.job["status"]!="running":raise ValueError("No running scan")
         if self.job.get("phase")=="Publish proposal":raise ValueError("Publishing is already in progress; wait for completion.")
         self.cancel.set();self.job["cancel_requested"]=True;return self.job
+    def invalidate(self):
+        for model in self.cache.get("models",{}).values():model.close()
+        self.cache={}
     def approved(self):
         marker=self.state/"approved"/"current.json"
         key=marker.read_bytes() if marker.exists() else b"legacy"
         if self.cache.get("key")!=key:
+            self.invalidate()
             a=load_approved_state(self.state)
-            self.cache={"key":key,"approved":a,"views":{}}
+            self.cache={"key":key,"approved":a,"views":{},"models":{}}
         return self.cache["approved"]
     def view(self,scope):
         a=self.approved(); views=self.cache["views"]
@@ -240,6 +246,29 @@ class App:
                 if r.get("Document Link"):r["Document Link"]=resolve_document_target(r["Document Link"],r.get("Source File",""),source_root)
             views[scope]=rows
         return views[scope]
+    def query_page(self,scope,query="",column="",sort="",desc=False,filters=None,page=0,group=""):
+        rows=self.view(scope);models=self.cache["models"]
+        if scope not in models:models[scope]=ReadModel(rows,ordered_fields(rows,scope))
+        model=models[scope]
+        try:return model.page(query,column,sort,desc,filters,page,group)
+        except NotImplementedError:
+            matched=apply_filters(filter_rows(rows,query,column,sort,desc),filters or {},model.fields)
+            counts=Counter(str(r.get(group,"")).casefold() for r in matched) if group else {}
+            if group and group not in model.fields:raise ValueError("Unknown grouping field")
+            return {"count":len(matched),"fields":model.fields,"rows":matched[page*100:(page+1)*100],"groups":[{"value":k,"count":v} for k,v in sorted(counts.items(),key=lambda kv:(-kv[1],kv[0]))[:100]]}
+    def save_view(self,body):
+        name=str(body.get("name","")).strip();scope=body.get("scope","events")
+        if not name or len(name)>100:raise ValueError("Invalid saved view name")
+        fields=ordered_fields(self.view(scope),scope)
+        settings={k:str(body.get(k,"")) for k in ("query","column","sort","group")}
+        if any(settings[k] and settings[k] not in fields for k in ("column","sort","group")):raise ValueError("Unknown view field")
+        filters=body.get("filters",{});apply_filters([],filters,fields)
+        cols=body.get("columns",fields)
+        if not isinstance(cols,list) or not cols or any(k not in fields for k in cols):raise ValueError("Invalid columns")
+        views=self.settings.setdefault("index_views",{})
+        if body.get("delete") is True:views.pop(name,None)
+        else:views[name]=dict(settings,scope=scope,desc=body.get("desc") is True,filters=filters,columns=list(dict.fromkeys(cols)))
+        self.save_settings();return views
     def proposal(self):
         self.idle(); s=load_latest_stage(self.state)
         run=s.get("run_id",""); status=s.get("decision",{}).get("decision","")
@@ -303,7 +332,7 @@ class App:
         if any(f["Flag Code"] not in routine and f.get("Resolution Status")!="RESOLVED" for f in p["flags"]):
             raise ValueError("Unresolved flags require correction; candidate does not provide override.")
         result=approve_stage(self.state,p["run"],require_file_review=True,allow_conflicts=False)
-        self.cache={}
+        self.invalidate()
         if self.settings.get("data_dir"):
             try:result["verified_unchanged_eligible"]=unchanged.certify(self.state,self.source(),self.config,unchanged.build_identity())
             except (OSError,ValueError,KeyError,TypeError):result["verified_unchanged_eligible"]=False
@@ -428,10 +457,11 @@ def server_for(app):
                     if path=="/api/rules":return self.send(200,app.rules())
                     if path=="/api/history":return self.send(200,build_history_rows(app.state)[-500:])
                     if path in ("/api/index","/api/export","/api/export-plan"):
-                        scope=q.get("scope","events"); rows=app.view(scope); fields=ordered_fields(rows,scope)
-                        rows=filter_rows(rows,q.get("q",""),q.get("column",""),q.get("sort",""),q.get("desc")=="1")
+                        scope=q.get("scope","events");filters=json.loads(q.get("filters","{}"))
                         if path=="/api/index":
-                            page=max(0,int(q.get("page","0")));return self.send(200,{"count":len(rows),"fields":fields,"rows":rows[page*100:(page+1)*100]})
+                            return self.send(200,app.query_page(scope,q.get("q",""),q.get("column",""),q.get("sort",""),q.get("desc")=="1",filters,max(0,int(q.get("page","0"))),q.get("group","")))
+                        rows=app.view(scope); fields=ordered_fields(rows,scope)
+                        rows=apply_filters(filter_rows(rows,q.get("q",""),q.get("column",""),q.get("sort",""),q.get("desc")=="1"),filters,fields)
                         selected=q.get("columns","").split("|") if q.get("columns") else fields
                         selected=list(dict.fromkeys(selected+CORE[scope]))
                         if not set(selected)<=set(fields): raise ValueError("Unknown column")
@@ -467,10 +497,11 @@ def server_for(app):
                     elif path=="/api/rules":result=app.save_rules(body)
                     elif path=="/api/report":result=app.report_flags(body)
                     elif path=="/api/profile":result=app.profile(body)
+                    elif path=="/api/index-view":result=app.save_view(body)
                     elif path=="/api/backup":result=app.backup("Manual recovery snapshot")
                     elif path=="/api/restore-copy":result=app.restore_copy()
                     elif path=="/api/undo":
-                        app.idle();app.backup("Before undo");result=undo_last_approval(app.state);app.cache={}
+                        app.idle();app.backup("Before undo");result=undo_last_approval(app.state);app.invalidate()
                     elif path=="/api/preferences":
                         if body.get("theme") not in ("light","dark"):raise ValueError("Invalid theme")
                         app.settings["theme"]=body["theme"]
@@ -528,6 +559,13 @@ def self_test():
             assert app.approved()["records"][0]["Event_Key"]=="E1"
             assert hashlib.sha256(source.read_bytes()).hexdigest()==before
             assert app.view("events")[0]["Document No."]=="D1"
+            for query,column in [('"D1"',"Document No."),("d1 -missing",""),('"D1"',""),("missing","")]:
+                page=app.query_page("events",query,column,filters={"Project No.":["0001"]},group="Revision")
+                expected=filter_rows(app.view("events"),query,column)
+                assert page["rows"]==expected and page["count"]==len(expected)
+            assert app.query_page("events",filters={"Project No.":["9999"]})["count"]==0
+            assert app.query_page("events",group="Revision")["groups"]==[{"value":"A","count":1}]
+            assert app.save_view({"name":"QA","scope":"events","filters":{"Project No.":["0001"]},"columns":["Document No."]})["QA"]["columns"]==["Document No."]
             assert filter_rows(rows,'"0001"',"Document No.")==rows
             assert not filter_rows(rows,'"001"',"Document No.")
             profiles=app.profile({"name":"Test","scope":"events","columns":["Document No."]})
@@ -561,7 +599,7 @@ def self_test():
             except ValueError:pass
             else:raise AssertionError("Restore overwrote existing folder")
             print("Standalone HTTP/auth/XLSX and production update/review smoke PASS")
-        finally:s.shutdown();s.server_close();app.lock.close()
+        finally:s.shutdown();s.server_close();app.invalidate();app.lock.close()
 def main():
     p=argparse.ArgumentParser();p.add_argument("--self-test",action="store_true");p.add_argument("--workspace",type=Path);p.add_argument("--no-browser",action="store_true")
     args=p.parse_args()
@@ -575,7 +613,7 @@ def main():
         s.serve_forever()
     finally:
         if "s" in locals():s.server_close()
-        app.lock.close()
+        app.invalidate();app.lock.close()
 if __name__=="__main__":
     multiprocessing.freeze_support()
     main()
