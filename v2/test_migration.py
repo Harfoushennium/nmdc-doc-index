@@ -269,6 +269,8 @@ class MigrationPublicApiRegression(unittest.TestCase):
             self.assertTrue(Path(third["path"]).exists())
 
     def test_reset_rejects_nested_reparse_in_profile_and_source_cache(self):
+        import os, subprocess
+
         for area in ("profile", "source_cache"):
             with self.subTest(area=area), tempfile.TemporaryDirectory() as td:
                 root = Path(td); ws = root / "workspace"; state = ws / "state"
@@ -282,11 +284,17 @@ class MigrationPublicApiRegression(unittest.TestCase):
                 try:
                     link.symlink_to(external, target_is_directory=True)
                 except OSError:
-                    self.skipTest("Symlink creation unavailable")
-                with self.assertRaisesRegex(ValueError, "reparse|[Ss]ymlink"):
-                    reset_workspace(ws, "RESET")
-                self.assertEqual(sentinel.read_text(encoding="utf-8"), "safe")
-                self.assertTrue((state / "approved" / "keep.txt").is_file())
+                    if os.name != "nt":
+                        self.skipTest("Symlink creation unavailable")
+                    subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(external)],
+                                   check=True, capture_output=True)
+                try:
+                    with self.assertRaisesRegex(ValueError, "reparse|[Ss]ymlink"):
+                        reset_workspace(ws, "RESET")
+                    self.assertEqual(sentinel.read_text(encoding="utf-8"), "safe")
+                    self.assertTrue((state / "approved" / "keep.txt").is_file())
+                finally:
+                    link.rmdir() if os.name == "nt" else link.unlink()
 
     def test_verify_bundle_wraps_corrupt_archive_errors_as_value_error(self):
         import zipfile, zlib
