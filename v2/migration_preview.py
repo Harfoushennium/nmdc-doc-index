@@ -21,7 +21,7 @@ MAX_INPUT_FILE=512*1024**2
 RUNTIME_AREAS=("approved","staging","cache","logs","user_flags")
 CONFIGS=("classification_rules.csv","project_identity_overrides.csv","source_exclusions.csv")
 KNOWN_CONFIG=set(CONFIGS)|{"cycle2_sentinels.csv","classification_aliases.csv","custom_fields.json"}
-KNOWN_RUNTIME={"approved","staging","cache","logs","user_flags","profile","owner_review_drafts.csv","owner_review_drafts.csv.tmp","owner_review_drafts.csv.bak","user_custom_fields.csv","user_keyword_mappings.csv"}
+KNOWN_RUNTIME={"approved","staging","cache","logs","user_flags","profile","owner_review_drafts.csv","owner_review_drafts.csv.tmp","owner_review_drafts.csv.bak","user_custom_fields.csv","user_keyword_mappings.csv","source_cache","excel_exchange"}
 def overlap(a,b):return a==b or a in b.parents or b in a.parents
 def _is_reparse(path):
     try:return bool(Path(path).lstat().st_file_attributes & 0x400)
@@ -103,13 +103,15 @@ def preview_package(package):
             blockers.append("Legacy file is unreadable; make it locally available before migration: "+path.relative_to(package).as_posix())
             return
         files[path.relative_to(package).as_posix()]={"bytes":size,"sha256":checksum}
-    for p in children(runtime,("approved","staging","cache","logs","user_flags","profile","owner_review_drafts.csv","owner_review_drafts.csv.tmp","owner_review_drafts.csv.bak","user_custom_fields.csv","user_keyword_mappings.csv")):
+    for p in children(runtime,("approved","staging","cache","logs","user_flags","profile","owner_review_drafts.csv","owner_review_drafts.csv.tmp","owner_review_drafts.csv.bak","user_custom_fields.csv","user_keyword_mappings.csv","source_cache","excel_exchange")):
         add_file(p)
     for p in runtime.rglob("*"):
         if p.is_symlink() or _is_reparse(p):raise ValueError("Symlink or reparse point in migration input: "+str(p))
         if p.is_file() and p.relative_to(runtime).parts[0] not in KNOWN_RUNTIME:
             add_file(p)
-            blockers.append("Unsupported legacy runtime content: "+p.relative_to(runtime).as_posix())
+            if re.fullmatch(r"nmdc_engine_[0-9]{8}_[0-9]{6}_[A-Za-z0-9_]+\.(?:cmd|done|err\.txt|out\.txt)",p.relative_to(runtime).as_posix()):
+                warnings.append("Generated bridge output retained as inert evidence, never executed: "+p.name)
+            else:blockers.append("Unsupported legacy runtime content: "+p.relative_to(runtime).as_posix())
     for p in config.rglob("*"):
         if p.is_symlink() or _is_reparse(p):raise ValueError("Symlink or reparse point in migration input: "+str(p))
         if not p.is_file():continue
@@ -186,7 +188,11 @@ def preview_package(package):
         else:warnings.append("Inactive legacy review drafts retained as migration evidence.")
     workbook_paths=sorted(p for p in package.glob("*.xlsm") if not p.name.startswith("~$"))
     tables={};workbook="";workbook_data_dir=""
-    if len(workbook_paths)>1:blockers.append("Multiple XLSM workbooks; choose the exact legacy baseline before import")
+    if len(workbook_paths)>1:
+        for path in workbook_paths:
+            if path.is_symlink() or _is_reparse(path):raise ValueError("Legacy workbook is a reparse point")
+            add_file(path)
+        blockers.append("Multiple XLSM workbooks; choose the exact legacy baseline before import")
     elif workbook_paths:
         p=workbook_paths[0]
         if p.is_symlink() or _is_reparse(p):raise ValueError("Legacy workbook symlink or reparse point")

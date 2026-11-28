@@ -14,6 +14,24 @@ from v2.recovery import reset_workspace, undo_approval
 
 
 class MigrationPublicApiRegression(unittest.TestCase):
+    def test_generated_legacy_mirrors_and_bridge_outputs_are_preserved_as_inert_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);legacy=root/'legacy';legacy.mkdir();data=root/'DATA';data.mkdir()
+            (data/'a.xlsx').write_text('fixture');template=App(root/'template')
+            try:shutil.copytree(template.config,legacy/'config')
+            finally:template.invalidate();template.lock.close()
+            staged=stage_update(data_dir=data,state_dir=legacy/'runtime',processor=lambda p,r:[{'Event_Key':'E1','Source File':r}])
+            approve_stage(legacy/'runtime',staged['run_id'])
+            extras={'source_cache/files/mirror.xlsx':b'inert mirror','excel_exchange/events.csv':b'key\nE1\n',
+                    'profile/provenance.json':b'{}','nmdc_engine_20261012_135454_50094238.cmd':b'never execute this evidence'}
+            for name,value in extras.items():
+                path=legacy/'runtime'/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(value)
+            report=preview_package(legacy)
+            self.assertEqual(report['blockers'],[])
+            target=root/'imported';import_package(legacy,target,report['preview_sha256'])
+            for name,value in extras.items():
+                self.assertEqual((target/'migration-evidence/runtime'/name).read_bytes(),value)
+                self.assertFalse((target/'state'/name).exists())
     def test_reset_rejects_junction_above_workspace_root(self):
         import os,subprocess
         with tempfile.TemporaryDirectory() as directory:

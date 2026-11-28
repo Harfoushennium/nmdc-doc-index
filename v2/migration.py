@@ -84,9 +84,7 @@ def import_package(package, target, confirmed_fingerprint, *, source_root=None):
         evidence = scratch / "migration-evidence"
         for rel in sorted(expected):
             path = package / rel
-            if rel.startswith("config/") or rel.startswith("config-history/") or rel.startswith("runtime/") and Path(rel).name not in {
-                "owner_review_drafts.csv", "owner_review_drafts.csv.tmp", "owner_review_drafts.csv.bak",
-                "user_custom_fields.csv", "user_keyword_mappings.csv"}:
+            if rel.startswith(("config/","config-history/")) or rel.startswith("runtime/") and rel.split("/")[1] in ("approved","staging","cache","logs","user_flags"):
                 continue
             dest = evidence / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -108,7 +106,6 @@ def import_package(package, target, confirmed_fingerprint, *, source_root=None):
             if name.startswith("runtime/") and name.split("/")[1] in ("approved","staging","cache","logs","user_flags"):
                 copied=scratch/"state"/name.removeprefix("runtime/")
             elif name.startswith(("config/","config-history/")):copied=scratch/name
-            elif name.startswith("runtime/profile/"):continue  # Rebuildable profiler output; original retained.
             else:copied=evidence/name
             expected_copies.add(copied.relative_to(scratch).as_posix())
             if not copied.is_file() or copied.stat().st_size!=meta["bytes"] or _sha256(copied)!=meta["sha256"]:
