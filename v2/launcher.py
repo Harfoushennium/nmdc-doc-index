@@ -689,7 +689,7 @@ def self_test():
             assert filter_rows(rows,"0001 -missing","Document No.")==rows
             assert partition_plan(rows*5,list(rows[0]),row_limit=2,link_limit=2)==[(0,2),(2,4),(4,5)]
             # Exercise the pinned production update and review engine with an isolated synthetic processor.
-            data=Path(d)/"DATA";data.mkdir();source=data/"register.xlsx";source.write_bytes(b"synthetic input")
+            data=Path(d)/"project"/"DATA";data.mkdir(parents=True);source=data/"register.xlsx";source.write_bytes(b"synthetic input")
             before=hashlib.sha256(source.read_bytes()).hexdigest()
             def processor(path,rel):
                 return [{"Event_Key":"E1","Source File":rel,"Project No.":"0001","Document No.":"D1","Document Title":"Fixture","Revision":"A","Revision_Key":"R1","Global_Document_Key":"D1","Source Sheet":"Register","Source Row":2,"Source Cell":"A2","Event Date":"2026-11-28"}]
