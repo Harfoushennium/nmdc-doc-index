@@ -22,6 +22,7 @@ from v2.recovery import create_bundle, restore_to_new_workspace, inventory
 from v2 import unchanged
 from v2.read_model import ReadModel, apply_filters
 from v2 import custom_fields
+from v2.flag_review import FlagReview
 from collections import Counter
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
@@ -215,6 +216,8 @@ class App:
         run=read_json(self.state/'staging'/'latest.json',{}).get('run_id','')
         if run and read_json(self.state/'staging'/run/'web_draft.json',{}).get('dirty'):
             raise ValueError('Save or explicitly discard the current review draft before continuing.')
+        if run and read_json(self.state/'staging'/run/'flag_review.json',{}).get('dirty'):
+            raise ValueError('Save the current flag review draft before continuing.')
     def start(self,full):
         self.idle(); self.require_clean_review(); src=self.source()
         self.cancel.clear()
@@ -334,7 +337,8 @@ class App:
                 for f in files:
                     ch=choices[f["Source File"]];f["Accept Update?"]=ch["accept"];f["Owner Note"]=ch["note"]
             elif dirty:raise ValueError("Saved web draft does not match current files")
-        return {"run":run,"files":files,"flags":build_flag_rows(s),"summary":s["summary"],"saved":valid and not dirty,"draft_dirty":dirty,"draft_version":version,"baseline":baseline}
+        review=FlagReview(s,build_flag_rows(s),baseline)
+        return {"run":run,"files":files,"flags":review.rows,"flag_version":review.payload["version"],"flag_dirty":review.payload["dirty"],"summary":s["summary"],"saved":valid and not dirty,"draft_dirty":dirty,"draft_version":version,"baseline":baseline}
     def draft_choices(self,body,dirty=True):
         self.idle();p=self.proposal()
         if not p["run"] or body.get("run")!=p["run"]:raise ValueError("Proposal changed")
@@ -408,9 +412,10 @@ class App:
         if self.settings.get("requires_rescan"): raise ValueError("Configuration changed; rescan before approval.")
         if not p["run"] or body.get("run")!=p["run"]: raise ValueError("Proposal changed")
         if not p["saved"]:raise ValueError("Save all file choices before approval.")
+        if p["flag_dirty"]:raise ValueError("Save flag decisions before approval.")
         # Conservative candidate: no override and no unresolved non-routine flag approval.
         routine={"SOURCE_NEW","SOURCE_CHANGED","PARSER_VERSION_CHANGED","CONFIG_CHANGED","CACHE_MISSING","SOURCE_REMOVED"}
-        if any(f["Flag Code"] not in routine and f.get("Resolution Status")!="RESOLVED" for f in p["flags"]):
+        if any(f["Flag Code"] not in routine or f.get("User Decision") in ("HOLD FOR REVIEW","NEEDS SOURCE CORRECTION","NEEDS PARSER/MAPPING FIX") for f in p["flags"]):
             raise ValueError("Unresolved flags require correction; candidate does not provide override.")
         self.backup("Before approval")
         result=approve_stage(self.state,p["run"],require_file_review=True,allow_conflicts=False,review_removals=True)
@@ -508,28 +513,40 @@ class App:
         finally:tmp.unlink(missing_ok=True)
         self.settings["requires_rescan"]=True;self.save_settings()
         return {"saved":len(rows),"requires_rescan":True}
-    def report_flags(self,body):
+    def flag_review(self,body):
         self.idle();p=self.proposal()
         if not p["run"] or p["run"]!=body.get("run"):raise ValueError("Proposal changed")
-        # Select server-known flag identities only. Reporting cannot resolve flags or authorize approval.
-        indices=body.get("indices")
-        if not isinstance(indices,list) or not indices or any(type(i) is not int or not 0<=i<len(p["flags"]) for i in indices):raise ValueError("Invalid flag selection")
-        report_parent=self.root.parent/"NMDC_V2_Reports"
-        report_root=report_parent/"PARSER_FIX_REPORTS"
+        stage=load_latest_stage(self.state)
+        return FlagReview(stage,build_flag_rows(stage),p["baseline"])
+    def edit_flags(self,body,save):
+        review=self.flag_review(body)
+        result=review.edit(body,save)
+        if save:_append_log(self.state,{"event":"WEB_FLAG_DECISIONS_SAVED","at":utc_now(),"run_id":body["run"],"flag_version":result["flag_version"]})
+        return result
+    def report_directory(self,parent=None):
+        parent=Path(parent or self.settings.get("report_parent") or self.root.parent/"NMDC_V2_Reports").resolve()
+        def overlap(a,b):return a==b or a in b.parents or b in a.parents
+        root=parent/"PARSER_FIX_REPORTS"
+        if overlap(root,self.root):raise ValueError("Report path overlaps application workspace")
         if self.settings.get("data_dir"):
-            source=self.source()
-            if source==report_root or source in report_root.parents or report_root in source.parents:raise ValueError("Report path overlaps DATA")
-        keys=["Flag Code","Source File","Worksheet Name","Event Key","Project No.","Document No.","Revision","User Decision","User Comment","Resolution Status"]
-        path=self.root/"flag-decisions.csv"
-        try:
-            with path.open("w",encoding="utf-8",newline="") as h:
-                w=csv.DictWriter(h,fieldnames=keys);w.writeheader()
-                for i in sorted(set(indices)):
-                    r=p["flags"][i];row={k:r.get(k,"") for k in keys}
-                    row.update({"User Decision":"NEEDS PARSER/MAPPING FIX","User Comment":str(body.get("comment","")),"Resolution Status":"OPEN"})
-                    w.writerow(row)
-            return apply_review_decisions(self.state,path,request_dir=report_parent,expected_run_id=p["run"])
-        finally:path.unlink(missing_ok=True)
+            source=self.source();project=source.parent if source.name.casefold()=="data" else source
+            if overlap(root,project):raise ValueError("Select a report folder outside DATA and its project root.")
+        return parent
+    def select_report_directory(self):
+        self.idle()
+        import tkinter as tk
+        from tkinter import filedialog
+        root=tk.Tk();root.withdraw();root.attributes("-topmost",True)
+        try:value=filedialog.askdirectory(parent=root,title="Select report parent outside project and workspace",mustexist=True)
+        finally:root.destroy()
+        if value:
+            self.settings["report_parent"]=str(self.report_directory(value));self.save_settings()
+        return self.settings
+    def report_flags(self,body):
+        review=self.flag_review(body);result=review.report(body,self.report_directory(),self.state)
+        _append_log(self.state,{"event":"PARSER_REPORT_CREATED","at":utc_now(),"run_id":body["run"],"request_sequence":result["request_sequence"]})
+        return result
+
     def profile(self,body):
         scope=body.get("scope");name=str(body.get("name","")).strip()
         if not name or len(name)>100 or scope not in CORE:raise ValueError("Invalid profile")
@@ -626,6 +643,9 @@ def server_for(app):
                     elif path=="/api/custom-fields":result=app.save_custom_fields(body)
                     elif path=="/api/project-mappings":result=app.save_project_mappings(body)
                     elif path=="/api/report":result=app.report_flags(body)
+                    elif path=="/api/flag-draft":result=app.edit_flags(body,False)
+                    elif path=="/api/flag-save":result=app.edit_flags(body,True)
+                    elif path=="/api/report-directory":result=app.select_report_directory()
                     elif path=="/api/profile":result=app.profile(body)
                     elif path=="/api/index-view":result=app.save_view(body)
                     elif path=="/api/backup":result=app.backup("Manual recovery snapshot")
@@ -707,8 +727,9 @@ def self_test():
             result=stage_update(data_dir=data,state_dir=app.state,processor=processor,
                 post_process_flags=lambda:[{"level":"REVIEW","code":"UNRECOGNIZED_LAYOUT","source":"register.xlsx","source_sheet":"Register","message":"Synthetic test"}])
             p=app.proposal()
-            idx=next(i for i,r in enumerate(p["flags"]) if r["Flag Code"]=="UNRECOGNIZED_LAYOUT")
-            report=app.report_flags({"run":p["run"],"indices":[idx],"comment":"Synthetic expected mapping"})
+            flag=next(r for r in p["flags"] if r["Flag Code"]=="UNRECOGNIZED_LAYOUT")
+            # Explicit isolated reporting location for the synthetic test; no live project root selected.
+            report=app.report_flags({"run":p["run"],"flag_version":p["flag_version"],"ids":[flag["Flag ID"]],"comment":"Synthetic expected mapping"})
             assert report["parser_mapping_fix_requests"]==1
             report_dir=Path(d)/"NMDC_V2_Reports"/"PARSER_FIX_REPORTS"/"0001"
             assert (report_dir/"PARSER_FIX_REQUEST.md").exists()
