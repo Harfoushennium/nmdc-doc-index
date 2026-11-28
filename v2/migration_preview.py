@@ -77,6 +77,7 @@ def workbook_tables(path):
 def preview_package(package):
     package=Path(package).resolve()
     runtime=package/"runtime";config=package/"config"
+    if runtime.is_symlink() or config.is_symlink():raise ValueError("Legacy runtime/config must not be symbolic links")
     if not runtime.is_dir() or not config.is_dir():raise ValueError("Select the legacy package containing runtime and config folders.")
     blockers=[];warnings=[];files={}
     for p in children(runtime,(*RUNTIME_AREAS,"owner_review_drafts.csv","owner_review_drafts.csv.tmp","owner_review_drafts.csv.bak","user_custom_fields.csv","user_keyword_mappings.csv")):
