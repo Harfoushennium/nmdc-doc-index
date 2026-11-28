@@ -602,13 +602,17 @@ class App:
             raise ValueError("Preview the legacy package and type MIGRATE to confirm this exact inventory.")
         if preview["blockers"]:raise ValueError("Resolve migration compatibility blockers before import.")
         source_override=getattr(self,"legacy_source_override",None)
-        if body.get("source_root") is not None:
-            if not source_override or str(body.get("source_root"))!=str(source_override):
-                raise ValueError("Remapped DATA folder does not match the selected migration source.")
+        requested_source=body.get("source_root") or None
+        if requested_source is not None and not isinstance(requested_source,str):
+            raise ValueError("Invalid remapped DATA folder.")
+        if requested_source!=source_override:
+            raise ValueError("Remapped DATA folder does not match the selected migration source.")
         self.backup("Before side-by-side migration")
         target=self.root.parent/(self.root.name+"-migrated-"+secrets.token_hex(5))
         if self.settings.get("data_dir") and (target==self.source() or self.source() in target.parents):raise ValueError("Migration destination overlaps DATA")
-        return import_package(preview["package"],target,preview["preview_sha256"],source_root=source_override)
+        result=import_package(preview["package"],target,preview["preview_sha256"],source_root=source_override)
+        self.legacy_source_override=None
+        return result
     def reset(self,body):
         self.idle()
         if body.get("confirm")!="RESET":raise ValueError("Type RESET to confirm clearing active runtime views.")

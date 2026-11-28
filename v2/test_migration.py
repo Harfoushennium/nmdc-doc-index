@@ -348,20 +348,28 @@ class MigrationPublicApiRegression(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "reparse|[Ss]ymlink"):
                     preview_package(legacy)
 
-    def test_copy_tree_checked_rejects_root_reparse_and_import_records_utc_imported_at(self):
-        import json, re
+    def test_copy_tree_checked_rejects_root_reparse(self):
+        from unittest.mock import patch
         from v2.migration import _copy_tree_checked
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); real_dir = root / "real"; real_dir.mkdir(); (real_dir / "a.txt").write_text("x", encoding="utf-8")
+            with patch("v2.migration._is_reparse", side_effect=lambda p: Path(p) == real_dir):
+                with self.assertRaisesRegex(ValueError, "symlink|reparse"):
+                    _copy_tree_checked(real_dir, root / "copied_reparse")
+            self.assertFalse((root / "copied_reparse").exists())
             link = root / "link_dir"
             try:
                 link.symlink_to(real_dir, target_is_directory=True)
             except OSError:
-                self.skipTest("Symlink creation unavailable")
+                return
             with self.assertRaisesRegex(ValueError, "symlink|reparse"):
                 _copy_tree_checked(link, root / "copied")
             self.assertFalse((root / "copied").exists())
 
+    def test_import_records_utc_imported_at(self):
+        import json
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
             legacy = root / "legacy"; legacy.mkdir(); data = legacy / "DATA"; data.mkdir()
             (data / "fixture.xlsx").write_bytes(b"fixture")
             app = App(root / "template")
@@ -424,8 +432,12 @@ class MigrationPublicApiRegression(unittest.TestCase):
                         self.assertEqual(src_resp["source_root"], str(moved_data.resolve()))
                     st_bad, _ = post("/api/migration-import", {"confirm": "MIGRATE", "preview_sha256": preview["preview_sha256"], "source_root": str(root / "other")})
                     self.assertEqual(st_bad, 400)
+                    # Omitting source_root while a remapped source is active must fail closed (no silent override).
+                    st_omit, _ = post("/api/migration-import", {"confirm": "MIGRATE", "preview_sha256": preview["preview_sha256"]})
+                    self.assertEqual(st_omit, 400)
                     st_imp, imp = post("/api/migration-import", {"confirm": "MIGRATE", "preview_sha256": preview["preview_sha256"], "source_root": src_resp["source_root"]})
                     self.assertEqual(st_imp, 200)
+                    self.assertIsNone(app.legacy_source_override)
                     migrated_settings = json.loads((Path(imp["workspace"]) / "settings.json").read_text(encoding="utf-8"))
                     self.assertEqual(migrated_settings["data_dir"], str(moved_data.resolve()))
                     self.assertTrue(migrated_settings["requires_rescan"])
