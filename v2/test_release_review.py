@@ -59,4 +59,20 @@ class ReviewAcceptance(unittest.TestCase):
         self.app.decide_proposal({"run":p["run"],"decision":"REJECT","note":"Do not accept"})
         self.assertEqual(self.values(),{"A.xlsx":"old"});self.assertEqual(self.app.proposal()["run"],"")
 
+    def test_stale_displayed_approval_rejected(self):
+        self.write("A.xlsx","original");self.stage();p=self.app.proposal();self.save(p)
+        old=self.app.proposal();new=self.app.proposal()
+        new["files"][0]["Owner Note"]="Other tab changed the review";self.save(new)
+        with self.assertRaisesRegex(ValueError,"Displayed review version changed"):
+            self.app.approve({k:old[k] for k in ("run","draft_version","flag_version")},require_versions=True)
+        self.assertEqual(self.values(),{})
+        current=self.app.proposal()
+        self.app.edit_flags({"run":current["run"],"flag_version":current["flag_version"],"changes":[]},save=True)
+        with self.assertRaisesRegex(ValueError,"Displayed review version changed"):
+            self.app.approve({k:current[k] for k in ("run","draft_version","flag_version")},require_versions=True)
+        self.assertEqual(self.values(),{})
+        current=self.app.proposal()
+        self.app.approve({k:current[k] for k in ("run","draft_version","flag_version")},require_versions=True)
+        self.assertEqual(self.values(),{"A.xlsx":"original"})
+
 if __name__=="__main__":unittest.main()
