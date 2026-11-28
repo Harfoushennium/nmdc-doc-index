@@ -148,8 +148,16 @@ class App:
             if not dest.exists(): shutil.copy2(p,dest)
         self.settings_path=self.root/"settings.json"
         self.settings=read_json(self.settings_path, {})
-        self.guard=threading.RLock(); self.job={"status":"idle"}; self.cache={}; self.token=secrets.token_urlsafe(32); self.cancel=threading.Event()
+        self.guard=threading.RLock(); self.job_path=self.root/"job.json"; self.job=read_json(self.job_path,{"status":"idle"}); self.cache={}; self.token=secrets.token_urlsafe(32); self.cancel=threading.Event()
+        if self.job.get("status")=="running":
+            self.settings["requires_rescan"]=True;self.save_settings()
+            self.job={"status":"interrupted","message":"Previous scan interrupted. Run a new scan before approval."}
+            _write_json_atomic(self.job_path,self.job)
+            _append_log(self.state,{"event":"SCAN_INTERRUPTED","at":utc_now()})
     def save_settings(self): _write_json_atomic(self.settings_path,self.settings)
+    def save_job(self,job):
+        _write_json_atomic(self.job_path,job)
+        self.job=job
     def source(self):
         v=self.settings.get("data_dir")
         if not v: raise ValueError("Select the DATA folder first.")
@@ -185,7 +193,9 @@ class App:
     def start(self,full):
         self.idle(); self.require_clean_review(); src=self.source()
         self.cancel.clear()
-        self.job={"status":"running","mode":"full" if full else "incremental","started":time.time(),"phase":"Starting","current":0,"total":0}
+        was_dirty=bool(self.settings.get("requires_rescan"))
+        self.settings["requires_rescan"]=True;self.save_settings()
+        self.save_job({"status":"running","mode":"full" if full else "incremental","started":time.time(),"phase":"Starting","current":0,"total":0})
         def checkpoint(phase,current,total):
             with self.guard:
                 if self.cancel.is_set():raise ScanCancelled("Cancelled before publishing proposal")
@@ -196,7 +206,7 @@ class App:
                 build=unchanged.build_identity()
                 checkpoint("Verify source identity",0,0)
                 result=None
-                if not full and not self.settings.get("requires_rescan"):
+                if not full and not was_dirty:
                     result=unchanged.check(self.state,src,self.config,build)
                 if result is None:
                     before=unchanged.inputs(src,self.config,build)
@@ -210,12 +220,13 @@ class App:
                     if before!=after:
                         result["requires_rescan"]=True
                 with self.guard:
+                    if self.cancel.is_set() and self.job.get("phase")!="Publish proposal":raise ScanCancelled("Cancelled before completing scan")
+                    self.save_job({"status":"complete","result":result})
                     self.settings["requires_rescan"]=bool(result.get("requires_rescan"));self.save_settings()
-                    self.job={"status":"complete","result":result}
             except ScanCancelled as exc:
-                with self.guard:self.job={"status":"cancelled","message":str(exc)}
+                with self.guard:self.save_job({"status":"cancelled","message":str(exc)})
             except Exception as exc:
-                with self.guard:self.job={"status":"error","message":str(exc)}
+                with self.guard:self.save_job({"status":"error","message":str(exc)})
         threading.Thread(target=work,daemon=True).start()
         return self.job
     def cancel_job(self):
