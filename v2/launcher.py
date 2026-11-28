@@ -10,7 +10,7 @@ import xlsxwriter
 from nmdc_profiler.excel_bridge import load_approved_state, load_latest_stage, build_document_rows, build_revision_rows, build_flag_rows, build_history_rows, resolve_document_target
 from nmdc_profiler.extractor import OUTPUT_FIELDS
 from nmdc_profiler.file_review import affected_files, save_file_review, validated_review, _baseline
-from nmdc_profiler.update_engine import approve_stage, reject_stage, hold_stage, _write_json_atomic, stage_update
+from nmdc_profiler.update_engine import approve_stage, reject_stage, hold_stage, _write_json_atomic, stage_update, _read_jsonl, _index_records, _canonical_record, _append_log, utc_now
 from nmdc_profiler.runtime_engine import stage_runtime_update
 from nmdc_profiler.runtime_admin import undo_last_approval, reset_runtime_state
 from nmdc_profiler.source_access import install_resilient_source_access
@@ -178,8 +178,12 @@ class App:
             else:self.settings.pop("data_dir",None)
             raise
         self.save_settings(); return self.settings
+    def require_clean_review(self):
+        run=read_json(self.state/'staging'/'latest.json',{}).get('run_id','')
+        if run and read_json(self.state/'staging'/run/'web_draft.json',{}).get('dirty'):
+            raise ValueError('Save or explicitly discard the current review draft before continuing.')
     def start(self,full):
-        self.idle(); src=self.source()
+        self.idle(); self.require_clean_review(); src=self.source()
         self.cancel.clear()
         self.job={"status":"running","mode":"full" if full else "incremental","started":time.time(),"phase":"Starting","current":0,"total":0}
         def checkpoint(phase,current,total):
@@ -322,16 +326,56 @@ class App:
             self.draft_choices(body,dirty=False)
             return result
         finally: f.unlink(missing_ok=True)
+    def discard_draft(self,body):
+        self.idle();p=self.proposal()
+        if not p['run'] or body.get('run')!=p['run'] or body.get('draft_version')!=p['draft_version']:
+            raise ValueError('Review changed; reload.')
+        if body.get('confirm') is not True:raise ValueError('Confirm discarding the current unsaved choices.')
+        path=self.state/'staging'/p['run']/'web_draft.json'
+        old=read_json(path,{})
+        if old:
+            archive=path.parent/('web_draft-discarded-'+secrets.token_hex(6)+'.json')
+            _write_json_atomic(archive,old)
+            old['dirty']=False;old['version']=p['draft_version']+1;_write_json_atomic(path,old)
+            _append_log(self.state,{'event':'DRAFT_DISCARDED','run_id':p['run'],'at':utc_now()})
+        return {'discarded':True}
+    def draft_history(self):
+        self.idle();out=[]
+        for path in sorted((self.state/'staging').glob('*/web_draft*.json'),reverse=True):
+            payload=read_json(path,{})
+            out.append({'run':path.parent.name,'file':path.name,'dirty':payload.get('dirty',False),'version':payload.get('version',0),'choices':payload.get('choices',{})})
+        return out[:100]
+    def file_details(self,run,source,page=0):
+        p=self.proposal()
+        if run!=p['run'] or source not in {f['Source File'] for f in p['files']}:raise ValueError('Unknown or replaced file proposal')
+        stage=load_latest_stage(self.state)
+        before,_=_index_records([r for r in self.approved()['records'] if r.get('Source File')==source],'approved')
+        after,_=_index_records([r for r in stage['records'] if r.get('Source File')==source],'staged')
+        changed=[]
+        for key in sorted(set(before)|set(after)):
+            a,b=before.get(key),after.get(key)
+            if a is not None and b is not None and _canonical_record(a)==_canonical_record(b):continue
+            kind='ADDED' if a is None else 'REMOVED' if b is None else 'MODIFIED'
+            changed.append({'identity':key,'type':kind,'before':a,'after':b,'fields':[k for k in sorted(set(a or {})|set(b or {})) if (a or {}).get(k)!=(b or {}).get(k)]})
+        return {'count':len(changed),'rows':changed[page*50:(page+1)*50]}
+    def decide_proposal(self,body):
+        self.idle();self.require_clean_review();p=self.proposal()
+        if not p['run'] or body.get('run')!=p['run']:raise ValueError('Proposal changed')
+        decision=body.get('decision');note=str(body.get('note',''))
+        if decision=='HOLD':return hold_stage(self.state,p['run'],note=note)
+        if decision=='REJECT':return reject_stage(self.state,p['run'],note=note)
+        raise ValueError('Unknown proposal decision')
     def approve(self,body):
         self.idle(); p=self.proposal()
         if self.settings.get("requires_rescan"): raise ValueError("Configuration changed; rescan before approval.")
         if not p["run"] or body.get("run")!=p["run"]: raise ValueError("Proposal changed")
         if not p["saved"]:raise ValueError("Save all file choices before approval.")
         # Conservative candidate: no override and no unresolved non-routine flag approval.
-        routine={"SOURCE_NEW","SOURCE_CHANGED","PARSER_VERSION_CHANGED","CONFIG_CHANGED","CACHE_MISSING"}
+        routine={"SOURCE_NEW","SOURCE_CHANGED","PARSER_VERSION_CHANGED","CONFIG_CHANGED","CACHE_MISSING","SOURCE_REMOVED"}
         if any(f["Flag Code"] not in routine and f.get("Resolution Status")!="RESOLVED" for f in p["flags"]):
             raise ValueError("Unresolved flags require correction; candidate does not provide override.")
-        result=approve_stage(self.state,p["run"],require_file_review=True,allow_conflicts=False)
+        self.backup("Before approval")
+        result=approve_stage(self.state,p["run"],require_file_review=True,allow_conflicts=False,review_removals=True)
         self.invalidate()
         if self.settings.get("data_dir"):
             try:result["verified_unchanged_eligible"]=unchanged.certify(self.state,self.source(),self.config,unchanged.build_identity())
@@ -453,6 +497,8 @@ def server_for(app):
                         a=app.approved()
                         return self.send(200,{"job":app.job,"settings":app.settings,"approved_run":a["run_id"],"events":len(a["records"])})
                     if path=="/api/review":return self.send(200,app.proposal())
+                    if path=="/api/review-details":return self.send(200,app.file_details(q.get("run",""),q.get("source",""),max(0,int(q.get("page","0")))))
+                    if path=="/api/draft-history":return self.send(200,app.draft_history())
                     if path=="/api/sources":return self.send(200,app.manifest_files())
                     if path=="/api/rules":return self.send(200,app.rules())
                     if path=="/api/history":return self.send(200,build_history_rows(app.state)[-500:])
@@ -491,6 +537,8 @@ def server_for(app):
                     elif path=="/api/scan":result=app.start(body.get("full") is True)
                     elif path=="/api/cancel":result=app.cancel_job()
                     elif path=="/api/draft":result=app.draft_choices(body)
+                    elif path=="/api/discard-draft":result=app.discard_draft(body)
+                    elif path=="/api/proposal-decision":result=app.decide_proposal(body)
                     elif path=="/api/save-choices":result=app.save_choices(body)
                     elif path=="/api/approve":result=app.approve(body)
                     elif path=="/api/source-choice":result=app.source_choice(body)
