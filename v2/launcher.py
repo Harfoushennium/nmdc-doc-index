@@ -195,7 +195,7 @@ class App:
     def idle(self):
         if self.job["status"]=="running": raise ValueError("A processing job is active.")
     def select(self):
-        self.idle()
+        self.idle();self.require_clean_review()
         import tkinter as tk
         from tkinter import filedialog
         root=tk.Tk(); root.withdraw(); root.attributes("-topmost",True)
@@ -211,6 +211,7 @@ class App:
             if previous: self.settings["data_dir"]=previous
             else:self.settings.pop("data_dir",None)
             raise
+        if not previous or Path(previous).resolve()!=Path(value).resolve():self.settings["requires_rescan"]=True
         self.save_settings(); return self.settings
     def require_clean_review(self):
         run=read_json(self.state/'staging'/'latest.json',{}).get('run_id','')
@@ -219,10 +220,14 @@ class App:
         if run and read_json(self.state/'staging'/run/'flag_review.json',{}).get('dirty'):
             raise ValueError('Save the current flag review draft before continuing.')
     def start(self,full):
-        self.idle(); self.require_clean_review(); src=self.source()
+        self.idle(); self.require_clean_review()
         self.cancel.clear()
         was_dirty=bool(self.settings.get("requires_rescan"))
         self.settings["requires_rescan"]=True;self.save_settings()
+        try:src=self.source()
+        except (OSError,ValueError) as exc:
+            self.save_job({"status":"error","message":str(exc)})
+            raise
         self.save_job({"status":"running","mode":"full" if full else "incremental","started":time.time(),"phase":"Starting","current":0,"total":0})
         def checkpoint(phase,current,total):
             with self.guard:
@@ -409,7 +414,8 @@ class App:
         raise ValueError('Unknown proposal decision')
     def approve(self,body):
         self.idle(); p=self.proposal()
-        if self.settings.get("requires_rescan"): raise ValueError("Configuration changed; rescan before approval.")
+        if self.settings.get("requires_rescan"): raise ValueError("Configuration or source state changed; rescan before approval.")
+        if self.settings.get("data_dir"):self.source()
         if not p["run"] or body.get("run")!=p["run"]: raise ValueError("Proposal changed")
         if not p["saved"]:raise ValueError("Save all file choices before approval.")
         if p["flag_dirty"]:raise ValueError("Save flag decisions before approval.")
