@@ -2,6 +2,11 @@
 **Handoff ID:** NMDC-V2-CODEX-001 | **Date:** 2026-11-28 | **From:** ChatGPT (implementer/integration coordinator) | **To:** Codex (implementation executor)
 **Collaboration:** NMDC-DOC-INDEX-001 | **Authority:** Owner-approved RP-NMDC-V2-001 v1.0, decisions D1–D5; owner requested execution handoff via GitHub. This authorizes remaining implementation/testing, not production approval or merge of the release PR.
 
+
+## Mandatory current recovery and publication instructions — 2026-11-28
+
+**Before new implementation, read [CHC-NMDC-001 v1.0](../agents/CROSS-HARNESS-COLLABORATION.md) and [the central cross-harness dashboard](https://github.com/Harfoushennium/nmdc-doc-index/issues/22#issuecomment-7241792621).** The original Codex baseline and Antigravity handback remain immutable. Codex must publish its existing corrective commit chain ending at `1e70414394a3762e29faedc332688a6b110bc5b0` from its actual local checkout onto `review/nmdc-v2-codex-rc1` (remote starting SHA `54c919e8687e043177bf2b462419cbb72191bd1e`). Verify the remote SHA, open a separate draft review PR, publish sanitized evidence, and run full CI. Do not recreate unpublished work from summaries. The protocol now requires every harness to commit, push, verify and document each coherent slice, update dashboards continuously and provide a verified handoff before switching environments. No production integration or acceptance gates have changed.
+
 ## 1. Start here — do not restart planning
 - Repository: https://github.com/Harfoushennium/nmdc-doc-index
 - Active integration: `feature/nmdc-v2-web-app`, draft [PR #29](https://github.com/Harfoushennium/nmdc-doc-index/pull/29), base `planning/nmdc-v2-standalone`.
