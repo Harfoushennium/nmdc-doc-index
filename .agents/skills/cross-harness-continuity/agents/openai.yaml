@@ -1,0 +1,5 @@
+interface:
+  display_name: Cross-Harness Continuity
+  short_description: GitHub checkpoints and verified agent handoffs
+policy:
+  allow_implicit_invocation: true

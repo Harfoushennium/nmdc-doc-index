@@ -1,5 +1,15 @@
 # AGENTS.md — NMDC Document Index Handoff Guide
 
+## Mandatory cross-harness collaboration — read first
+
+Automatically load the repository [Cross-Harness Continuity skill](.agents/skills/cross-harness-continuity/SKILL.md) for substantive project work, resumption, reviews, progress checks and handoffs. It is also bundled in Engineering Chief of Staff v1.1.0 for web chats; if not discovered by name, read the repository file directly. Follow the project-specific protocol below. Do not require the owner to remember a prompt.
+
+Follow [CHC-NMDC-001 v1.0](docs/agents/CROSS-HARNESS-COLLABORATION.md) for every implementation, review and handoff, including Codex, Antigravity and future agents. GitHub is authoritative. Verify remote HEAD before editing; publish a checkpoint at session start; commit and push each coherent tested slice promptly with harness/ticket attribution; verify the remote SHA; incrementally document evidence and update the workstream dashboard and parent issue #22. Checkpoint at milestones, at least every 15 minutes of active work when reachable, and before switching harnesses or ending. Unpublished work is not a completed handoff. Preserve branch separation, actual model attribution, independent QA and owner-only merge/release authority. Read the current version of the protocol on the integration branch even from another branch.
+
+## Active V2 execution — read first
+
+On the V2 integration branch, the active owner-authorized work is standalone production readiness, not V1 Excel stabilization. **Codex: begin with [the current execution handoff](docs/architecture/NMDC-V2-CODEX-HANDOFF.md), [the approved release contract](docs/architecture/NMDC-V2-FINAL-RELEASE-PLAN.md), GitHub spec #32, tickets #33–41 and draft PR #29.** Live-fetch PR #29 and migration preview PR #42 before changes. D1–D5 are settled. The earlier Excel branch/PR #8 remains a legacy reference and rollback path; do not modify it. Older project documents retain requirements/provenance but the approved V2 plan governs delivery sequencing. No production merge, cutover, or final approval without explicit owner authorization. Codex is the assigned implementation executor; use actual test evidence and the existing collaboration dashboard, and disclose unavailable independent review/owner PC access.
+
 ## 1. Why this file exists
 
 This repository is intended to be worked on by multiple LLM/agent sessions over time. This file tells a fresh agent what to read, what is already decided, what is still pending, and how to continue without re-inventing the project or asking the user to repeat settled requirements.

@@ -144,8 +144,8 @@ def _write_parser_mapping_fix_request(
         "",
         "## Affected items",
         "",
-        "| Source File | Worksheet Name | Project No. | Document No. | Revision | Flag Code | Owner Comment |",
-        "| --- | --- | --- | --- | --- | --- | --- |",
+        "| Source File | Worksheet Name | Source Row | Source Cell | Project No. | Document No. | Revision | Flag Code | Owner Comment |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for flag in rows:
         lines.append(
@@ -153,6 +153,8 @@ def _write_parser_mapping_fix_request(
                 [
                     _clean_md(flag.get("source", "")),
                     _clean_md(flag.get("source_sheet", "")),
+                    _clean_md(flag.get("source_row", "")),
+                    _clean_md(flag.get("source_cell", "")),
                     _clean_md(flag.get("project_no", "")),
                     _clean_md(flag.get("document_no", "")),
                     _clean_md(flag.get("revision", "")),

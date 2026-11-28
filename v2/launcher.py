@@ -1,0 +1,944 @@
+"""NMDC V2 standalone integration candidate. Existing engine owns approved data."""
+from __future__ import annotations
+import multiprocessing
+import argparse, csv, hashlib, hmac, io, json, os, re, secrets, shlex, shutil, sys, threading, time, webbrowser, zipfile
+from datetime import datetime
+from functools import lru_cache
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import urlsplit, parse_qs
+import xlsxwriter
+from nmdc_profiler.excel_bridge import load_approved_state, load_latest_stage, build_document_rows, build_revision_rows, build_flag_rows, build_history_rows, resolve_document_target
+from nmdc_profiler.extractor import OUTPUT_FIELDS
+from nmdc_profiler.file_review import affected_files, save_file_review, validated_review, _baseline
+from nmdc_profiler.update_engine import approve_stage, reject_stage, hold_stage, _write_json_atomic, stage_update, _read_jsonl, _index_records, _canonical_record, _append_log, utc_now
+from nmdc_profiler.runtime_engine import stage_runtime_update
+from nmdc_profiler.runtime_admin import undo_last_approval, reset_runtime_state
+from nmdc_profiler.source_access import install_resilient_source_access
+from nmdc_profiler.layout_compat import install_layout_compatibility
+from nmdc_profiler.review_decisions import apply_review_decisions
+from nmdc_profiler.source_selection import set_source_selection, read_source_exclusions
+from nmdc_profiler.rules import load_rules
+from v2.recovery import create_bundle, restore_to_new_workspace, inventory, reset_workspace, undo_approval, assert_workspace_paths
+from v2.migration_preview import preview_package
+from v2.migration import import_package
+from v2 import unchanged
+from v2.read_model import ReadModel, apply_filters
+from v2 import custom_fields
+from v2.export_policy import preview_token, link_exceptions, date_exceptions
+from v2.flag_review import FlagReview
+from collections import Counter
+
+ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
+WEB = ROOT / "v2"
+CORE = {"events": ["Project No.", "Document No.", "Revision", "Event_Key", "Source File", "Source Sheet", "Source Row", "Original_Hyperlink_Target", "Source Workbook Path", "Document Link"],
+        "documents": ["Project No.", "Document No.", "Global Document Key", "Source File", "Source Sheet", "Source Row", "Source Workbook Path", "Original_Hyperlink_Target", "Document Link"],
+        "revisions": ["Project No.", "Document No.", "Revision", "Revision Key", "Source File", "Source Sheet", "Source Row", "Source Workbook Path", "Original_Hyperlink_Target", "Document Link"]}
+class WorkspaceLock:
+    def __init__(self, root):
+        self.f = (root / ".writer.lock").open("a+b")
+        try:
+            # Reading the lock byte itself raises on Windows while another writer holds it.
+            # Inspect metadata only; all lock-file operations are inside the close-on-error guard.
+            if os.fstat(self.f.fileno()).st_size==0:
+                self.f.write(b"0"); self.f.flush()
+            self.f.seek(0)
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(self.f.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(self.f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            self.f.close()
+            raise ValueError("This workspace is already open.")
+    def close(self): self.f.close()
+
+def read_json(p, default):
+    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else default
+
+def ordered_fields(rows, scope):
+    base = list(OUTPUT_FIELDS) if scope == "events" else list(custom_fields.DOC_COLUMNS) if scope=="documents" else ["Flag Level","Project No.","Document No.","Document Title","Revision","Is Latest Revision","Revision Key","Document Link","Source File","Source Sheet","Source Row","Source Cell"]
+    return list(dict.fromkeys(base + [k for r in rows for k in r] + CORE[scope]))
+
+def filter_rows(rows, query="", column="", sort="", desc=False):
+    tokens = []
+    for m in re.finditer(r'(-?)"([^"]+)"|([^\s+]+)',query):
+        if m.group(2) is not None: tokens.append((bool(m.group(1)),True,m.group(2).casefold()))
+        else:
+            value=m.group(3)
+            if value=="-": continue
+            tokens.append((value.startswith("-"),False,value.lstrip("-").casefold()))
+    def matches(row):
+        values=[str(row.get(column,"")).casefold()] if column else [str(v).casefold() for v in row.values()]
+        text=" ".join(values)
+        return all((not found if negative else found) for negative,exact,value in tokens
+                   for found in [value in values if exact else value in text])
+    result = [r for r in rows if matches(r)] if tokens else list(rows)
+    if sort: result.sort(key=lambda r: str(r.get(sort, "")).casefold(), reverse=desc)
+    return result
+
+MAX_EXCEL_ROWS=1048575
+MAX_EXCEL_LINKS=65530
+LINK_FIELDS=("Document Link","Source Workbook Path")
+def excel_target(value):
+    return _excel_target(value) if isinstance(value,str) else None
+
+@lru_cache(maxsize=8192)
+def _excel_target(value):
+    # Never turn arbitrary schemes or relative paths into active links.
+    # External link syntax is generated by the application, not trusted from input.
+    if not isinstance(value,str) or not value or len(value)>2079 or any(ord(ch)<32 for ch in value):return None
+    if value.startswith(("https://","http://")):
+        try:
+            u=urlsplit(value)
+            return value if u.hostname and not u.username and not u.password else None
+        except ValueError:return None
+    if "#" in value or any(ch in value for ch in '<>|"?*'):return None
+    if re.match(r"^[A-Za-z]:[\\/]",value) or re.match(r"^\\\\[^\\]+\\[^\\]+\\",value):
+        # Keep paths to potentially executable files as text, not clickable.
+        if Path(value.replace("\\","/")).suffix.lower() in (".exe",".com",".bat",".cmd",".ps1",".vbs",".js",".lnk",".msi",".scr",".hta"):return None
+        return "external:"+value.replace("/","\\")
+    return None
+@lru_cache(maxsize=4096)
+def excel_date(value):
+    try:
+        date=datetime.strptime(value,"%Y-%m-%d")
+        return date if date.year>=1900 else None
+    except ValueError:return None
+
+def native_link(row,fields):
+    return sum(excel_target(row.get(k)) is not None for k in LINK_FIELDS if k in fields)
+def link_summary(rows,fields):
+    return {k:{"native":sum(excel_target(r.get(k)) is not None for r in rows),
+               "literal_unverified":sum(bool(r.get(k)) and excel_target(r.get(k)) is None for r in rows),
+               "empty":sum(not r.get(k) for r in rows)} for k in LINK_FIELDS if k in fields}
+
+def partition_plan(rows,fields,row_limit=MAX_EXCEL_ROWS,link_limit=MAX_EXCEL_LINKS):
+    if len(fields)>16384:raise ValueError("Too many Excel columns")
+    result=[];start=0;links=0
+    for i,r in enumerate(rows):
+        count=native_link(r,fields)
+        if count>link_limit:raise ValueError('A single row exceeds the hyperlink limit')
+        if i-start>=row_limit or links+count>link_limit:
+            result.append((start,i));start=i;links=0
+        links+=count
+    if start<len(rows) or not rows:result.append((start,len(rows)))
+    return result
+
+def partition_export(rows,fields):
+    parts=partition_plan(rows,fields)
+    if len(parts)<2:raise ValueError("Partitioning is not required")
+    b=io.BytesIO()
+    with zipfile.ZipFile(b,"w",compression=zipfile.ZIP_STORED) as z:
+        for i,(start,end) in enumerate(parts,1):
+            z.writestr(f"NMDC_INDEX_{i:03d}.xlsx",export_bytes(rows[start:end],fields,"xlsx"))
+        z.writestr("manifest.json",json.dumps({"rows":len(rows),"parts":[{"file":f"NMDC_INDEX_{i:03d}.xlsx","rows":end-start} for i,(start,end) in enumerate(parts,1)]},indent=2))
+    return b.getvalue()
+
+def export_bytes(rows, fields, fmt):
+    if fmt == "json":
+        return json.dumps([{k:r.get(k,"") for k in fields} for r in rows], ensure_ascii=False, default=str).encode("utf-8")
+    if fmt == "csv":
+        b=io.StringIO(newline=""); w=csv.DictWriter(b,fieldnames=fields); w.writeheader()
+        # CSV has no text-cell metadata: neutralize spreadsheet-formula prefixes explicitly.
+        def safe(v):
+            s=str(v) if v is not None else ""
+            return "'" + s if s.lstrip().startswith(("=", "+", "-", "@")) else s
+        w.writerows({k:safe(r.get(k,"")) for k in fields} for r in rows)
+        return b.getvalue().encode("utf-8-sig")
+    if fmt != "xlsx": raise ValueError("Unknown export format")
+    if len(rows)>MAX_EXCEL_ROWS or len(fields)>16384: raise ValueError("Excel limits exceeded. Preview and explicitly confirm partitioned export.")
+    if not fields: raise ValueError("Select at least one output field.")
+    if sum(native_link(r,fields) for r in rows)>MAX_EXCEL_LINKS:
+        raise ValueError("Native hyperlink limit exceeded. Preview and explicitly confirm partitioned export.")
+    out=io.BytesIO()
+    with xlsxwriter.Workbook(out, {"in_memory":True,"strings_to_formulas":False,"strings_to_urls":False}) as book:
+        ws=book.add_worksheet("INDEX"); date_fmt=book.add_format({"num_format":"dd/mm/yyyy"}); links=0
+        for i,row in enumerate(rows,1):
+            for j,k in enumerate(fields):
+                v=row.get(k,"")
+                if isinstance(v,(dict,list)): v=json.dumps(v,ensure_ascii=False)
+                if isinstance(v,str) and len(v)>32767: raise ValueError("Cell exceeds Excel text limit: "+k)
+                if k in ("Event Date","Latest Event Date","Source Modified Date") and isinstance(v,str) and len(v)==10:
+                    dt=excel_date(v)
+                    if dt is not None:
+                        # Excel's 1900 system contains the fictional 29 February.
+                        serial=(dt-datetime(1899,12,31)).days+(1 if dt>=datetime(1900,3,1) else 0)
+                        ws.write_number(i,j,serial,date_fmt);continue
+                target=excel_target(v) if k in LINK_FIELDS else None
+                if target is not None:
+                    rc=ws.write_url(i,j,target,string=v)
+                    if rc!=0:raise ValueError("Excel hyperlink write rejected: "+k)
+                    links+=1;continue
+                # Unsupported targets are retained literally and counted in the export preview.
+                # Explicit string writes also prevent array-formula syntax from being interpreted.
+                if isinstance(v,str):
+                    if not v:continue
+                    rc=ws.write_string(i,j,v)
+                else:rc=ws.write(i,j,v)
+                if rc != 0: raise ValueError("Excel cell write rejected: "+k)
+        if ws.add_table(0,0,max(1,len(rows)),len(fields)-1,{"name":"NMDCIndex","columns":[{"header":k} for k in fields]}) != 0:
+            raise ValueError("Excel table creation failed")
+        ws.freeze_panes(1,0); ws.set_column(0,len(fields)-1,18)
+    return out.getvalue()
+
+class ScanCancelled(Exception): pass
+
+class App:
+    def __init__(self, workspace):
+        self.root=assert_workspace_paths(workspace); self.root.mkdir(parents=True,exist_ok=True)
+        self.lock=WorkspaceLock(self.root)
+        self.state=self.root/"state"; self.config=self.root/"config"; self.config.mkdir(exist_ok=True)
+        for p in (ROOT/"config").glob("*.csv"):
+            dest=self.config/p.name
+            if not dest.exists(): shutil.copy2(p,dest)
+        self.settings_path=self.root/"settings.json"
+        self.settings=read_json(self.settings_path, {})
+        self.guard=threading.RLock(); self.job_path=self.root/"job.json"; self.job=read_json(self.job_path,{"status":"idle"}); self.cache={}; self.token=secrets.token_urlsafe(32); self.cancel=threading.Event()
+        if self.job.get("status")=="running":
+            self.settings["requires_rescan"]=True;self.save_settings()
+            self.job={"status":"interrupted","message":"Previous scan interrupted. Run a new scan before approval."}
+            _write_json_atomic(self.job_path,self.job)
+            _append_log(self.state,{"event":"SCAN_INTERRUPTED","at":utc_now()})
+        if (self.state/"approved"/"current.json").is_file():self.prepare_views()
+    def save_settings(self): _write_json_atomic(self.settings_path,self.settings)
+    def save_job(self,job):
+        _write_json_atomic(self.job_path,job)
+        self.job=job
+    def source(self):
+        v=self.settings.get("data_dir")
+        if not v: raise ValueError("Select the DATA folder first.")
+        p=Path(v).resolve()
+        if not p.is_dir(): raise ValueError("Source folder is unavailable.")
+        if self.root==p or self.root in p.parents or p in self.root.parents:
+            raise ValueError("Source and workspace must be separate.")
+        return p
+    def idle(self):
+        if self.job["status"]=="running": raise ValueError("A processing job is active.")
+    def select(self):
+        self.idle();self.require_clean_review()
+        import tkinter as tk
+        from tkinter import filedialog
+        root=tk.Tk(); root.withdraw(); root.attributes("-topmost",True)
+        try: value=filedialog.askdirectory(parent=root,title="Select NMDC DATA folder",mustexist=True)
+        finally: root.destroy()
+        if not value: return self.settings
+        previous=self.settings.get("data_dir")
+        if previous and Path(previous).resolve()!=Path(value).resolve() and (self.state/"approved"/"current.json").exists():
+            raise ValueError("Existing approved data belongs to another source. Use an isolated workspace.")
+        self.settings["data_dir"]=value
+        try:self.source()
+        except Exception:
+            if previous: self.settings["data_dir"]=previous
+            else:self.settings.pop("data_dir",None)
+            raise
+        if not previous or Path(previous).resolve()!=Path(value).resolve():self.settings["requires_rescan"]=True
+        self.save_settings(); return self.settings
+    def require_clean_review(self):
+        run=read_json(self.state/'staging'/'latest.json',{}).get('run_id','')
+        if run and read_json(self.state/'staging'/run/'web_draft.json',{}).get('dirty'):
+            raise ValueError('Save or explicitly discard the current review draft before continuing.')
+        if run and read_json(self.state/'staging'/run/'flag_review.json',{}).get('dirty'):
+            raise ValueError('Save the current flag review draft before continuing.')
+    def start(self,full):
+        self.idle(); self.require_clean_review()
+        self.cancel.clear()
+        was_dirty=bool(self.settings.get("requires_rescan"))
+        self.settings["requires_rescan"]=True;self.save_settings()
+        try:src=self.source()
+        except (OSError,ValueError) as exc:
+            self.save_job({"status":"error","message":str(exc)})
+            raise
+        self.save_job({"status":"running","mode":"full" if full else "incremental","started":time.time(),"phase":"Starting","current":0,"total":0})
+        def checkpoint(phase,current,total):
+            with self.guard:
+                if self.cancel.is_set():raise ScanCancelled("Cancelled before publishing proposal")
+                self.job.update(phase=phase,current=current,total=total)
+        def work():
+            try:
+                install_resilient_source_access(); install_layout_compatibility()
+                build=unchanged.build_identity()
+                checkpoint("Verify source identity",0,0)
+                result=None
+                if not full and not was_dirty:
+                    result=unchanged.check(self.state,src,self.config,build)
+                if result is None:
+                    before=unchanged.inputs(src,self.config,build)
+                    result=stage_runtime_update(data_dir=src,state_dir=self.state,config_dir=self.config,full_rescan=full,reuse_raw_profiles=True,checkpoint=checkpoint,verify_source_content=True,extraction_workers=min(4,os.cpu_count() or 1))
+                    after=None
+                    try:
+                        after=unchanged.inputs(src,self.config,build)
+                        result["input_proof"]=unchanged.stage_proof(self.state,result["run_id"],before,after,self.config)
+                    except (OSError,ValueError,KeyError,TypeError):
+                        result["input_proof"]=False;result["requires_rescan"]=True
+                    if before!=after:
+                        result["requires_rescan"]=True
+                with self.guard:
+                    if self.cancel.is_set() and self.job.get("phase")!="Publish proposal":raise ScanCancelled("Cancelled before completing scan")
+                    self.save_job({"status":"complete","result":result})
+                    self.settings["requires_rescan"]=bool(result.get("requires_rescan"));self.save_settings()
+            except ScanCancelled as exc:
+                with self.guard:self.save_job({"status":"cancelled","message":str(exc)})
+            except Exception as exc:
+                with self.guard:self.save_job({"status":"error","message":str(exc)})
+        threading.Thread(target=work,daemon=True).start()
+        return self.job
+    def cancel_job(self):
+        if self.job["status"]!="running":raise ValueError("No running scan")
+        if self.job.get("phase")=="Publish proposal":raise ValueError("Publishing is already in progress; wait for completion.")
+        self.cancel.set();self.job["cancel_requested"]=True;return self.job
+    def invalidate(self):
+        for model in self.cache.get("models",{}).values():model.close()
+        self.cache={}
+    def approved(self):
+        marker=self.state/"approved"/"current.json"
+        if marker.exists():
+            run=str(read_json(marker,{}).get("run_id",""))
+            if not re.fullmatch(r"[A-Za-z0-9_-]+",run):raise ValueError("Unsafe approved run pointer")
+            base=self.state/"approved"/"versions"
+            version=base/run
+            if not version.resolve().is_relative_to(base.resolve()) or version.is_symlink():raise ValueError("Approved version escapes workspace")
+        key=marker.read_bytes() if marker.exists() else b"legacy"
+        if self.cache.get("key")!=key:
+            self.invalidate()
+            a=load_approved_state(self.state)
+            self.cache={"key":key,"approved":a,"views":{},"models":{}}
+        return self.cache["approved"]
+    def view(self,scope):
+        a=self.approved(); views=self.cache["views"]
+        if scope not in CORE: raise ValueError("Unknown view")
+        if scope not in views:
+            raw=a["records"]
+            rows=[dict(r) for r in (raw if scope=="events" else build_document_rows(raw) if scope=="documents" else build_revision_rows(raw))]
+            source_root=a.get("manifest",{}).get("data_dir","")
+            if scope!="events":
+                by_source={(r.get("Source File"),r.get("Source Sheet"),str(r.get("Source Row"))):r for r in raw}
+                for r in rows:
+                    orig=by_source.get((r.get("Source File"),r.get("Source Sheet"),str(r.get("Source Row"))),{})
+                    r["Original_Hyperlink_Target"]=orig.get("Original_Hyperlink_Target","")
+                    if not r.get("Document Link"):r["Document Link"]=orig.get("Document Link","")
+            for r in rows:
+                r["Source Workbook Path"]=str(Path(source_root)/str(r.get("Source File",""))) if source_root else str(r.get("Source File",""))
+                if r.get("Document Link"):r["Document Link"]=resolve_document_target(r["Document Link"],r.get("Source File",""),source_root)
+            if scope=="documents":custom_fields.enrich(rows,self.custom_fields())
+            views[scope]=rows
+        return views[scope]
+    def view_fields(self,scope,rows=None):
+        fields=ordered_fields(self.view(scope) if rows is None else rows,scope)
+        if scope=="documents":fields=list(dict.fromkeys(fields+[f["Field Name"] for f in self.custom_fields()["fields"]]))
+        return fields
+    def query_page(self,scope,query="",column="",sort="",desc=False,filters=None,page=0,group=""):
+        rows=self.view(scope);models=self.cache["models"]
+        if scope not in models:models[scope]=ReadModel(rows,self.view_fields(scope,rows))
+        model=models[scope]
+        try:return model.page(query,column,sort,desc,filters,page,group)
+        except NotImplementedError:
+            matched=apply_filters(filter_rows(rows,query,column,sort,desc),filters or {},model.fields)
+            counts=Counter(str(r.get(group,"")).casefold() for r in matched) if group else {}
+            if group and group not in model.fields:raise ValueError("Unknown grouping field")
+            return {"count":len(matched),"fields":model.fields,"rows":matched[page*100:(page+1)*100],"groups":[{"value":k,"count":v} for k,v in sorted(counts.items(),key=lambda kv:(-kv[1],kv[0]))[:100]]}
+    def prepare_views(self):
+        # This work belongs to measured startup/promotion, before the UI becomes
+        # ready. Queries never construct a cold model after a normal approval.
+        for scope in CORE:
+            rows=self.view(scope)
+            self.cache["models"][scope]=ReadModel(rows,self.view_fields(scope,rows))
+    def dashboard(self):
+        self.idle()
+        approved=self.approved()
+        events=self.view("events");documents=self.view("documents");revisions=self.view("revisions")
+        groups={}
+        for field in ("Source Family","Discipline","Category"):
+            counts=Counter(str(r.get(field) or "UNCLASSIFIED") for r in documents)
+            groups[field]=[{"value":k,"count":v} for k,v in sorted(counts.items(),key=lambda item:(-item[1],item[0]))]
+        return {"run":approved["run_id"],"events":len(events),"documents":len(documents),"revisions":len(revisions),"groups":groups}
+    def save_view(self,body):
+        name=str(body.get("name","")).strip();scope=body.get("scope","events")
+        if not name or len(name)>100:raise ValueError("Invalid saved view name")
+        fields=self.view_fields(scope)
+        settings={k:str(body.get(k,"")) for k in ("query","column","sort","group")}
+        if any(settings[k] and settings[k] not in fields for k in ("column","sort","group")):raise ValueError("Unknown view field")
+        filters=body.get("filters",{});apply_filters([],filters,fields)
+        cols=body.get("columns",fields)
+        if not isinstance(cols,list) or not cols or any(k not in fields for k in cols):raise ValueError("Invalid columns")
+        views=self.settings.setdefault("index_views",{})
+        if body.get("delete") is True:views.pop(name,None)
+        else:views[name]=dict(settings,scope=scope,desc=body.get("desc") is True,filters=filters,columns=list(dict.fromkeys(cols)))
+        self.save_settings();return views
+    def proposal(self):
+        self.idle(); s=load_latest_stage(self.state)
+        run=s.get("run_id",""); status=s.get("decision",{}).get("decision","")
+        if not run or status in ("APPROVED","REJECTED"): return {"run":"","files":[],"flags":[]}
+        files=affected_files(self.state,run)
+        saved=read_json(s["stage_dir"]/"file_review.json",{})
+        valid=False
+        if saved:
+            try: validated_review(self.state,run,required=True); valid=True
+            except ValueError: pass
+        if valid:
+            for f in files:
+                c=saved["choices"][f["Source File"]]; f["Accept Update?"]=c["accept"]; f["Owner Note"]=c["note"]
+        baseline=_baseline(self.state,s["stage_dir"])
+        draft=read_json(s["stage_dir"]/"web_draft.json",{})
+        version=0;dirty=False
+        if draft.get("baseline")==baseline and draft.get("run")==run:
+            version=int(draft.get("version",0));dirty=bool(draft.get("dirty",False))
+            choices=draft.get("choices",{})
+            if dirty and set(choices)=={f["Source File"] for f in files}:
+                for f in files:
+                    ch=choices[f["Source File"]];f["Accept Update?"]=ch["accept"];f["Owner Note"]=ch["note"]
+            elif dirty:raise ValueError("Saved web draft does not match current files")
+        review=FlagReview(s,build_flag_rows(s),baseline)
+        return {"run":run,"files":files,"flags":review.rows,"flag_version":review.payload["version"],"flag_dirty":review.payload["dirty"],"summary":s["summary"],"saved":valid and not dirty,"draft_dirty":dirty,"draft_version":version,"baseline":baseline}
+    def draft_choices(self,body,dirty=True):
+        self.idle();p=self.proposal()
+        if not p["run"] or body.get("run")!=p["run"]:raise ValueError("Proposal changed")
+        if body.get("draft_version",0)!=p["draft_version"]:raise ValueError("Review was edited elsewhere. Reload before editing.")
+        choices={}
+        for r in body["files"]:
+            source=r["Source File"]
+            if source in choices or type(r["Accept Update?"]) is not bool:raise ValueError("Invalid or duplicate file choice")
+            choices[source]={"accept":r["Accept Update?"],"note":str(r.get("Owner Note",""))}
+        if set(choices)!={f["Source File"] for f in p["files"]}:raise ValueError("Missing or unknown file choices")
+        payload={"run":p["run"],"baseline":p["baseline"],"version":p["draft_version"]+1,"dirty":dirty,"choices":choices}
+        _write_json_atomic(self.state/"staging"/p["run"]/"web_draft.json",payload)
+        return {"draft_version":payload["version"],"dirty":dirty}
+    def save_choices(self,body):
+        self.idle()
+        p=self.proposal()
+        if body.get("run")!=p["run"] or not p["run"]: raise ValueError("Proposal has changed")
+        if body.get("draft_version",0)!=p["draft_version"]:raise ValueError("Review was edited elsewhere. Reload before saving.")
+        f=self.root/"choices.csv"
+        try:
+            with f.open("w",encoding="utf-8",newline="") as h:
+                w=csv.DictWriter(h,fieldnames=["Source File","Accept Update?","Owner Note"]); w.writeheader()
+                for r in body["files"]:
+                    if type(r["Accept Update?"]) is not bool: raise ValueError("Invalid choice")
+                    w.writerow({"Source File":r["Source File"],"Accept Update?":str(r["Accept Update?"]).upper(),"Owner Note":str(r.get("Owner Note",""))})
+            result=save_file_review(self.state,p["run"],f)
+            self.draft_choices(body,dirty=False)
+            return result
+        finally: f.unlink(missing_ok=True)
+    def discard_draft(self,body,*,require_versions=False):
+        self.idle();p=self.proposal()
+        if require_versions:self.require_review_versions(body,p)
+        if not p['run'] or body.get('run')!=p['run'] or body.get('draft_version')!=p['draft_version']:
+            raise ValueError('Review changed; reload.')
+        if body.get('confirm') is not True:raise ValueError('Confirm discarding the current unsaved choices.')
+        path=self.state/'staging'/p['run']/'web_draft.json'
+        old=read_json(path,{})
+        if old:
+            archive=path.parent/('web_draft-discarded-'+secrets.token_hex(6)+'.json')
+            _write_json_atomic(archive,old)
+            old['dirty']=False;old['version']=p['draft_version']+1;_write_json_atomic(path,old)
+            _append_log(self.state,{'event':'DRAFT_DISCARDED','run_id':p['run'],'at':utc_now()})
+        return {'discarded':True}
+    def draft_history(self):
+        self.idle();out=[]
+        for path in sorted((self.state/'staging').glob('*/web_draft*.json'),reverse=True):
+            payload=read_json(path,{})
+            out.append({'run':path.parent.name,'file':path.name,'dirty':payload.get('dirty',False),'version':payload.get('version',0),'choices':payload.get('choices',{})})
+        return out[:100]
+    def file_details(self,run,source,page=0):
+        p=self.proposal()
+        if run!=p['run'] or source not in {f['Source File'] for f in p['files']}:raise ValueError('Unknown or replaced file proposal')
+        stage=load_latest_stage(self.state)
+        before,_=_index_records([r for r in self.approved()['records'] if r.get('Source File')==source],'approved')
+        after,_=_index_records([r for r in stage['records'] if r.get('Source File')==source],'staged')
+        changed=[]
+        for key in sorted(set(before)|set(after)):
+            a,b=before.get(key),after.get(key)
+            if a is not None and b is not None and _canonical_record(a)==_canonical_record(b):continue
+            kind='ADDED' if a is None else 'REMOVED' if b is None else 'MODIFIED'
+            changed.append({'identity':key,'type':kind,'before':a,'after':b,'fields':[k for k in sorted(set(a or {})|set(b or {})) if (a or {}).get(k)!=(b or {}).get(k)]})
+        return {'count':len(changed),'rows':changed[page*50:(page+1)*50]}
+    def decide_proposal(self,body,*,require_versions=False):
+        self.idle();self.require_clean_review();p=self.proposal()
+        if require_versions:self.require_review_versions(body,p)
+        if not p['run'] or body.get('run')!=p['run']:raise ValueError('Proposal changed')
+        decision=body.get('decision');note=str(body.get('note',''))
+        if decision=='HOLD':return hold_stage(self.state,p['run'],note=note)
+        if decision=='REJECT':return reject_stage(self.state,p['run'],note=note)
+        raise ValueError('Unknown proposal decision')
+    def require_review_versions(self,body,proposal):
+        if not proposal.get("run") or body.get("run")!=proposal["run"] or any(type(body.get(k)) is not int or body[k]!=proposal[k] for k in ("draft_version","flag_version")):
+            raise ValueError("Displayed review version changed; reload and confirm the current saved choices.")
+    def approve(self,body,*,require_versions=False):
+        self.idle(); p=self.proposal()
+        if self.settings.get("requires_rescan"): raise ValueError("Configuration or source state changed; rescan before approval.")
+        if self.settings.get("data_dir"):self.source()
+        if not p["run"] or body.get("run")!=p["run"]: raise ValueError("Proposal changed")
+        if require_versions:self.require_review_versions(body,p)
+        if not p["saved"]:raise ValueError("Save all file choices before approval.")
+        if p["flag_dirty"]:raise ValueError("Save flag decisions before approval.")
+        # The review is an observation of source bytes, not a lock on external files.
+        # Recheck content at the promotion boundary, including same-metadata edits.
+        if self.settings.get("data_dir"):
+            from nmdc_profiler.update_engine import fingerprint_paths
+            manifest=load_latest_stage(self.state)["manifest"]
+            try:
+                current=unchanged.inputs(self.source(),self.config,unchanged.build_identity())
+                expected={r["relative_path"]:[r["sha256"],r["size"]] for r in manifest["files"]}
+                if expected!={k:v[:2] for k,v in current["source"].items()}:raise ValueError("Source changed")
+                fingerprint=manifest.get("config_fingerprint")
+                if fingerprint and fingerprint!=fingerprint_paths([]) and fingerprint!=fingerprint_paths([self.config/"classification_rules.csv",self.config/"project_identity_overrides.csv"]):
+                    raise ValueError("Configuration changed")
+            except (OSError,ValueError,KeyError,TypeError) as exc:
+                self.settings["requires_rescan"]=True;self.save_settings()
+                raise ValueError("Source or configuration changed; rescan before approval.") from exc
+        # Conservative candidate: no override and no unresolved non-routine flag approval.
+        routine={"SOURCE_NEW","SOURCE_CHANGED","PARSER_VERSION_CHANGED","CONFIG_CHANGED","CACHE_MISSING","SOURCE_REMOVED"}
+        if any(f["Flag Code"] not in routine or f.get("User Decision") in ("HOLD FOR REVIEW","NEEDS SOURCE CORRECTION","NEEDS PARSER/MAPPING FIX") for f in p["flags"]):
+            raise ValueError("Unresolved flags require correction; candidate does not provide override.")
+        self.backup("Before approval")
+        result=approve_stage(self.state,p["run"],require_file_review=True,allow_conflicts=False,review_removals=True)
+        self.invalidate()
+        try:self.prepare_views()
+        except (ValueError,OSError,MemoryError) as error:
+            result["index_warning"]="Approved snapshot saved; derived view preparation failed: "+str(error)
+        if self.settings.get("data_dir"):
+            try:result["verified_unchanged_eligible"]=unchanged.certify(self.state,self.source(),self.config,unchanged.build_identity())
+            except (OSError,ValueError,KeyError,TypeError):result["verified_unchanged_eligible"]=False
+        return result
+
+    def backup(self,reason):
+        self.idle()
+        return create_bundle(self.root,reason)
+    def restore_copy(self):
+        self.idle()
+        import tkinter as tk
+        from tkinter import filedialog
+        root=tk.Tk();root.withdraw();root.attributes("-topmost",True)
+        try: value=filedialog.askopenfilename(parent=root,title="Select verified NMDC recovery ZIP",filetypes=[("Recovery bundle","*.zip")])
+        finally:root.destroy()
+        if not value:return {"status":"cancelled"}
+        target=self.root.parent/(self.root.name+"-restored-"+secrets.token_hex(5))
+        if self.settings.get("data_dir") and target.is_relative_to(self.source()):raise ValueError("Recovery destination overlaps DATA")
+        return restore_to_new_workspace(value,target)
+    def preview_legacy(self):
+        self.idle()
+        import tkinter as tk
+        from tkinter import filedialog
+        root=tk.Tk();root.withdraw();root.attributes("-topmost",True)
+        try:value=filedialog.askdirectory(parent=root,title="Select legacy package for read-only migration preview",mustexist=True)
+        finally:root.destroy()
+        if not value:return {"cancelled":True}
+        self.legacy_preview=preview_package(value)
+        return self.legacy_preview
+    def migrate_legacy(self,body):
+        self.idle()
+        preview=getattr(self,"legacy_preview",None)
+        if body.get("confirm")!="MIGRATE" or not preview or body.get("preview_sha256")!=preview["preview_sha256"]:
+            raise ValueError("Preview the legacy package and type MIGRATE to confirm this exact inventory.")
+        if preview["blockers"]:raise ValueError("Resolve migration compatibility blockers before import.")
+        self.backup("Before side-by-side migration")
+        target=self.root.parent/(self.root.name+"-migrated-"+secrets.token_hex(5))
+        if self.settings.get("data_dir") and (target==self.source() or self.source() in target.parents):raise ValueError("Migration destination overlaps DATA")
+        return import_package(preview["package"],target,preview["preview_sha256"])
+    def reset(self,body):
+        self.idle()
+        if body.get("confirm")!="RESET":raise ValueError("Type RESET to confirm clearing active runtime views.")
+        self.settings["requires_rescan"]=True;self.save_settings()
+        result=reset_workspace(self.root,"RESET");self.invalidate()
+        (self.state/"verified-unchanged.json").unlink(missing_ok=True)
+        return result
+    def undo(self,body):
+        self.idle();self.require_clean_review()
+        result=undo_approval(self.state,body.get("confirm"))
+        self.settings["requires_rescan"]=True;self.save_settings();self.invalidate()
+        (self.state/"verified-unchanged.json").unlink(missing_ok=True)
+        return result
+    def manifest_files(self):
+        self.idle()
+        s=load_latest_stage(self.state)
+        manifest=s.get("manifest") or self.approved().get("manifest",{})
+        excluded=read_source_exclusions(self.config/"source_exclusions.csv")
+        return [dict(r,owner_excluded=str(r.get("relative_path","")).replace("\\","/").lstrip("/").casefold() in excluded) for r in manifest.get("files",[])]
+    def source_choice(self,body):
+        self.idle();self.require_clean_review()
+        rel=body.get("source","")
+        if rel not in {r["relative_path"] for r in self.manifest_files()}: raise ValueError("Source not in current inventory")
+        if type(body.get("include")) is not bool:raise ValueError("Invalid scope choice")
+        self.settings["requires_rescan"]=True;self.save_settings()
+        target=self.config/"source_exclusions.csv"
+        if target.exists():
+            history=self.root/"config-history";history.mkdir(exist_ok=True)
+            shutil.copy2(target,history/("source_exclusions-"+secrets.token_hex(8)+".csv"))
+        result=set_source_selection(self.config,rel,include=body["include"],reason=str(body.get("note","")))
+        return result
+    def custom_fields(self):
+        return custom_fields.validate(read_json(self.config/"custom_fields.json",{"fields":[],"mappings":[]}),list(OUTPUT_FIELDS)+[k for fields in CORE.values() for k in fields])
+    def save_custom_fields(self,body):
+        self.idle()
+        payload=custom_fields.validate(body,list(OUTPUT_FIELDS)+[k for fields in CORE.values() for k in fields])
+        path=self.config/"custom_fields.json"
+        if path.exists():
+            history=self.root/"config-history";history.mkdir(exist_ok=True)
+            shutil.copy2(path,history/("custom_fields-"+secrets.token_hex(8)+".json"))
+        _write_json_atomic(path,payload)
+        self.invalidate()
+        _append_log(self.state,{"event":"CUSTOM_FIELDS_SAVED","at":utc_now(),"fields":len(payload["fields"]),"mappings":len(payload["mappings"])})
+        return payload
+    def project_mappings(self):
+        self.idle();p=self.config/"project_identity_overrides.csv"
+        with p.open(encoding="utf-8-sig",newline="") as h:
+            r=csv.DictReader(h);return {"columns":r.fieldnames,"rows":list(r)}
+    def save_project_mappings(self,body):
+        self.idle();self.require_clean_review();current=self.project_mappings();columns=current["columns"];rows=body.get("rows")
+        if body.get("columns")!=columns or not isinstance(rows,list) or len(rows)>5000:raise ValueError("Project mapping schema mismatch")
+        seen=set()
+        for r in rows:
+            if not isinstance(r,dict) or set(r)!=set(columns) or not all(isinstance(v,str) for v in r.values()):raise ValueError("Invalid project mapping row")
+            source=r.get("Source File","").strip();status=r.get("Decision Status","").strip().upper()
+            if not source or source in seen or not r.get("Approved Project No.","").strip() and status=="APPROVED":raise ValueError("Duplicate, missing or incomplete approved project mapping")
+            seen.add(source)
+        target=self.config/"project_identity_overrides.csv";tmp=target.with_suffix(".tmp")
+        try:
+            with tmp.open("w",encoding="utf-8-sig",newline="") as h:
+                w=csv.DictWriter(h,fieldnames=columns);w.writeheader();w.writerows(rows)
+            from nmdc_profiler.project_identity import load_project_identity_overrides
+            load_project_identity_overrides(tmp)
+            history=self.root/"config-history";history.mkdir(exist_ok=True)
+            shutil.copy2(target,history/("project_identity-"+secrets.token_hex(8)+".csv"))
+            self.settings["requires_rescan"]=True;self.save_settings();os.replace(tmp,target)
+        finally:tmp.unlink(missing_ok=True)
+        return {"saved":len(rows),"requires_rescan":True}
+    def rules(self):
+        self.idle()
+        p=self.config/"classification_rules.csv"
+        with p.open(encoding="utf-8-sig",newline="") as h:
+            r=csv.DictReader(h)
+            return {"columns":r.fieldnames,"rows":list(r)}
+    def validate_rules_file(self,path):
+        with path.open(encoding="utf-8-sig",newline="") as handle:
+            reader=csv.DictReader(handle);rows=list(reader)
+            if reader.fieldnames!=self.rules()["columns"]:raise ValueError("Rule schema mismatch")
+        ids=set()
+        for row in rows:
+            if None in row or None in row.values():raise ValueError("Invalid rule row")
+            key=row["Rule_ID"].strip()
+            if not key or key in ids:raise ValueError("Missing or duplicate rule identity")
+            ids.add(key)
+            if any(row[k].strip().upper() not in ("YES","NO") for k in ("Enabled","Stop_On_Match","Include")):
+                raise ValueError("Rule switches must be YES or NO")
+        rules=load_rules(path)
+        for r in rules:
+            if not r.rule_id or not r.words.strip() or r.match_type not in {"EXACT","CONTAINS","STARTS_WITH","ENDS_WITH","FUZZY","REGEX"} or r.scope not in {"FILE","WORKSHEET","SECTION","HEADER","DOC_NUMBER","TITLE"} or r.family not in {"ANY","METHODS","TECH"} or r.include not in {"YES","NO"} or not 0<=r.min_confidence<=100:raise ValueError("Invalid classification rule: "+r.rule_id)
+        return rules
+    def configuration_history(self):
+        self.idle();history=self.root/"config-history"
+        types={"classification_rules":"csv","project_identity":"csv","source_exclusions":"csv","custom_fields":"json"}
+        versions=[]
+        for kind,ext in types.items():
+            for path in history.glob(kind+"-*."+ext):
+                if path.is_file() and not path.is_symlink():versions.append({"id":path.name,"kind":kind,"modified":path.stat().st_mtime,"sha256":hashlib.sha256(path.read_bytes()).hexdigest()})
+        return sorted(versions,key=lambda r:r["modified"],reverse=True)
+    def restore_configuration(self,body):
+        self.idle();self.require_clean_review()
+        if body.get("confirm") is not True:raise ValueError("Confirm configuration restoration")
+        record=next((r for r in self.configuration_history() if r["id"]==body.get("id")),None)
+        if not record:raise ValueError("Unknown configuration history version")
+        kind=record["kind"];name={"classification_rules":"classification_rules.csv","project_identity":"project_identity_overrides.csv","source_exclusions":"source_exclusions.csv","custom_fields":"custom_fields.json"}[kind]
+        history=self.root/"config-history";source=history/record["id"];target=self.config/name
+        raw=source.read_bytes()
+        if hashlib.sha256(raw).hexdigest()!=record["sha256"]:raise ValueError("Configuration history changed")
+        tmp=target.with_name(target.name+".restore-"+secrets.token_hex(6))
+        try:
+            tmp.write_bytes(raw)
+            if kind=="classification_rules":self.validate_rules_file(tmp)
+            elif kind=="project_identity":
+                from nmdc_profiler.project_identity import load_project_identity_overrides
+                load_project_identity_overrides(tmp)
+            elif kind=="source_exclusions":read_source_exclusions(tmp)
+            else:custom_fields.validate(read_json(tmp,{}),list(OUTPUT_FIELDS)+[k for fields in CORE.values() for k in fields])
+            if target.exists():shutil.copy2(target,history/(kind+"-"+secrets.token_hex(8)+target.suffix))
+            if kind!="custom_fields":self.settings["requires_rescan"]=True;self.save_settings()
+            os.replace(tmp,target);self.invalidate()
+            _append_log(self.state,{"event":"CONFIGURATION_RESTORED","at":utc_now(),"kind":kind,"version":record["id"]})
+        finally:tmp.unlink(missing_ok=True)
+        return {"restored":record["id"],"requires_rescan":bool(self.settings.get("requires_rescan"))}
+    def save_rules(self,body):
+        self.idle();self.require_clean_review(); current=self.rules();columns=current["columns"]
+        if body.get("columns")!=columns or not isinstance(body.get("rows"),list):raise ValueError("Rule schema mismatch")
+        rows=body["rows"]
+        if len(rows)>5000 or any(not isinstance(r,dict) or set(r)!=set(columns) or not all(isinstance(v,str) for v in r.values()) for r in rows):raise ValueError("Invalid rule rows")
+        target=self.config/"classification_rules.csv";tmp=target.with_suffix(".tmp")
+        try:
+            with tmp.open("w",encoding="utf-8-sig",newline="") as h:
+                w=csv.DictWriter(h,fieldnames=columns);w.writeheader();w.writerows(rows)
+            self.validate_rules_file(tmp)
+            history=self.root/"config-history";history.mkdir(exist_ok=True)
+            shutil.copy2(target,history/("classification_rules-"+secrets.token_hex(8)+".csv"))
+            self.settings["requires_rescan"]=True;self.save_settings()
+            os.replace(tmp,target)
+        finally:tmp.unlink(missing_ok=True)
+        self.settings["requires_rescan"]=True;self.save_settings()
+        return {"saved":len(rows),"requires_rescan":True}
+    def flag_review(self,body):
+        self.idle();p=self.proposal()
+        if not p["run"] or p["run"]!=body.get("run"):raise ValueError("Proposal changed")
+        stage=load_latest_stage(self.state)
+        return FlagReview(stage,build_flag_rows(stage),p["baseline"])
+    def edit_flags(self,body,save):
+        review=self.flag_review(body)
+        result=review.edit(body,save)
+        if save:_append_log(self.state,{"event":"WEB_FLAG_DECISIONS_SAVED","at":utc_now(),"run_id":body["run"],"flag_version":result["flag_version"]})
+        return result
+    def report_directory(self,parent=None):
+        parent=Path(parent or self.settings.get("report_parent") or self.root.parent/"NMDC_V2_Reports").resolve()
+        def overlap(a,b):return a==b or a in b.parents or b in a.parents
+        root=parent/"PARSER_FIX_REPORTS"
+        if overlap(root,self.root):raise ValueError("Report path overlaps application workspace")
+        if self.settings.get("data_dir"):
+            source=self.source();project=source.parent if source.name.casefold()=="data" else source
+            if overlap(root,project):raise ValueError("Select a report folder outside DATA and its project root.")
+        return parent
+    def select_report_directory(self):
+        self.idle()
+        import tkinter as tk
+        from tkinter import filedialog
+        root=tk.Tk();root.withdraw();root.attributes("-topmost",True)
+        try:value=filedialog.askdirectory(parent=root,title="Select report parent outside project and workspace",mustexist=True)
+        finally:root.destroy()
+        if value:
+            self.settings["report_parent"]=str(self.report_directory(value));self.save_settings()
+        return self.settings
+    def report_flags(self,body):
+        review=self.flag_review(body);result=review.report(body,self.report_directory(),self.state)
+        _append_log(self.state,{"event":"PARSER_REPORT_CREATED","at":utc_now(),"run_id":body["run"],"request_sequence":result["request_sequence"]})
+        return result
+
+    def profile(self,body):
+        scope=body.get("scope");name=str(body.get("name","")).strip()
+        if not name or len(name)>100 or scope not in CORE:raise ValueError("Invalid profile")
+        fields=self.view_fields(scope)
+        cols=body.get("columns")
+        if not isinstance(cols,list) or not all(isinstance(x,str) and x in fields for x in cols):raise ValueError("Invalid profile columns")
+        profiles=self.settings.setdefault("export_profiles",{})
+        profiles[name]={"scope":scope,"columns":list(dict.fromkeys(cols+CORE[scope]))}
+        self.save_settings();return profiles
+
+def server_for(app):
+    class Handler(BaseHTTPRequestHandler):
+        server_version="NMDC-V2"
+        def log_message(self,*args): pass
+        def send(self,code,payload,ctype="application/json",name=None):
+            if not isinstance(payload,bytes): payload=json.dumps(payload,ensure_ascii=False,default=str).encode()
+            self.send_response(code); self.send_header("Content-Type",ctype)
+            self.send_header("Content-Length",str(len(payload))); self.send_header("Cache-Control","no-store")
+            self.send_header("X-Content-Type-Options","nosniff"); self.send_header("Referrer-Policy","no-referrer")
+            self.send_header("Content-Security-Policy","default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+            if name:self.send_header("Content-Disposition",'attachment; filename="'+name+'"')
+            self.end_headers();self.wfile.write(payload)
+        def auth(self,api=True):
+            expected="127.0.0.1:"+str(self.server.server_port)
+            if self.headers.get("Host")!=expected: raise PermissionError("Host rejected")
+            origin=self.headers.get("Origin")
+            if origin and origin!="http://"+expected: raise PermissionError("Origin rejected")
+            if self.command=="POST" and origin!="http://"+expected: raise PermissionError("Origin required")
+            if api and not hmac.compare_digest(self.headers.get("Authorization",""),"Bearer "+app.token): raise PermissionError("Invalid session")
+        def do_GET(self):
+            try:
+                u=urlsplit(self.path); path=u.path
+                if path in ("/","/app.js","/style.css"):
+                    self.auth(False); f=WEB/{" /":"index.html","/":"index.html","/app.js":"app.js","/style.css":"style.css"}[path]
+                    return self.send(200,f.read_bytes(),{"/":"text/html; charset=utf-8","/app.js":"application/javascript; charset=utf-8","/style.css":"text/css; charset=utf-8"}[path])
+                self.auth()
+                q={k:v[0] for k,v in parse_qs(u.query).items()}
+                with app.guard:
+                    if path=="/api/status":
+                        a=app.approved()
+                        return self.send(200,{"job":app.job,"settings":app.settings,"approved_run":a["run_id"],"events":len(a["records"])})
+                    if path=="/api/review":return self.send(200,app.proposal())
+                    if path=="/api/dashboard":return self.send(200,app.dashboard())
+                    if path=="/api/review-details":return self.send(200,app.file_details(q.get("run",""),q.get("source",""),max(0,int(q.get("page","0")))))
+                    if path=="/api/draft-history":return self.send(200,app.draft_history())
+                    if path=="/api/sources":return self.send(200,app.manifest_files())
+                    if path=="/api/rules":return self.send(200,app.rules())
+                    if path=="/api/config-history":return self.send(200,app.configuration_history())
+                    if path=="/api/custom-fields":return self.send(200,app.custom_fields())
+                    if path=="/api/project-mappings":return self.send(200,app.project_mappings())
+                    if path=="/api/history":return self.send(200,build_history_rows(app.state)[-500:])
+                    if path in ("/api/index","/api/export","/api/export-plan"):
+                        scope=q.get("scope","events");filters=json.loads(q.get("filters","{}"))
+                        if path=="/api/index":
+                            return self.send(200,app.query_page(scope,q.get("q",""),q.get("column",""),q.get("sort",""),q.get("desc")=="1",filters,max(0,int(q.get("page","0"))),q.get("group","")))
+                        rows=app.view(scope); fields=app.view_fields(scope,rows)
+                        rows=apply_filters(filter_rows(rows,q.get("q",""),q.get("column",""),q.get("sort",""),q.get("desc")=="1"),filters,fields)
+                        selected=q.get("columns","").split("|") if q.get("columns") else fields
+                        selected=list(dict.fromkeys(selected+CORE[scope]))
+                        if not set(selected)<=set(fields): raise ValueError("Unknown column")
+                        fmt=q.get("format","xlsx")
+                        if path=="/api/export-plan":
+                            parts=partition_plan(rows,selected)
+                            return self.send(200,{"rows":len(rows),"parts":len(parts),"run":app.approved()["run_id"],"preview":preview_token(app,q,selected),"links":link_summary(rows,selected),"exceptions":link_exceptions(rows,selected,excel_target),"date_exceptions":date_exceptions(rows,selected),"availability":"Targets have not been checked for availability. Native/formula eligibility verifies syntax only; verify actual clicks on both PCs."})
+                        if not hmac.compare_digest(q.get("preview",""),preview_token(app,q,selected)):
+                            raise ValueError("Export preview changed; preview the current snapshot, configuration and filters again.")
+                        if fmt=="xlsx":
+                            warnings=sum(v["literal_unverified"] for v in link_summary(rows,selected).values())
+                            if warnings and (q.get("literal_links")!="confirmed" or q.get("run")!=app.approved()["run_id"]):raise ValueError("Some hyperlink targets must remain literal. Review export preview and confirm.")
+                        if fmt=="xlsx" and len(partition_plan(rows,selected))>1:
+                            if q.get("partition")!="confirmed" or q.get("run")!=app.approved()["run_id"]:raise ValueError("Confirm partitioning for the current approved snapshot.")
+                            return self.send(200,partition_export(rows,selected),"application/zip","NMDC_INDEX_PARTS.zip")
+                        data=export_bytes(rows,selected,fmt)
+                        return self.send(200,data,{"xlsx":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","csv":"text/csv","json":"application/json"}[fmt],"NMDC_DOCUMENT_INDEX."+fmt)
+                    return self.send(404,{"error":"Unknown route"})
+            except PermissionError as e:self.send(403,{"error":str(e)})
+            except (ValueError,OSError,KeyError) as e:self.send(400,{"error":str(e)})
+            except Exception as e:self.send(500,{"error":str(e)})
+        def do_POST(self):
+            try:
+                self.auth()
+                size=int(self.headers.get("Content-Length","0"))
+                if not 0<=size<=2_000_000: raise ValueError("Request too large")
+                if not self.headers.get("Content-Type","").startswith("application/json"):raise ValueError("JSON required")
+                body=json.loads(self.rfile.read(size) or b"{}")
+                if not isinstance(body,dict):raise ValueError("JSON object required")
+                with app.guard:
+                    path=urlsplit(self.path).path
+                    if path=="/api/select":result=app.select()
+                    elif path=="/api/scan":result=app.start(body.get("full") is True)
+                    elif path=="/api/cancel":result=app.cancel_job()
+                    elif path=="/api/draft":result=app.draft_choices(body)
+                    elif path=="/api/discard-draft":result=app.discard_draft(body,require_versions=True)
+                    elif path=="/api/proposal-decision":result=app.decide_proposal(body,require_versions=True)
+                    elif path=="/api/save-choices":result=app.save_choices(body)
+                    elif path=="/api/approve":result=app.approve(body,require_versions=True)
+                    elif path=="/api/source-choice":result=app.source_choice(body)
+                    elif path=="/api/rules":result=app.save_rules(body)
+                    elif path=="/api/config-restore":result=app.restore_configuration(body)
+                    elif path=="/api/custom-fields":result=app.save_custom_fields(body)
+                    elif path=="/api/project-mappings":result=app.save_project_mappings(body)
+                    elif path=="/api/report":result=app.report_flags(body)
+                    elif path=="/api/flag-draft":result=app.edit_flags(body,False)
+                    elif path=="/api/flag-save":result=app.edit_flags(body,True)
+                    elif path=="/api/report-directory":result=app.select_report_directory()
+                    elif path=="/api/profile":result=app.profile(body)
+                    elif path=="/api/index-view":result=app.save_view(body)
+                    elif path=="/api/backup":result=app.backup("Manual recovery snapshot")
+                    elif path=="/api/restore-copy":result=app.restore_copy()
+                    elif path=="/api/undo":result=app.undo(body)
+                    elif path=="/api/reset":result=app.reset(body)
+                    elif path=="/api/migration-preview":result=app.preview_legacy()
+                    elif path=="/api/migration-import":result=app.migrate_legacy(body)
+                    elif path=="/api/backup-policy":
+                        keep=body.get("keep")
+                        if type(keep) is not int or not 1<=keep<=100:raise ValueError("Backup retention must be an integer from 1 to 100")
+                        app.idle();app.settings["backup_retention"]=keep;app.save_settings();result={"keep":keep}
+                    elif path=="/api/preferences":
+                        if body.get("theme") not in ("light","dark"):raise ValueError("Invalid theme")
+                        app.settings["theme"]=body["theme"]
+                        if body.get("density") in ("compact","comfortable"):app.settings["density"]=body["density"]
+                        app.save_settings();result=app.settings
+                    elif path=="/api/exit":
+                        app.idle();result={"status":"closing"};threading.Thread(target=self.server.shutdown,daemon=True).start()
+                    else:return self.send(404,{"error":"Unknown route"})
+                    return self.send(200,result)
+            except PermissionError as e:self.send(403,{"error":str(e)})
+            except (ValueError,OSError,KeyError) as e:self.send(400,{"error":str(e)})
+            except Exception as e:self.send(500,{"error":str(e)})
+    s=ThreadingHTTPServer(("127.0.0.1",0),Handler)
+    return s
+
+def self_test():
+    import tempfile, zipfile, urllib.request
+    with tempfile.TemporaryDirectory() as d:
+        app=App(Path(d)/"workspace")
+        s=server_for(app);t=threading.Thread(target=s.serve_forever,daemon=True);t.start()
+        try:
+            url="http://127.0.0.1:"+str(s.server_port)
+            req=urllib.request.Request(url+"/api/status",headers={"Authorization":"Bearer "+app.token})
+            assert json.load(urllib.request.urlopen(req))["events"]==0
+            assert b"NMDC" in urllib.request.urlopen(url).read()
+            try: urllib.request.urlopen(url+"/api/status")
+            except urllib.error.HTTPError as e: assert e.code==403
+            else:raise AssertionError("Missing token accepted")
+            rows=[{"Event_Key":"E1","Document No.":"0001","Document Title":"=1+1","Document Link":"https://example.invalid/a","Event Date":"2026-11-28","Source File":"test.xlsx"}]
+            b=export_bytes(rows,list(rows[0]),"xlsx")
+            with zipfile.ZipFile(io.BytesIO(b)) as z:
+                assert z.testzip() is None and "xl/tables/table1.xml" in z.namelist()
+                assert b'NMDCIndex' in z.read("xl/tables/table1.xml")
+                assert b'<f>' not in z.read("xl/worksheets/sheet1.xml")
+            assert filter_rows(rows,"0001 -missing","Document No.")==rows
+            assert partition_plan(rows*5,list(rows[0]),row_limit=2,link_limit=2)==[(0,2),(2,4),(4,5)]
+            # Exercise the pinned production update and review engine with an isolated synthetic processor.
+            data=Path(d)/"project"/"DATA";data.mkdir(parents=True);source=data/"register.xlsx";source.write_bytes(b"synthetic input")
+            before=hashlib.sha256(source.read_bytes()).hexdigest()
+            def processor(path,rel):
+                return [{"Event_Key":"E1","Source File":rel,"Project No.":"0001","Document No.":"D1","Document Title":"Fixture","Revision":"A","Revision_Key":"R1","Global_Document_Key":"D1","Source Sheet":"Register","Source Row":2,"Source Cell":"A2","Event Date":"2026-11-28"}]
+            staged=stage_update(data_dir=data,state_dir=app.state,processor=processor)
+            p=app.proposal();assert p["run"]==staged["run_id"] and len(p["files"])==1
+            try:app.approve({"run":p["run"]})
+            except ValueError:pass
+            else:raise AssertionError("Unsaved approval permitted")
+            draft=app.draft_choices({"run":p["run"],"files":p["files"],"draft_version":0})
+            assert app.proposal()["draft_dirty"]
+            try:app.approve({"run":p["run"]})
+            except ValueError:pass
+            else:raise AssertionError("Draft approval permitted")
+            app.save_choices({"run":p["run"],"files":p["files"],"draft_version":draft["draft_version"]})
+            assert app.proposal()["saved"]
+            app.approve({"run":p["run"]})
+            assert app.approved()["records"][0]["Event_Key"]=="E1"
+            assert hashlib.sha256(source.read_bytes()).hexdigest()==before
+            assert app.view("events")[0]["Document No."]=="D1"
+            for query,column in [('"D1"',"Document No."),("d1 -missing",""),('"D1"',""),("missing","")]:
+                page=app.query_page("events",query,column,filters={"Project No.":["0001"]},group="Revision")
+                expected=filter_rows(app.view("events"),query,column)
+                assert page["rows"]==expected and page["count"]==len(expected)
+            assert app.query_page("events",filters={"Project No.":["9999"]})["count"]==0
+            assert app.query_page("events",group="Revision")["groups"]==[{"value":"A","count":1}]
+            assert app.save_view({"name":"QA","scope":"events","filters":{"Project No.":["0001"]},"columns":["Document No."]})["QA"]["columns"]==["Document No."]
+            assert filter_rows(rows,'"0001"',"Document No.")==rows
+            assert not filter_rows(rows,'"001"',"Document No.")
+            profiles=app.profile({"name":"Test","scope":"events","columns":["Document No."]})
+            assert "Event_Key" in profiles["Test"]["columns"] and "Test" in read_json(app.settings_path,{})["export_profiles"]
+            assert len(app.manifest_files())==1
+            assert app.rules()["columns"]
+            # New isolated synthetic proposal with a parser flag, no approval.
+            source.write_bytes(b"synthetic input changed")
+            result=stage_update(data_dir=data,state_dir=app.state,processor=processor,
+                post_process_flags=lambda:[{"level":"REVIEW","code":"UNRECOGNIZED_LAYOUT","source":"register.xlsx","source_sheet":"Register","message":"Synthetic test"}])
+            p=app.proposal()
+            flag=next(r for r in p["flags"] if r["Flag Code"]=="UNRECOGNIZED_LAYOUT")
+            # Explicit isolated reporting location for the synthetic test; no live project root selected.
+            report=app.report_flags({"run":p["run"],"flag_version":p["flag_version"],"ids":[flag["Flag ID"]],"comment":"Synthetic expected mapping"})
+            assert report["parser_mapping_fix_requests"]==1
+            report_dir=Path(d)/"NMDC_V2_Reports"/"PARSER_FIX_REPORTS"/"0001"
+            assert (report_dir/"PARSER_FIX_REQUEST.md").exists()
+            assert app.approved()["records"][0]["Event_Key"]=="E1"
+            # Cancellation cannot replace the previous staged pointer or the approved version.
+            marker=app.state/"staging"/"latest.json"; prior=marker.read_bytes()
+            def stop(phase,current,total):
+                if phase=="Publish proposal":raise ScanCancelled("test")
+            try:stage_update(data_dir=data,state_dir=app.state,processor=processor,checkpoint=stop)
+            except ScanCancelled:pass
+            else:raise AssertionError("Cancellation not respected")
+            assert marker.read_bytes()==prior and app.approved()["records"][0]["Event_Key"]=="E1"
+            backup=app.backup("Synthetic recovery test")
+            recovered=Path(d)/"restored"
+            restore_to_new_workspace(backup["path"],recovered)
+            assert inventory(recovered)==inventory(app.root)
+            try:restore_to_new_workspace(backup["path"],recovered)
+            except ValueError:pass
+            else:raise AssertionError("Restore overwrote existing folder")
+            print("Standalone HTTP/auth/XLSX and production update/review smoke PASS")
+        finally:s.shutdown();s.server_close();app.invalidate();app.lock.close()
+def main():
+    p=argparse.ArgumentParser();p.add_argument("--self-test",action="store_true");p.add_argument("--workspace",type=Path);p.add_argument("--no-browser",action="store_true")
+    args=p.parse_args()
+    if args.self_test:self_test();return
+    root=args.workspace or Path(os.environ.get("LOCALAPPDATA",Path.home()))/"NMDCIndexV2"
+    app=App(root)
+    try:
+        s=server_for(app);url="http://127.0.0.1:"+str(s.server_port)+"/#"+app.token
+        print("NMDC V2 running. Close using Exit in the app. "+url,flush=True)
+        if not args.no_browser:webbrowser.open(url)
+        s.serve_forever()
+    finally:
+        if "s" in locals():s.server_close()
+        app.invalidate();app.lock.close()
+if __name__=="__main__":
+    multiprocessing.freeze_support()
+    main()

@@ -378,6 +378,7 @@ def stage_update(
     selection_statuses: Mapping[str, str] | None = None,
     initial_flags: Sequence[Mapping[str, Any]] = (),
     post_process_flags: FlagProvider | None = None,
+    checkpoint: Callable[[str, int, int], None] | None = None,
 ) -> Dict[str, Any]:
     """Create a proposed update without changing the approved dataset."""
     data_dir = Path(data_dir)
@@ -404,7 +405,8 @@ def stage_update(
     effective_decisions: List[SourceDecision] = []
     reprocessed_sources: List[str] = []
 
-    for original_decision in decisions:
+    for position, original_decision in enumerate(decisions):
+        if checkpoint is not None: checkpoint("Process sources", position, len(decisions))
         decision = original_decision
         rel = decision.relative_path
         now = current_map.get(rel, {})
@@ -518,6 +520,7 @@ def stage_update(
                 _set_manifest_processed_run(current_manifest, rel, str(old.get("last_processed_run", approved_manifest.get("run_id", ""))))
             effective_decisions.append(decision)
 
+    if checkpoint is not None: checkpoint("Reconcile records", len(decisions), len(decisions))
     staged_rows.sort(
         key=lambda r: (
             str(r.get("Project No.", "")),
@@ -579,7 +582,8 @@ def stage_update(
         "approved_base_run_id": str(approved_manifest.get("run_id", "")),
     }
     _write_json(stage_dir / "summary.json", summary)
-    _write_json(state_dir / "staging" / "latest.json", {"run_id": run_id})
+    if checkpoint is not None: checkpoint("Publish proposal", 1, 1)
+    _write_json_atomic(state_dir / "staging" / "latest.json", {"run_id": run_id})
     _append_log(state_dir, {"event": "STAGED", "at": utc_now(), **summary})
     return summary
 
@@ -598,7 +602,7 @@ def _resolve_stage(state_dir: Path, run_id: str | None) -> Tuple[str, Path]:
 
 
 def approve_stage(state_dir: Path, run_id: str | None = None, *, allow_conflicts: bool = False,
-                  require_file_review: bool = False) -> Dict[str, Any]:
+                  require_file_review: bool = False, review_removals: bool = False) -> Dict[str, Any]:
     """Promote one staged package into approved state after explicit user approval."""
     state_dir = Path(state_dir)
     run_id, stage_dir = _resolve_stage(state_dir, run_id)
@@ -618,11 +622,18 @@ def approve_stage(state_dir: Path, run_id: str | None = None, *, allow_conflicts
             + ", ".join(non_overridable)
             + ". Correct the underlying problem and stage again."
         )
-    if blocking and not allow_conflicts:
-        raise ValueError(f"Staged update has {blocking} blocking conflict flag(s); approval is not allowed without an explicit override.")
-
     from .file_review import merge_deferred_files, validated_review
     review = validated_review(state_dir, run_id, required=require_file_review)
+    if blocking and not allow_conflicts:
+        conflicts=[f for f in flags if f.get("level")=="CONFLICT"]
+        # V2 only: a missing file can be deferred or explicitly accepted for removal.
+        # Require saved exact-run choices and an explicit removal acknowledgement for accepted files.
+        acknowledged = review_removals and require_file_review and len(conflicts)==blocking and all(
+            f.get("code")=="SOURCE_REMOVED" and f.get("source") in review.get("choices",{})
+            and (not review["choices"][f["source"]]["accept"] or review["choices"][f["source"]]["note"].strip())
+            for f in conflicts)
+        if not acknowledged:
+            raise ValueError(f"Staged update has {blocking} blocking conflict flag(s); review and explicitly document removal or defer the file.")
     merged = merge_deferred_files(state_dir, stage_dir, review) if review else None
     if merged:
         _, merge_flags = compare_records([], merged[2])
@@ -648,6 +659,7 @@ def approve_stage(state_dir: Path, run_id: str | None = None, *, allow_conflicts
         "decision": "APPROVED",
         "approved_at": utc_now(),
         "allow_conflicts": bool(allow_conflicts),
+        **({"reviewed_removals": [f["source"] for f in flags if f.get("code")=="SOURCE_REMOVED"]} if review_removals else {}),
         "deferred_files": [source for source, choice in review.get("choices", {}).items() if not choice["accept"]],
     }
     _write_json(version_dir / "approval.json", approval)
