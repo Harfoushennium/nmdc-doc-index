@@ -27,6 +27,35 @@ Resume remaining work at current Codex checkpoint. Latest baseline CI run 461303
 
 Use Matt Skills or equivalent small vertical slices and behavioral tests; follow Section 8 token-efficiency rules. Preserve prior artifacts and baseline, no new architecture research. Report only genuine blockers; do not stop at intermediate milestones unnecessarily.
 
+## Mandatory continuous GitHub progress reporting
+
+GitHub is the live execution record, not merely the final delivery location. Report progress **while working**, without waiting for the user to ask. These requirements apply to the lead agent and delegated workers (lead agent consolidates their updates).
+
+1. **At session start/resume:** read the latest PR #43 dashboard, branch HEAD and active tickets. Publish executor, actual model/effort (or NOT VERIFIED), current SHA, ticket(s), next concrete task and known blockers. Record a checkpoint before lengthy work begins.
+2. **During execution:** update the single pinned-by-convention progress dashboard comment on PR #43 at each meaningful milestone (reproducer, implementation slice, test result, finding, blocker, dependency change) and at least every 15 minutes of active work when GitHub is reachable. Report a concise status even during a lengthy test/build; never fabricate progress. Do not wait until the end of a ticket or session to synchronize.
+3. **Commit and push:** push each coherent, attributable implementation/test/documentation slice promptly to `feature/nmdc-v2-antigravity-neon`. Use the required [AG-NEON][#ticket] prefix and trailers. If a long task has no coherent commit yet, publish a checkpoint describing uncommitted work and what remains; do not push secrets, private artifacts or deliberately broken code as verified. Clearly label work-in-progress and failed tests. Do not modify the integration branch or squash evidence.
+4. **Ticket traceability:** update the existing affected issue(s) on meaningful changes, including actual test evidence and proposed closeout. Do not create duplicate tickets or automatically close outstanding tickets before Codex review. Record new findings with severity and reproducible evidence.
+5. **On interruption, context compaction, handoff or session end:** publish the latest available checkpoint before stopping, where possible. Include exact pushed SHA, unpushed work, current tests, outstanding issues, and the next executable command/task. Do not claim a checkpoint was saved if push/API operations failed. If GitHub is unavailable, retain a sanitized local checkpoint, report the blocker and synchronize when access returns.
+6. **Evidence:** update `docs/architecture/NMDC-V2-ANTIGRAVITY-NEON-EVIDENCE.md` incrementally as acceptance evidence becomes available. Retain CI links, actual results, artifact hashes, findings and exact commits; keep sensitive owner-workspace data local. Do not delay evidence collection until final review.
+
+### Compact dashboard format (update one comment in place)
+
+```
+AG-NEON-001 — LIVE PROGRESS
+Executor / actual model / effort:
+Checkpoint time (UTC):
+Branch / latest pushed SHA:
+Active ticket(s) / current task:
+Completed since last checkpoint:
+Tests: PASS / FAIL / RUNNING / NOT RUN / BLOCKED (evidence links):
+Open findings and external blockers:
+Unpushed work (none or description):
+Next executable action:
+Status: IMPLEMENTING / TESTING / BLOCKED / READY FOR CODEX REVIEW
+```
+
+Keep the dashboard concise and current. Important historical evidence belongs in commit history, ticket comments and the incremental evidence register. Progress reporting must not interrupt execution, increase redundant context loading, or reduce QA coverage. A green CI result alone does not prove an intermittent regression is fixed. No work is independently accepted until Codex has audited it, and no production integration or cutover without owner authorization.
+
 ## Mandatory Codex review handback
 
 Before declaring the Antigravity workstream ready, commit an evidence register (docs/architecture/NMDC-V2-ANTIGRAVITY-NEON-EVIDENCE.md) with:
