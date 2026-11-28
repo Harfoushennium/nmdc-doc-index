@@ -379,6 +379,7 @@ def stage_update(
     initial_flags: Sequence[Mapping[str, Any]] = (),
     post_process_flags: FlagProvider | None = None,
     checkpoint: Callable[[str, int, int], None] | None = None,
+    finalize_stage: Callable[[Path, Dict[str, Any]], Mapping[str, Any] | None] | None = None,
 ) -> Dict[str, Any]:
     """Create a proposed update without changing the approved dataset."""
     data_dir = Path(data_dir)
@@ -582,6 +583,10 @@ def stage_update(
         "approved_base_run_id": str(approved_manifest.get("run_id", "")),
     }
     _write_json(stage_dir / "summary.json", summary)
+    if finalize_stage is not None:
+        updated = finalize_stage(stage_dir, summary)
+        if isinstance(updated, Mapping):
+            summary = dict(updated)
     if checkpoint is not None: checkpoint("Publish proposal", 1, 1)
     _write_json_atomic(state_dir / "staging" / "latest.json", {"run_id": run_id})
     _append_log(state_dir, {"event": "STAGED", "at": utc_now(), **summary})

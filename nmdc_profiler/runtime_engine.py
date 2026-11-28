@@ -22,6 +22,7 @@ from .source_cache import prepare_local_source_cache
 from .source_selection import apply_source_exclusions
 from .update_engine import (
     DEFAULT_PARSER_VERSION,
+    _write_json_atomic,
     approve_stage,
     hold_stage,
     reject_stage,
@@ -236,6 +237,17 @@ def build_runtime_catalog(
     )
 
 
+def _config_hashes(config_dir: Path) -> Dict[str, str]:
+    config_dir = Path(config_dir)
+    if not config_dir.exists() or not config_dir.is_dir():
+        return {}
+    return {
+        path.name: sha256_file(path)
+        for path in sorted(config_dir.glob("*.csv"))
+        if path.is_file()
+    }
+
+
 def _restore_original_data_path(state_dir: Path, run_id: str, original_data_dir: Path) -> None:
     """Keep the user-facing manifest bound to the real DATA folder, not the local cache."""
     if not run_id:
@@ -246,9 +258,7 @@ def _restore_original_data_path(state_dir: Path, run_id: str, original_data_dir:
     with manifest_path.open(encoding="utf-8") as handle:
         payload = json.load(handle)
     payload["data_dir"] = str(Path(original_data_dir).resolve())
-    with manifest_path.open("w", encoding="utf-8", newline="\n") as handle:
-        json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
-        handle.write("\n")
+    _write_json_atomic(manifest_path, payload)
 
 
 def _suppress_expected_owner_selection_flag(state_dir: Path, run_id: str, owner_excluded_sources: Sequence[str]) -> None:
@@ -275,18 +285,14 @@ def _suppress_expected_owner_selection_flag(state_dir: Path, run_id: str, owner_
     if len(filtered) == len(flags):
         return
 
-    with flags_path.open("w", encoding="utf-8", newline="\n") as handle:
-        json.dump(filtered, handle, ensure_ascii=False, indent=2, sort_keys=True)
-        handle.write("\n")
+    _write_json_atomic(flags_path, filtered)
 
     with summary_path.open(encoding="utf-8") as handle:
         summary = json.load(handle)
     summary["review_flags"] = sum(1 for flag in filtered if flag.get("level") == "REVIEW")
     summary["blocking_flags"] = sum(1 for flag in filtered if flag.get("level") == "CONFLICT")
     summary["status"] = "REVIEW_REQUIRED" if summary["blocking_flags"] else "STAGED"
-    with summary_path.open("w", encoding="utf-8", newline="\n") as handle:
-        json.dump(summary, handle, ensure_ascii=False, indent=2, sort_keys=True)
-        handle.write("\n")
+    _write_json_atomic(summary_path, summary)
 
 
 def stage_runtime_update(
@@ -300,6 +306,7 @@ def stage_runtime_update(
     checkpoint=None,
     verify_source_content: bool = False,
     extraction_workers: int = 1,
+    finalize_stage=None,
 ) -> Dict[str, Any]:
     phase_times={}
     original_data_dir = Path(data_dir).resolve()
@@ -307,6 +314,7 @@ def stage_runtime_update(
     rules_path = resolve_config_file(config_dir, "classification_rules.csv")
     overrides_path = resolve_config_file(config_dir, "project_identity_overrides.csv")
     exclusions_path = Path(config_dir) / "source_exclusions.csv"
+    staged_config_hashes = _config_hashes(config_dir)
 
     # Process from a persistent local mirror. The OneDrive/source tree is only
     # opened when a workbook is new or changed; profiling, hashing and extraction
@@ -334,6 +342,23 @@ def stage_runtime_update(
     )
     phase_times["catalog_seconds"]=round(time.perf_counter()-start,3)
     start=time.perf_counter()
+
+    def runtime_finalize(stage_dir: Path, summary: Mapping[str, Any]) -> Dict[str, Any]:
+        run_id = str(summary.get("run_id", "") or stage_dir.name)
+        _restore_original_data_path(state_dir, run_id, original_data_dir)
+        _suppress_expected_owner_selection_flag(state_dir, run_id, catalog.owner_excluded_sources)
+        _write_json_atomic(stage_dir / "stage_config_hashes.json", staged_config_hashes)
+        updated = dict(summary)
+        summary_path = stage_dir / "summary.json"
+        if summary_path.exists():
+            with summary_path.open(encoding="utf-8") as handle:
+                updated = json.load(handle)
+        if finalize_stage is not None:
+            extra = finalize_stage(stage_dir, updated)
+            if isinstance(extra, Mapping):
+                updated = dict(extra)
+        return updated
+
     def stage(processor):
         return stage_update(
         data_dir=working_data_dir,
@@ -348,6 +373,7 @@ def stage_runtime_update(
         initial_flags=catalog.initial_flags,
         post_process_flags=catalog.drain_processor_flags,
         checkpoint=checkpoint,
+        finalize_stage=runtime_finalize,
     )
     if full_rescan and extraction_workers>1 and len(catalog.work_items)>1:
         from .parallel_extract import FullScanPool
@@ -359,9 +385,7 @@ def stage_runtime_update(
         phase_times["extraction_workers"]=1
     phase_times["stage_update_seconds"]=round(time.perf_counter()-start,3)
     run_id = str(result.get("run_id", ""))
-    _restore_original_data_path(state_dir, run_id, original_data_dir)
-    _suppress_expected_owner_selection_flag(state_dir, run_id, catalog.owner_excluded_sources)
-    # Reload the persisted summary after presentation-safe flag suppression.
+    # Reload the persisted summary after pre-publish finalization.
     summary_path = state_dir / "staging" / run_id / "summary.json"
     if summary_path.exists():
         with summary_path.open(encoding="utf-8") as handle:

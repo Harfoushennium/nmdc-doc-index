@@ -265,14 +265,20 @@ class App:
                     result=unchanged.check(self.state,src,self.config,build)
                 if result is None:
                     before=unchanged.inputs(src,self.config,build)
-                    result=stage_runtime_update(data_dir=src,state_dir=self.state,config_dir=self.config,full_rescan=full,reuse_raw_profiles=True,checkpoint=checkpoint,verify_source_content=True,extraction_workers=min(4,os.cpu_count() or 1))
-                    after=None
-                    try:
-                        after=unchanged.inputs(src,self.config,build)
-                        result["input_proof"]=unchanged.stage_proof(self.state,result["run_id"],before,after,self.config)
-                    except (OSError,ValueError,KeyError,TypeError):
-                        result["input_proof"]=False;result["requires_rescan"]=True
-                    if before!=after:
+                    proof_state={"after":None,"input_proof":False,"requires_rescan":False}
+                    def pre_publish(stage_dir,summary):
+                        try:
+                            after=unchanged.inputs(src,self.config,build)
+                            proof_state["after"]=after
+                            proof_state["input_proof"]=unchanged.stage_proof(self.state,str(summary.get("run_id","") or stage_dir.name),before,after,self.config)
+                        except (OSError,ValueError,KeyError,TypeError):
+                            proof_state["input_proof"]=False;proof_state["requires_rescan"]=True
+                        if before!=proof_state["after"]:
+                            proof_state["requires_rescan"]=True
+                        return summary
+                    result=stage_runtime_update(data_dir=src,state_dir=self.state,config_dir=self.config,full_rescan=full,reuse_raw_profiles=True,checkpoint=checkpoint,verify_source_content=True,extraction_workers=min(4,os.cpu_count() or 1),finalize_stage=pre_publish)
+                    result["input_proof"]=proof_state["input_proof"]
+                    if proof_state["requires_rescan"]:
                         result["requires_rescan"]=True
                 with self.guard:
                     if self.cancel.is_set() and self.job.get("phase")!="Publish proposal":raise ScanCancelled("Cancelled before completing scan")
@@ -484,6 +490,11 @@ class App:
                 fingerprint=manifest.get("config_fingerprint")
                 if fingerprint and fingerprint!=fingerprint_paths([]) and fingerprint!=fingerprint_paths([self.config/"classification_rules.csv",self.config/"project_identity_overrides.csv"]):
                     raise ValueError("Configuration changed")
+                stage_hashes_path=self.state/"staging"/p["run"]/"stage_config_hashes.json"
+                if stage_hashes_path.exists():
+                    staged_hashes=read_json(stage_hashes_path,None)
+                    if not isinstance(staged_hashes,dict) or staged_hashes!=current["config"]:
+                        raise ValueError("Configuration changed")
             except (OSError,ValueError,KeyError,TypeError) as exc:
                 self.settings["requires_rescan"]=True;self.save_settings()
                 raise ValueError("Source or configuration changed; rescan before approval.") from exc
