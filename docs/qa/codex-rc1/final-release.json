@@ -1,0 +1,159 @@
+{
+  "method": "3 fresh-process/workspace trials + 5 same-process/workspace warm trials; no OS cache flush",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "executable_sha256": "4cf651bbfc44323d792417275a6127bd69cccd8dd814bedb3ca6eb795ab0147d",
+  "workbooks": 56,
+  "cold": [
+    {
+      "startup": 0.249336,
+      "full": 9.9961,
+      "unchanged": 0.211596,
+      "approval": 9.19234,
+      "export": 9.239849,
+      "export_bytes": 7122646,
+      "events": 40494,
+      "parent_peak_rss_bytes": 1002426368
+    },
+    {
+      "startup": 0.18954,
+      "full": 9.464851,
+      "unchanged": 0.222849,
+      "approval": 6.708787,
+      "export": 6.642255,
+      "export_bytes": 7122646,
+      "events": 40494,
+      "parent_peak_rss_bytes": 1001095168
+    },
+    {
+      "startup": 0.176077,
+      "full": 8.508685,
+      "unchanged": 0.200357,
+      "approval": 6.618844,
+      "export": 7.127127,
+      "export_bytes": 7122644,
+      "events": 40494,
+      "parent_peak_rss_bytes": 1000800256
+    }
+  ],
+  "warm": [
+    {
+      "startup": null,
+      "full": 10.882075,
+      "unchanged": 0.194446,
+      "approval": 12.291802,
+      "export": 7.095604,
+      "export_bytes": 7122646,
+      "events": 40494,
+      "parent_peak_rss_bytes": 1075392512
+    },
+    {
+      "startup": null,
+      "full": 11.084703,
+      "unchanged": 0.220829,
+      "approval": 15.30542,
+      "export": 7.236955,
+      "export_bytes": 7122644,
+      "events": 40494,
+      "parent_peak_rss_bytes": 1076658176
+    },
+    {
+      "startup": null,
+      "full": 10.598906,
+      "unchanged": 0.204596,
+      "approval": 14.992772,
+      "export": 6.894228,
+      "export_bytes": 7122644,
+      "events": 40494,
+      "parent_peak_rss_bytes": 1078321152
+    },
+    {
+      "startup": null,
+      "full": 10.066237,
+      "unchanged": 0.203249,
+      "approval": 16.474299,
+      "export": 6.732887,
+      "export_bytes": 7122644,
+      "events": 40494,
+      "parent_peak_rss_bytes": 1078321152
+    },
+    {
+      "startup": null,
+      "full": 10.123878,
+      "unchanged": 0.228045,
+      "approval": 17.726501,
+      "export": 6.582578,
+      "export_bytes": 7122646,
+      "events": 40494,
+      "parent_peak_rss_bytes": 1078677504
+    }
+  ],
+  "queries": [
+    0.024343,
+    0.020452,
+    0.024264,
+    0.0578,
+    0.020329,
+    0.021515,
+    0.024584,
+    0.020931,
+    0.002372,
+    0.065633,
+    0.018957,
+    0.02179,
+    0.025286,
+    0.020354,
+    0.025697,
+    0.056644,
+    0.02331,
+    0.021665,
+    0.024313,
+    0.021217,
+    0.025018,
+    0.041222,
+    0.021067,
+    0.008769,
+    0.024419,
+    0.020559,
+    0.025645,
+    0.052288,
+    0.026275,
+    0.020717,
+    0.023502,
+    0.020568,
+    0.025145,
+    0.054992,
+    0.002842,
+    0.009342,
+    0.002984,
+    0.030289,
+    0.024822,
+    0.056536,
+    0.002805,
+    0.010194,
+    0.02446,
+    0.020565,
+    0.025947
+  ],
+  "approved_restart_seconds": [
+    2.262761,
+    2.557976,
+    2.229883
+  ],
+  "scratch_disk_bytes": 1344988438,
+  "source_hashes_unchanged": true,
+  "medians": {
+    "full": 10.0950575,
+    "unchanged": 0.208096,
+    "approval": 13.642287,
+    "export": 6.994916
+  },
+  "query_p95": 0.056644,
+  "release_ceilings": {
+    "startup": true,
+    "full": true,
+    "unchanged": true,
+    "export": true,
+    "query": true
+  },
+  "owner_pc_acceptance": "NOT RUN; local development environment only"
+}

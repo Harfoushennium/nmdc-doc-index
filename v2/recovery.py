@@ -1,6 +1,6 @@
 """Local verified recovery bundles. Never read/write the source DATA directory."""
 from __future__ import annotations
-import hashlib, json, os, shutil, threading, time, uuid, zlib
+import hashlib, json, math, os, shutil, threading, time, uuid, zlib
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED, BadZipFile
 
@@ -93,15 +93,19 @@ def create_bundle(root,reason,keep=None):
     required=sum(item["bytes"] for item in before.values())
     if shutil.disk_usage(dest).free<required+16*1024**2:raise ValueError("Insufficient free space for a verified recovery bundle")
     name=time.strftime("%Y%m%d-%H%M%S")+"-"+uuid.uuid4().hex[:8]+".zip"
+    skipped=[]
+    archives=_verified_archives(dest,skipped)
+    # Persist the order independently of wall-clock changes and process restarts.
+    sequence=max((key[0] for key, _ in archives),default=0)+1
     tmp=dest/(name+".tmp"); final=dest/name
     try:
         with ZipFile(tmp,"w",ZIP_DEFLATED,compresslevel=3) as z:
             for name,meta in before.items():z.write(root/name,name)
-            z.writestr("recovery-manifest.json",json.dumps({"version":1,"created_at":time.time(),"created_order_ns":_next_creation_order(),"reason":str(reason),"files":before,"excluded_disposable":["state/source_cache","state/profile","derived indexes"]},indent=2))
+            z.writestr("recovery-manifest.json",json.dumps({"version":1,"created_at":time.time(),"created_order_ns":_next_creation_order(),"retention_sequence":sequence,"reason":str(reason),"files":before,"excluded_disposable":["state/source_cache","state/profile","derived indexes"]},indent=2))
         verify_bundle(tmp)
         if inventory(root)!=before:raise ValueError("Workspace changed during backup")
         os.replace(tmp,final)
-        skipped=[];apply_retention(dest,keep=keep,skipped=skipped)
+        _prune_archives(archives,keep-1)
         return {"path":str(final),"files":len(before),"bytes":final.stat().st_size,"retention_skipped":skipped}
     finally:tmp.unlink(missing_ok=True)
 def apply_retention(directory,keep=10,skipped=None):
@@ -110,22 +114,33 @@ def apply_retention(directory,keep=10,skipped=None):
     if any(_is_reparse(p) for p in (directory,*directory.parents)):raise ValueError("Backup directory ancestry contains a reparse point")
     if type(keep) is not int or keep<1:raise ValueError("Retention must keep at least one verified backup")
     if directory.is_symlink() or _is_reparse(directory):raise ValueError("Backup directory must not be a reparse point")
+    return _prune_archives(_verified_archives(directory,skipped),keep)
+
+def _verified_archives(directory,skipped):
     archives=[]
     for path in directory.glob("*.zip"):
         if path.is_symlink() or _is_reparse(path):raise ValueError("Backup archive is a reparse point")
-        try:manifest=verify_bundle(path)
-        except (OSError,ValueError,KeyError,TypeError,BadZipFile) as error:
-            if skipped is not None:skipped.append({"file":path.name,"reason":type(error).__name__})
+        try:
+            manifest=verify_bundle(path)
+            created=manifest.get("created_at")
+            if created is None:created=path.stat().st_mtime
+            if type(created) not in (int,float) or not math.isfinite(created):
+                raise ValueError("Invalid recovery timestamp")
+            order=manifest.get("created_order_ns",0)
+            if type(order) is not int or order<0:raise ValueError("Invalid recovery creation order")
+            sequence=manifest.get("retention_sequence",0)
+            if type(sequence) is not int or sequence<0:raise ValueError("Invalid recovery retention sequence")
+        except (OSError,ValueError,OverflowError) as error:
+            if skipped is not None:skipped.append({"file":path.name,"reason":str(error)})
             continue
-        created=manifest.get("created_at")
-        if created is None:created=path.stat().st_mtime
-        if not isinstance(created,(int,float)):raise ValueError("Invalid recovery timestamp")
-        order=manifest.get("created_order_ns",0)
-        if type(order) is not int or order<0:raise ValueError("Invalid recovery creation order")
-        archives.append((float(created),order,path))
-    archives.sort(key=lambda row:(row[0],row[1],row[2].name),reverse=True)
-    for _,_,path in archives[keep:]:path.unlink()
-    return [str(p) for _,_,p in archives[:keep]]
+        archives.append(((sequence,created,order,path.name),path))
+    return archives
+
+def _prune_archives(archives,keep):
+    archives.sort(reverse=True)
+    for _,path in archives[keep:]:path.unlink()
+    return [str(path) for _,path in archives[:keep]]
+
 def restore_to_new_workspace(path,target):
     """Restore only to a new isolated folder, never overwrite active or legacy state."""
     target=Path(target).absolute()

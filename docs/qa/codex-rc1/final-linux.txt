@@ -1,0 +1,29 @@
+Collecting playwright==1.56.0
+  Downloading playwright-1.56.0-py3-none-manylinux1_x86_64.whl.metadata (3.5 kB)
+Collecting pyee<14,>=13 (from playwright==1.56.0)
+  Downloading pyee-13.0.1-py3-none-any.whl.metadata (3.0 kB)
+Collecting greenlet<4.0.0,>=3.1.1 (from playwright==1.56.0)
+  Downloading greenlet-3.5.6-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (3.8 kB)
+Collecting typing-extensions (from pyee<14,>=13->playwright==1.56.0)
+  Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+Downloading playwright-1.56.0-py3-none-manylinux1_x86_64.whl (46.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 46.3/46.3 MB 18.2 MB/s eta 0:00:00
+Downloading greenlet-3.5.6-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (670 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 670.8/670.8 kB 17.8 MB/s eta 0:00:00
+Downloading pyee-13.0.1-py3-none-any.whl (15 kB)
+Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Installing collected packages: typing-extensions, greenlet, pyee, playwright
+
+Successfully installed greenlet-3.5.6 playwright-1.56.0 pyee-13.0.1 typing-extensions-4.16.0
+WARNING: Target directory <WSL_HOME>/.cache/nmdc-ag-neon-001/deps/local/bin already exists. Specify --upgrade to force replacement.
+.........................................................................
+----------------------------------------------------------------------
+Ran 73 tests in 27.230s
+
+OK
+..............................................................................................................................................................................................................................................................................................
+----------------------------------------------------------------------
+Ran 286 tests in 28.134s
+
+OK
+{"approved_run_id": "", "documents": 0, "errors": 0, "events": 0, "flags": 0, "output_dir": "/tmp/tmpvdzd5sxk/exchange", "pending_rows": 0, "pending_run_id": "", "revisions": 0}

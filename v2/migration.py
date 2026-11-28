@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 from v2.migration_preview import preview_package
+from nmdc_profiler.excel_bridge import load_approved_state
 from nmdc_profiler.file_review import _baseline
 
 
@@ -45,7 +46,7 @@ def import_package(package, target, confirmed_fingerprint, *, source_root=None):
         raise ValueError("Migration preview changed or was not confirmed; preview again.")
     if report["blockers"]:
         raise ValueError("Migration is blocked: " + "; ".join(report["blockers"]))
-    declared_source=source_root or report.get("source_path")
+    declared_source=report.get("source_path")
     if declared_source:
         declared=Path(declared_source).resolve()
         if target==declared or target in declared.parents or declared in target.parents:
@@ -102,7 +103,6 @@ def import_package(package, target, confirmed_fingerprint, *, source_root=None):
                     "source_inventory": expected, "approved_run": report["approved_run"],
                     "approved_events": report["approved_events"],
                     "imported_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-        (scratch / "migration-manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         expected_copies=set()
         for name,meta in expected.items():
             if name.startswith("runtime/") and name.split("/")[1] in ("approved","staging","cache","logs","user_flags"):
@@ -118,6 +118,11 @@ def import_package(package, target, confirmed_fingerprint, *, source_root=None):
         if actual-expected_copies-generated:raise ValueError("Migration copied unconfirmed extra files")
         if source_inventory() != expected:
             raise ValueError("Legacy package changed during import; destination was not published.")
+        if source_root is not None:
+            approved = load_approved_state(state)
+            manifest["source_remap"] = _verify_moved_sources(source_root, approved)
+        (scratch / "migration-manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         if target.exists():
             raise ValueError("Migration destination appeared during import.")
         os.replace(scratch, target)
@@ -128,6 +133,31 @@ def import_package(package, target, confirmed_fingerprint, *, source_root=None):
     return {"workspace": str(target), "preview_sha256": report["preview_sha256"],
             "approved_run": report["approved_run"], "approved_events": report["approved_events"],
             "source_files_verified": len(expected), "requires_rescan": True}
+
+
+
+def _verify_moved_sources(source_root, approved):
+    entries = approved["manifest"].get("files", [])
+    if not entries:
+        raise ValueError("The legacy approved manifest has no workbook fingerprints to verify moved DATA.")
+    hashes = {}
+    for entry in entries:
+        name = entry["relative_path"]
+        expected = entry.get("sha256")
+        parts = name.split("/")
+        if not expected or any(part in ("", ".", "..") for part in parts) or "\\" in name or ":" in name:
+            raise ValueError("No safe legacy fingerprint for workbook: " + name)
+        try:
+            workbook = source_root.joinpath(*parts).resolve(strict=True)
+            matches = (workbook.is_relative_to(source_root) and workbook.is_file()
+                       and workbook.stat().st_size == entry.get("size")
+                       and _sha256(workbook) == expected)
+        except OSError as error:
+            raise ValueError("Cannot verify moved DATA workbook: " + name) from error
+        if not matches:
+            raise ValueError("Moved DATA workbook does not match the approved fingerprint: " + name)
+        hashes[name] = expected
+    return {"root": str(source_root), "workbooks": hashes}
 
 
 def _sha256(path):

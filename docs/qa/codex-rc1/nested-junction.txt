@@ -1,0 +1,6 @@
+test_reset_rejects_nested_reparse_in_profile_and_source_cache (v2.test_migration.MigrationPublicApiRegression.test_reset_rejects_nested_reparse_in_profile_and_source_cache) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.082s
+
+OK

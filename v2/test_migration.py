@@ -269,6 +269,8 @@ class MigrationPublicApiRegression(unittest.TestCase):
             self.assertTrue(Path(third["path"]).exists())
 
     def test_reset_rejects_nested_reparse_in_profile_and_source_cache(self):
+        import os, subprocess
+
         for area in ("profile", "source_cache"):
             with self.subTest(area=area), tempfile.TemporaryDirectory() as td:
                 root = Path(td); ws = root / "workspace"; state = ws / "state"
@@ -282,11 +284,17 @@ class MigrationPublicApiRegression(unittest.TestCase):
                 try:
                     link.symlink_to(external, target_is_directory=True)
                 except OSError:
-                    self.skipTest("Symlink creation unavailable")
-                with self.assertRaisesRegex(ValueError, "reparse|[Ss]ymlink"):
-                    reset_workspace(ws, "RESET")
-                self.assertEqual(sentinel.read_text(encoding="utf-8"), "safe")
-                self.assertTrue((state / "approved" / "keep.txt").is_file())
+                    if os.name != "nt":
+                        self.skipTest("Symlink creation unavailable")
+                    subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(external)],
+                                   check=True, capture_output=True)
+                try:
+                    with self.assertRaisesRegex(ValueError, "reparse|[Ss]ymlink"):
+                        reset_workspace(ws, "RESET")
+                    self.assertEqual(sentinel.read_text(encoding="utf-8"), "safe")
+                    self.assertTrue((state / "approved" / "keep.txt").is_file())
+                finally:
+                    link.rmdir() if os.name == "nt" else link.unlink()
 
     def test_verify_bundle_wraps_corrupt_archive_errors_as_value_error(self):
         import zipfile, zlib
@@ -435,12 +443,28 @@ class MigrationPublicApiRegression(unittest.TestCase):
                     # Omitting source_root while a remapped source is active must fail closed (no silent override).
                     st_omit, _ = post("/api/migration-import", {"confirm": "MIGRATE", "preview_sha256": preview["preview_sha256"]})
                     self.assertEqual(st_omit, 400)
-                    st_imp, imp = post("/api/migration-import", {"confirm": "MIGRATE", "preview_sha256": preview["preview_sha256"], "source_root": src_resp["source_root"]})
-                    self.assertEqual(st_imp, 200)
+                    confirmed = {"confirm": "MIGRATE", "preview_sha256": preview["preview_sha256"],
+                                 "source_root": src_resp["source_root"]}
+                    moved_workbook = moved_data / "fixture.xlsx"
+                    moved_workbook.write_bytes(b"altered")
+                    rejected, error = post("/api/migration-import", confirmed)
+                    self.assertEqual(rejected, 400, error)
+                    self.assertIn("fixture.xlsx", error["error"])
+                    self.assertFalse(list(root.glob("active-workspace-migrated-*")))
+                    self.assertEqual(moved_workbook.read_bytes(), b"altered")
+
+                    moved_workbook.write_bytes(b"fixture")
+                    st_imp, imp = post("/api/migration-import", confirmed)
+                    self.assertEqual(st_imp, 200, imp)
                     self.assertIsNone(app.legacy_source_override)
-                    migrated_settings = json.loads((Path(imp["workspace"]) / "settings.json").read_text(encoding="utf-8"))
-                    self.assertEqual(migrated_settings["data_dir"], str(moved_data.resolve()))
-                    self.assertTrue(migrated_settings["requires_rescan"])
+                    migrated = App(Path(imp["workspace"]))
+                    try:
+                        self.assertEqual(migrated.settings["data_dir"], str(moved_data.resolve()))
+                        self.assertTrue(migrated.settings["requires_rescan"])
+                        self.assertEqual(migrated.view("events")[0]["Source Workbook Path"], str(moved_workbook.resolve()))
+                    finally:
+                        migrated.invalidate()
+                        migrated.lock.close()
                 finally:
                     server.shutdown(); thread.join(); server.server_close()
             finally:
