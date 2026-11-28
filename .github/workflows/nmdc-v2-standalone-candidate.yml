@@ -1,7 +1,7 @@
 name: NMDC V2 standalone candidate
 on:
   pull_request:
-    branches: [planning/nmdc-v2-standalone, feature/nmdc-v2-web-app, feature/nmdc-v2-antigravity-neon]
+    branches: [planning/nmdc-v2-standalone, feature/nmdc-v2-web-app, feature/nmdc-v2-antigravity-neon, review/nmdc-v2-codex-rc1]
   workflow_dispatch:
 concurrency:
   group: nmdc-v2-candidate-${{ github.event.pull_request.number || github.ref }}
