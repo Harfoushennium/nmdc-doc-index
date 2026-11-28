@@ -525,17 +525,41 @@ class App:
         finally:root.destroy()
         if not value:return {"cancelled":True}
         self.legacy_preview=preview_package(value)
+        self.legacy_source_override=None
         return self.legacy_preview
+    def select_migration_source(self,body=None):
+        self.idle()
+        preview=getattr(self,"legacy_preview",None)
+        if not preview:raise ValueError("Preview a legacy package before remapping its DATA folder.")
+        if isinstance(body,dict) and body.get("clear"):
+            self.legacy_source_override=None
+            return {"source_root":"","cleared":True}
+        import tkinter as tk
+        from tkinter import filedialog
+        root=tk.Tk();root.withdraw();root.attributes("-topmost",True)
+        try:value=filedialog.askdirectory(parent=root,title="Select moved NMDC DATA folder for migrated workspace",mustexist=True)
+        finally:root.destroy()
+        if not value:return {"cancelled":True,"source_root":str(getattr(self,"legacy_source_override","") or "")}
+        selected=Path(value).resolve(strict=True)
+        if not selected.is_dir():raise ValueError("Selected source root is not a folder.")
+        if selected==self.root or selected in self.root.parents or self.root in selected.parents:
+            raise ValueError("Selected migration source overlaps active workspace.")
+        self.legacy_source_override=str(selected)
+        return {"source_root":self.legacy_source_override}
     def migrate_legacy(self,body):
         self.idle()
         preview=getattr(self,"legacy_preview",None)
         if body.get("confirm")!="MIGRATE" or not preview or body.get("preview_sha256")!=preview["preview_sha256"]:
             raise ValueError("Preview the legacy package and type MIGRATE to confirm this exact inventory.")
         if preview["blockers"]:raise ValueError("Resolve migration compatibility blockers before import.")
+        source_override=getattr(self,"legacy_source_override",None)
+        if body.get("source_root") is not None:
+            if not source_override or str(body.get("source_root"))!=str(source_override):
+                raise ValueError("Remapped DATA folder does not match the selected migration source.")
         self.backup("Before side-by-side migration")
         target=self.root.parent/(self.root.name+"-migrated-"+secrets.token_hex(5))
         if self.settings.get("data_dir") and (target==self.source() or self.source() in target.parents):raise ValueError("Migration destination overlaps DATA")
-        return import_package(preview["package"],target,preview["preview_sha256"])
+        return import_package(preview["package"],target,preview["preview_sha256"],source_root=source_override)
     def reset(self,body):
         self.idle()
         if body.get("confirm")!="RESET":raise ValueError("Type RESET to confirm clearing active runtime views.")
@@ -821,6 +845,7 @@ def server_for(app):
                     elif path=="/api/undo":result=app.undo(body)
                     elif path=="/api/reset":result=app.reset(body)
                     elif path=="/api/migration-preview":result=app.preview_legacy()
+                    elif path=="/api/migration-source":result=app.select_migration_source(body)
                     elif path=="/api/migration-import":result=app.migrate_legacy(body)
                     elif path=="/api/backup-policy":
                         keep=body.get("keep")

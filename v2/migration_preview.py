@@ -118,7 +118,7 @@ def preview_package(package):
         add_file(p)
         if p.name not in KNOWN_CONFIG:blockers.append("Unsupported legacy configuration: "+p.relative_to(config).as_posix())
     history=package/"config-history"
-    if history.is_symlink():raise ValueError("Symlink in migration input: "+str(history))
+    if history.is_symlink() or _is_reparse(history):raise ValueError("Symlink or reparse point in migration input: "+str(history))
     if history.is_dir():
         for p in history.rglob("*"):
             if p.is_symlink() or _is_reparse(p):raise ValueError("Symlink or reparse point in migration input: "+str(p))
