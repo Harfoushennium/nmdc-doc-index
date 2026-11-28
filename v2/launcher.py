@@ -126,14 +126,42 @@ def partition_plan(rows,fields,row_limit=MAX_EXCEL_ROWS,link_limit=MAX_EXCEL_LIN
     if start<len(rows) or not rows:result.append((start,len(rows)))
     return result
 
-def partition_export(rows,fields):
-    parts=partition_plan(rows,fields)
+def _export_row_key(row, fields):
+    for key in ("Event_Key", "Revision Key", "Revision_Key", "Global Document Key", "Global_Document_Key"):
+        value = row.get(key)
+        if value not in (None, ""):
+            return str(value)
+    return json.dumps({k: row.get(k, "") for k in fields}, sort_keys=True, ensure_ascii=False, default=str)
+
+def partition_export(rows, fields, row_limit=MAX_EXCEL_ROWS, link_limit=MAX_EXCEL_LINKS):
+    parts=partition_plan(rows,fields,row_limit=row_limit,link_limit=link_limit)
     if len(parts)<2:raise ValueError("Partitioning is not required")
+    ordered_keys=[_export_row_key(r,fields) for r in rows]
+    manifest_parts=[]
     b=io.BytesIO()
     with zipfile.ZipFile(b,"w",compression=zipfile.ZIP_STORED) as z:
         for i,(start,end) in enumerate(parts,1):
-            z.writestr(f"NMDC_INDEX_{i:03d}.xlsx",export_bytes(rows[start:end],fields,"xlsx"))
-        z.writestr("manifest.json",json.dumps({"rows":len(rows),"parts":[{"file":f"NMDC_INDEX_{i:03d}.xlsx","rows":end-start} for i,(start,end) in enumerate(parts,1)]},indent=2))
+            chunk=rows[start:end]
+            part_bytes=export_bytes(chunk,fields,"xlsx")
+            filename=f"NMDC_INDEX_{i:03d}.xlsx"
+            z.writestr(filename,part_bytes)
+            manifest_parts.append({
+                "file":filename,
+                "rows":end-start,
+                "start_row":start+1,
+                "end_row":end,
+                "bytes":len(part_bytes),
+                "sha256":hashlib.sha256(part_bytes).hexdigest(),
+                "native_links":sum(native_link(r,fields) for r in chunk),
+                "keys_sha256":hashlib.sha256(json.dumps(ordered_keys[start:end],ensure_ascii=False).encode("utf-8")).hexdigest(),
+            })
+        manifest={
+            "rows":len(rows),
+            "fields":list(fields),
+            "keys_sha256":hashlib.sha256(json.dumps(ordered_keys,ensure_ascii=False).encode("utf-8")).hexdigest(),
+            "parts":manifest_parts,
+        }
+        z.writestr("manifest.json",json.dumps(manifest,indent=2))
     return b.getvalue()
 
 def export_bytes(rows, fields, fmt):
@@ -813,6 +841,7 @@ def server_for(app):
                         if fmt=="xlsx":
                             warnings=sum(v["literal_unverified"] for v in link_summary(rows,selected).values())
                             if warnings and (q.get("literal_links")!="confirmed" or q.get("run")!=app.approved()["run_id"]):raise ValueError("Some hyperlink targets must remain literal. Review export preview and confirm.")
+                            if date_exceptions(rows,selected) and (q.get("literal_dates")!="confirmed" or q.get("run")!=app.approved()["run_id"]):raise ValueError("Some date values precede the Excel date system and must remain literal. Review export preview and confirm.")
                         if fmt=="xlsx" and len(partition_plan(rows,selected))>1:
                             if q.get("partition")!="confirmed" or q.get("run")!=app.approved()["run_id"]:raise ValueError("Confirm partitioning for the current approved snapshot.")
                             return self.send(200,partition_export(rows,selected),"application/zip","NMDC_INDEX_PARTS.zip")

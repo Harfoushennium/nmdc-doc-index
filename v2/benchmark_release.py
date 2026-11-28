@@ -87,7 +87,7 @@ def run(executable, data, output):
                     query={'scope':'events','format':'xlsx'}
                     def export():
                         plan=api('/api/export-plan?'+urlencode(query))
-                        args=dict(query,preview=plan['preview'],run=plan['run'],literal_links='confirmed',partition='confirmed')
+                        args=dict(query,preview=plan['preview'],run=plan['run'],literal_links='confirmed',literal_dates='confirmed',partition='confirmed')
                         content=api('/api/export?'+urlencode(args),raw=True)
                         target=workspace/'measured-export.zip';target.write_bytes(content)
                         assert content[:2]==b'PK';return len(content)
