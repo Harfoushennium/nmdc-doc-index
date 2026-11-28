@@ -7,7 +7,7 @@ from nmdc_profiler.layout_compat import install_layout_compatibility
 from nmdc_profiler.excel_bridge import load_latest_stage, build_event_rows
 from nmdc_profiler.file_review import affected_files, save_file_review
 from nmdc_profiler.update_engine import approve_stage
-from v2.launcher import App, ordered_fields, export_bytes, filter_rows
+from v2.launcher import App, ordered_fields, export_bytes, filter_rows, partition_plan, partition_export, link_summary
 import csv, io, zipfile
 
 def hashes(root):
@@ -49,10 +49,18 @@ def run():
                     _,querytime=measure(lambda:filter_rows(approved,str(approved[0].get("Document No.","")),"Document No."))
                     report["query_seconds"]=querytime
                     try:
-                        data,exporttime=measure(lambda:export_bytes(approved,ordered_fields(approved,"events"),"xlsx"))
+                        fields=ordered_fields(approved,"events");parts=partition_plan(approved,fields)
+                        data,exporttime=measure(lambda:partition_export(approved,fields) if len(parts)>1 else export_bytes(approved,fields,"xlsx"))
                         with zipfile.ZipFile(io.BytesIO(data)) as z:
-                            assert z.testzip() is None and "xl/tables/table1.xml" in z.namelist()
-                        report.update({"xlsx_seconds":exporttime,"xlsx_bytes":len(data),"xlsx_structural":"PASS"})
+                            assert z.testzip() is None
+                            if len(parts)==1:assert "xl/tables/table1.xml" in z.namelist()
+                            else:
+                                manifest=json.loads(z.read("manifest.json"))
+                                assert manifest["rows"]==len(approved) and sum(p["rows"] for p in manifest["parts"])==len(approved)
+                                for p in manifest["parts"]:
+                                    with zipfile.ZipFile(io.BytesIO(z.read(p["file"]))) as part:
+                                        assert part.testzip() is None and "xl/tables/table1.xml" in part.namelist()
+                        report.update({"xlsx_seconds":exporttime,"xlsx_bytes":len(data),"xlsx_structural":"PASS","xlsx_parts":len(parts),"xlsx_links":link_summary(approved,fields)})
                     except Exception as exc:report["xlsx_structural"]="FAIL: "+type(exc).__name__
                     # Alternate paired modes against the same approved baseline, no approval between trials.
                     trials={"legacy":[],"cached":[]}; signatures={"legacy":[],"cached":[]}
