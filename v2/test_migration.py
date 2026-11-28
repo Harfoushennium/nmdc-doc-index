@@ -213,7 +213,11 @@ class MigrationPublicApiRegression(unittest.TestCase):
     def test_verified_restore_and_retention_keep_only_newest_verified_bundles(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);(root/"config").mkdir();(root/"config"/"rules.csv").write_text("a,b\n",encoding="utf-8")
-            first=create_bundle(root,"first");second=create_bundle(root,"second");third=create_bundle(root,"third")
+            from unittest.mock import patch
+            from uuid import UUID
+            ids=[UUID('ffffffff-0000-0000-0000-000000000000'),UUID('bbbbbbbb-0000-0000-0000-000000000000'),UUID('aaaaaaaa-0000-0000-0000-000000000000')]
+            with patch('v2.recovery.time.time',return_value=1000.0),patch('v2.recovery.time.strftime',return_value='20261128-090000'),patch('v2.recovery.uuid.uuid4',side_effect=ids):
+                first=create_bundle(root,"first");second=create_bundle(root,"second");third=create_bundle(root,"third")
             retained=apply_retention(root/"backups",keep=2)
             self.assertEqual(len(retained),2)
             self.assertFalse(Path(first["path"]).exists())

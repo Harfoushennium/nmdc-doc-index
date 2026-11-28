@@ -74,7 +74,7 @@ def create_bundle(root,reason,keep=None):
     try:
         with ZipFile(tmp,"w",ZIP_DEFLATED,compresslevel=3) as z:
             for name,meta in before.items():z.write(root/name,name)
-            z.writestr("recovery-manifest.json",json.dumps({"version":1,"created_at":time.time(),"reason":str(reason),"files":before,"excluded_disposable":["state/source_cache","state/profile","derived indexes"]},indent=2))
+            z.writestr("recovery-manifest.json",json.dumps({"version":1,"created_at":time.time(),"created_order_ns":time.monotonic_ns(),"reason":str(reason),"files":before,"excluded_disposable":["state/source_cache","state/profile","derived indexes"]},indent=2))
         verify_bundle(tmp)
         if inventory(root)!=before:raise ValueError("Workspace changed during backup")
         os.replace(tmp,final)
@@ -97,10 +97,12 @@ def apply_retention(directory,keep=10,skipped=None):
         created=manifest.get("created_at")
         if created is None:created=path.stat().st_mtime
         if not isinstance(created,(int,float)):raise ValueError("Invalid recovery timestamp")
-        archives.append((float(created),path))
-    archives.sort(key=lambda row:(row[0],row[1].name),reverse=True)
-    for _,path in archives[keep:]:path.unlink()
-    return [str(p) for _,p in archives[:keep]]
+        order=manifest.get("created_order_ns",0)
+        if type(order) is not int or order<0:raise ValueError("Invalid recovery creation order")
+        archives.append((float(created),order,path))
+    archives.sort(key=lambda row:(row[0],row[1],row[2].name),reverse=True)
+    for _,_,path in archives[keep:]:path.unlink()
+    return [str(p) for _,_,p in archives[:keep]]
 def restore_to_new_workspace(path,target):
     """Restore only to a new isolated folder, never overwrite active or legacy state."""
     target=Path(target).absolute()
