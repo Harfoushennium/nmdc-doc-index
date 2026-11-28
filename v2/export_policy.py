@@ -13,7 +13,7 @@ def preview_token(app, query, fields):
     identity = {
         'run': approved['run_id'],
         'request': {k: v for k, v in query.items()
-                    if k not in ('preview', 'run', 'literal_links', 'partition')},
+                    if k not in ('preview', 'run', 'literal_links', 'literal_dates', 'partition')},
         'columns': fields,
         'files': [(str(p.relative_to(app.root)), hashlib.sha256(p.read_bytes()).hexdigest())
                   for p in files if p.exists()],

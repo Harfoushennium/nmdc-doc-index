@@ -22,7 +22,10 @@ class ScaleAcceptance(unittest.TestCase):
                                'Revision':str((index//5)%2),'Source Row':index+2}
                 stage_update(data_dir=data,state_dir=app.state,processor=records)
                 proposal=app.proposal();app.save_choices(proposal);app.approve(proposal)
+                def workspace_bytes(path):
+                    return sum(p.stat().st_size for p in path.rglob('*') if p.is_file())
                 expected=filter_rows(app.view('events'),'Alpha -Gamma')
+                baseline_bytes=workspace_bytes(app.root)
                 for _ in range(3):
                     answer=app.query_page('events','Alpha -Gamma')
                     self.assertEqual(answer['count'],50000)
@@ -31,7 +34,9 @@ class ScaleAcceptance(unittest.TestCase):
                     self.assertEqual(page['rows'],expected[49900:50000])
                     self.assertEqual(app.query_page('events',column='Document No.',query='"00001"')['count'],10)
                     app.invalidate()
+                    self.assertEqual(workspace_bytes(app.root),baseline_bytes)
                 metrics=app.dashboard()
+                self.assertEqual(workspace_bytes(app.root),baseline_bytes)
                 self.assertEqual(metrics['events'],100000)
                 self.assertEqual(metrics['documents'],10000)
                 self.assertEqual(sum(g['count'] for g in metrics['groups']['Source Family']),10000)

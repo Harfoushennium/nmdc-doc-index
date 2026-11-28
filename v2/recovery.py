@@ -1,6 +1,6 @@
 """Local verified recovery bundles. Never read/write the source DATA directory."""
 from __future__ import annotations
-import hashlib, json, os, shutil, time, uuid
+import hashlib, json, os, shutil, threading, time, uuid, zlib
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED, BadZipFile
 
@@ -8,6 +8,14 @@ AREAS=("state/approved","state/staging","state/cache","state/logs","state/user_f
 MAX_FILES=100_000
 MAX_FILE_BYTES=512*1024**2
 MAX_TOTAL_BYTES=2*1024**3
+_ORDER_LOCK=threading.Lock()
+_LAST_CREATION_ORDER_NS=0
+def _next_creation_order():
+    global _LAST_CREATION_ORDER_NS
+    with _ORDER_LOCK:
+        value=max(time.perf_counter_ns(),_LAST_CREATION_ORDER_NS+1)
+        _LAST_CREATION_ORDER_NS=value
+        return value
 def digest(path):
     h=hashlib.sha256()
     with path.open("rb") as f:
@@ -19,6 +27,17 @@ def assert_workspace_paths(root):
         for parent in (path,*path.parents):
             if parent.is_symlink() or _is_reparse(parent):raise ValueError("Symlink or reparse point in workspace ancestry: "+str(parent))
     return root.resolve()
+
+def _assert_no_reparse_tree(target):
+    target=Path(target)
+    if target.is_symlink() or _is_reparse(target):raise ValueError("Runtime reset area is a reparse point: "+str(target))
+    if not target.exists() or not target.is_dir():return
+    for cur,dirs,files in os.walk(target,followlinks=False):
+        cur_path=Path(cur)
+        if cur_path.is_symlink() or _is_reparse(cur_path):raise ValueError("Runtime reset area contains a reparse point: "+str(cur_path))
+        for name in (*dirs,*files):
+            child=cur_path/name
+            if child.is_symlink() or _is_reparse(child):raise ValueError("Runtime reset area contains a reparse point: "+str(child))
 
 def inventory(root):
     root=assert_workspace_paths(root); out={}; total=0
@@ -43,21 +62,25 @@ def _is_reparse(path):
 def verify_bundle(path):
     path=Path(path)
     if path.is_symlink() or _is_reparse(path) or path.stat().st_size>MAX_TOTAL_BYTES:raise ValueError("Recovery archive is unsafe or exceeds size limits")
-    with ZipFile(path) as z:
-        if len(z.infolist())>MAX_FILES+1 or sum(i.file_size for i in z.infolist())>MAX_TOTAL_BYTES:raise ValueError("Recovery bundle exceeds size limits")
-        if z.getinfo("recovery-manifest.json").file_size>32*1024**2:raise ValueError("Recovery manifest exceeds size limit")
-        manifest=json.loads(z.read("recovery-manifest.json"))
-        files=manifest["files"]
-        if len(z.namelist())!=len(set(z.namelist())) or set(z.namelist())!=set(files)|{"recovery-manifest.json"}:raise ValueError("Recovery manifest mismatch")
-        for name,meta in files.items():
-            parts=name.split("/")
-            if any(p in ("",".","..") for p in parts) or "\\" in name or ":" in name or not any(name==a or name.startswith(a+"/") for a in AREAS):raise ValueError("Unsafe recovery path")
-            if not isinstance(meta,dict) or type(meta.get("bytes")) is not int or meta["bytes"]<0 or meta["bytes"]>MAX_FILE_BYTES:raise ValueError("Invalid recovery file size")
-            h=hashlib.sha256();size=0
-            with z.open(name) as f:
-                for chunk in iter(lambda:f.read(1024*1024),b""):h.update(chunk);size+=len(chunk)
-            if h.hexdigest()!=meta["sha256"] or size!=meta["bytes"]:raise ValueError("Recovery hash mismatch")
-        return manifest
+    try:
+        with ZipFile(path) as z:
+            if len(z.infolist())>MAX_FILES+1 or sum(i.file_size for i in z.infolist())>MAX_TOTAL_BYTES:raise ValueError("Recovery bundle exceeds size limits")
+            if z.getinfo("recovery-manifest.json").file_size>32*1024**2:raise ValueError("Recovery manifest exceeds size limit")
+            manifest=json.loads(z.read("recovery-manifest.json").decode("utf-8"))
+            if not isinstance(manifest,dict) or not isinstance(manifest.get("files"),dict):raise ValueError("Invalid recovery manifest")
+            files=manifest["files"]
+            if len(z.namelist())!=len(set(z.namelist())) or set(z.namelist())!=set(files)|{"recovery-manifest.json"}:raise ValueError("Recovery manifest mismatch")
+            for name,meta in files.items():
+                parts=name.split("/")
+                if any(p in ("",".","..") for p in parts) or "\\" in name or ":" in name or not any(name==a or name.startswith(a+"/") for a in AREAS):raise ValueError("Unsafe recovery path")
+                if not isinstance(meta,dict) or type(meta.get("bytes")) is not int or meta["bytes"]<0 or meta["bytes"]>MAX_FILE_BYTES:raise ValueError("Invalid recovery file size")
+                h=hashlib.sha256();size=0
+                with z.open(name) as f:
+                    for chunk in iter(lambda:f.read(1024*1024),b""):h.update(chunk);size+=len(chunk)
+                if h.hexdigest()!=meta["sha256"] or size!=meta["bytes"]:raise ValueError("Recovery hash mismatch")
+            return manifest
+    except (BadZipFile,KeyError,json.JSONDecodeError,UnicodeDecodeError,EOFError,RuntimeError,zlib.error) as error:
+        raise ValueError("Invalid recovery bundle: "+str(error)) from error
 def create_bundle(root,reason,keep=None):
     root=assert_workspace_paths(root); dest=root/"backups"
     if keep is None:
@@ -74,7 +97,7 @@ def create_bundle(root,reason,keep=None):
     try:
         with ZipFile(tmp,"w",ZIP_DEFLATED,compresslevel=3) as z:
             for name,meta in before.items():z.write(root/name,name)
-            z.writestr("recovery-manifest.json",json.dumps({"version":1,"created_at":time.time(),"created_order_ns":time.monotonic_ns(),"reason":str(reason),"files":before,"excluded_disposable":["state/source_cache","state/profile","derived indexes"]},indent=2))
+            z.writestr("recovery-manifest.json",json.dumps({"version":1,"created_at":time.time(),"created_order_ns":_next_creation_order(),"reason":str(reason),"files":before,"excluded_disposable":["state/source_cache","state/profile","derived indexes"]},indent=2))
         verify_bundle(tmp)
         if inventory(root)!=before:raise ValueError("Workspace changed during backup")
         os.replace(tmp,final)
@@ -127,12 +150,15 @@ def reset_workspace(root, confirmation):
     """Back up then clear only disposable approved/staged runtime views."""
     root=assert_workspace_paths(root)
     if confirmation != "RESET":raise ValueError('Type RESET to confirm clearing approved and staged runtime state.')
-    bundle=create_bundle(root,"Before runtime reset")
     state=root/"state"
-    for area in ("approved","staging","cache","profile","source_cache"):
+    reset_areas=("approved","staging","cache","profile","source_cache")
+    for area in reset_areas:
+        _assert_no_reparse_tree(state/area)
+    bundle=create_bundle(root,"Before runtime reset")
+    for area in reset_areas:
         target=state/area
+        _assert_no_reparse_tree(target)
         if target.exists():
-            if target.is_symlink() or _is_reparse(target):raise ValueError("Runtime reset area is a reparse point: "+str(target))
             shutil.rmtree(target)
     _append_recovery_history(state,{"event":"RESET","backup":bundle["path"],"at":time.time()})
     return {"decision":"RESET","backup":bundle["path"],"preserved":["settings","config","config-history","logs","audit history"]}
@@ -162,6 +188,7 @@ def undo_approval(state_dir, confirmation):
     predecessors={};active=""
     if history.exists():
         for line in history.read_text(encoding="utf-8").splitlines():
+            if not line.strip():continue
             row=json.loads(line)
             if row.get("event")=="APPROVED" and row.get("decision")=="APPROVED":
                 run=str(row.get("run_id",""))

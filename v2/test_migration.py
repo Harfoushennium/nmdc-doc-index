@@ -242,6 +242,210 @@ class MigrationPublicApiRegression(unittest.TestCase):
             self.assertEqual(result["restored_run_id"], one["run_id"])
             self.assertTrue((state / "approved" / "versions" / two["run_id"] / "records.jsonl").is_file())
 
+    def test_r18_retention_orders_bundles_even_when_all_clocks_are_frozen(self):
+        import json, zipfile
+        from unittest.mock import patch
+        from uuid import UUID
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); (root / "config").mkdir(); (root / "config" / "rules.csv").write_text("a,b\n", encoding="utf-8")
+            ids = [UUID("ffffffff-0000-0000-0000-000000000000"), UUID("bbbbbbbb-0000-0000-0000-000000000000"), UUID("aaaaaaaa-0000-0000-0000-000000000000")]
+            with patch("v2.recovery.time.time", return_value=1700000000.0), \
+                 patch("v2.recovery.time.strftime", return_value="20261128-090000"), \
+                 patch("v2.recovery.time.monotonic_ns", return_value=999999), \
+                 patch("v2.recovery.time.perf_counter_ns", return_value=999999), \
+                 patch("v2.recovery.uuid.uuid4", side_effect=ids):
+                first = create_bundle(root, "first")
+                second = create_bundle(root, "second")
+                third = create_bundle(root, "third")
+            orders = []
+            for item in (first, second, third):
+                with zipfile.ZipFile(item["path"]) as z:
+                    orders.append(json.loads(z.read("recovery-manifest.json"))["created_order_ns"])
+            self.assertTrue(orders[0] < orders[1] < orders[2], f"Expected strictly increasing created_order_ns, got {orders}")
+            retained = apply_retention(root / "backups", keep=2)
+            self.assertEqual(len(retained), 2)
+            self.assertFalse(Path(first["path"]).exists())
+            self.assertTrue(Path(second["path"]).exists())
+            self.assertTrue(Path(third["path"]).exists())
+
+    def test_reset_rejects_nested_reparse_in_profile_and_source_cache(self):
+        for area in ("profile", "source_cache"):
+            with self.subTest(area=area), tempfile.TemporaryDirectory() as td:
+                root = Path(td); ws = root / "workspace"; state = ws / "state"
+                (state / "approved").mkdir(parents=True)
+                (state / "approved" / "keep.txt").write_text("keep", encoding="utf-8")
+                nested = state / area / "sub"
+                nested.mkdir(parents=True)
+                external = root / "external"; external.mkdir()
+                sentinel = external / "protected.txt"; sentinel.write_text("safe", encoding="utf-8")
+                link = nested / "escape"
+                try:
+                    link.symlink_to(external, target_is_directory=True)
+                except OSError:
+                    self.skipTest("Symlink creation unavailable")
+                with self.assertRaisesRegex(ValueError, "reparse|[Ss]ymlink"):
+                    reset_workspace(ws, "RESET")
+                self.assertEqual(sentinel.read_text(encoding="utf-8"), "safe")
+                self.assertTrue((state / "approved" / "keep.txt").is_file())
+
+    def test_verify_bundle_wraps_corrupt_archive_errors_as_value_error(self):
+        import zipfile, zlib
+        from unittest.mock import patch
+        from v2.recovery import verify_bundle
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            bad_zip = root / "bad.zip"; bad_zip.write_bytes(b"not a zip")
+            with self.assertRaises(ValueError):
+                verify_bundle(bad_zip)
+            no_manifest = root / "nomanifest.zip"
+            with zipfile.ZipFile(no_manifest, "w") as z:
+                z.writestr("settings.json", "{}")
+            with self.assertRaises(ValueError):
+                verify_bundle(no_manifest)
+            bad_json = root / "badjson.zip"
+            with zipfile.ZipFile(bad_json, "w") as z:
+                z.writestr("recovery-manifest.json", "{bad json")
+            with self.assertRaises(ValueError):
+                verify_bundle(bad_json)
+            bad_utf8 = root / "badutf8.zip"
+            with zipfile.ZipFile(bad_utf8, "w") as z:
+                z.writestr("recovery-manifest.json", b"\xff\xfe\xfd")
+            with self.assertRaises(ValueError):
+                verify_bundle(bad_utf8)
+            for exc in (EOFError("truncated"), RuntimeError("encrypted"), zlib.error("corrupt")):
+                with patch("v2.recovery.ZipFile", side_effect=exc):
+                    with self.assertRaises(ValueError):
+                        verify_bundle(no_manifest)
+
+    def test_undo_approval_ignores_blank_lines_in_history(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); data = root / "DATA"; data.mkdir(); source = data / "one.xlsx"
+            state = root / "state"
+            source.write_bytes(b"v1")
+            one = stage_update(data_dir=data, state_dir=state, processor=lambda _p, rel: [{"Event_Key": "E1", "Source File": rel}])
+            approve_stage(state, one["run_id"])
+            source.write_bytes(b"v2")
+            two = stage_update(data_dir=data, state_dir=state, processor=lambda _p, rel: [{"Event_Key": "E2", "Source File": rel}])
+            approve_stage(state, two["run_id"])
+            history = state / "logs" / "history.jsonl"
+            lines = history.read_text(encoding="utf-8").splitlines()
+            history.write_text("\n" + lines[0] + "\n   \n" + "\n".join(lines[1:]) + "\n\n", encoding="utf-8")
+            result = undo_approval(state, "UNDO")
+            self.assertEqual(result["restored_run_id"], one["run_id"])
+
+    def test_preview_rejects_reparse_config_history_directory(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); legacy = root / "legacy"; legacy.mkdir()
+            (legacy / "runtime").mkdir(); (legacy / "config").mkdir(); (legacy / "config-history").mkdir()
+            target_history = (legacy / "config-history").resolve()
+            real_is_reparse = __import__("v2.migration_preview", fromlist=["_is_reparse"])._is_reparse
+            def fake_reparse(path):
+                if Path(path).resolve() == target_history:
+                    return True
+                return real_is_reparse(path)
+            with patch("v2.migration_preview._is_reparse", side_effect=fake_reparse):
+                with self.assertRaisesRegex(ValueError, "reparse|[Ss]ymlink"):
+                    preview_package(legacy)
+
+    def test_copy_tree_checked_rejects_root_reparse(self):
+        from unittest.mock import patch
+        from v2.migration import _copy_tree_checked
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); real_dir = root / "real"; real_dir.mkdir(); (real_dir / "a.txt").write_text("x", encoding="utf-8")
+            with patch("v2.migration._is_reparse", side_effect=lambda p: Path(p) == real_dir):
+                with self.assertRaisesRegex(ValueError, "symlink|reparse"):
+                    _copy_tree_checked(real_dir, root / "copied_reparse")
+            self.assertFalse((root / "copied_reparse").exists())
+            link = root / "link_dir"
+            try:
+                link.symlink_to(real_dir, target_is_directory=True)
+            except OSError:
+                return
+            with self.assertRaisesRegex(ValueError, "symlink|reparse"):
+                _copy_tree_checked(link, root / "copied")
+            self.assertFalse((root / "copied").exists())
+
+    def test_import_records_utc_imported_at(self):
+        import json
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            legacy = root / "legacy"; legacy.mkdir(); data = legacy / "DATA"; data.mkdir()
+            (data / "fixture.xlsx").write_bytes(b"fixture")
+            app = App(root / "template")
+            try:
+                shutil.copytree(app.config, legacy / "config")
+            finally:
+                app.lock.close()
+            staged = stage_update(data_dir=data, state_dir=legacy / "runtime",
+                processor=lambda _p, rel: [{"Event_Key": "EV-1", "Source File": rel}])
+            approve_stage(legacy / "runtime", staged["run_id"])
+            report = preview_package(legacy)
+            target = root / "imported"
+            import_package(legacy, target, report["preview_sha256"])
+            manifest = json.loads((target / "migration-manifest.json").read_text(encoding="utf-8"))
+            self.assertIsInstance(manifest.get("imported_at"), str)
+            self.assertRegex(manifest["imported_at"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+
+    def test_http_migration_source_remapping_sets_moved_data_dir(self):
+        import json, threading
+        from http.client import HTTPConnection
+        from unittest.mock import patch
+        from v2.launcher import server_for
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); legacy = root / "legacy"; legacy.mkdir(); old_data = root / "old_DATA"; old_data.mkdir()
+            (old_data / "fixture.xlsx").write_bytes(b"fixture")
+            moved_data = root / "moved_DATA"; moved_data.mkdir()
+            (moved_data / "fixture.xlsx").write_bytes(b"fixture")
+            app = App(root / "active-workspace")
+            try:
+                shutil.copytree(app.config, legacy / "config")
+                staged = stage_update(data_dir=old_data, state_dir=legacy / "runtime",
+                    processor=lambda _p, rel: [{"Event_Key": "EV-1", "Source File": rel}])
+                approve_stage(legacy / "runtime", staged["run_id"])
+                server = server_for(app)
+                thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+                origin = "http://127.0.0.1:" + str(server.server_port)
+                def post(path, payload):
+                    conn = HTTPConnection("127.0.0.1", server.server_port)
+                    try:
+                        conn.request("POST", path, body=json.dumps(payload), headers={
+                            "Authorization": "Bearer " + app.token, "Origin": origin, "Content-Type": "application/json"})
+                        resp = conn.getresponse()
+                        return resp.status, json.loads(resp.read().decode("utf-8"))
+                    finally:
+                        conn.close()
+                try:
+                    # Remapping before preview must fail cleanly.
+                    status_before, _ = post("/api/migration-source", {})
+                    self.assertEqual(status_before, 400)
+                    class _FakeRoot:
+                        def withdraw(self): pass
+                        def attributes(self, *a): pass
+                        def destroy(self): pass
+                    with patch("tkinter.Tk", return_value=_FakeRoot()), \
+                         patch("tkinter.filedialog.askdirectory", side_effect=[str(legacy), str(moved_data)]):
+                        st_prev, preview = post("/api/migration-preview", {})
+                        self.assertEqual(st_prev, 200)
+                        st_src, src_resp = post("/api/migration-source", {})
+                        self.assertEqual(st_src, 200)
+                        self.assertEqual(src_resp["source_root"], str(moved_data.resolve()))
+                    st_bad, _ = post("/api/migration-import", {"confirm": "MIGRATE", "preview_sha256": preview["preview_sha256"], "source_root": str(root / "other")})
+                    self.assertEqual(st_bad, 400)
+                    # Omitting source_root while a remapped source is active must fail closed (no silent override).
+                    st_omit, _ = post("/api/migration-import", {"confirm": "MIGRATE", "preview_sha256": preview["preview_sha256"]})
+                    self.assertEqual(st_omit, 400)
+                    st_imp, imp = post("/api/migration-import", {"confirm": "MIGRATE", "preview_sha256": preview["preview_sha256"], "source_root": src_resp["source_root"]})
+                    self.assertEqual(st_imp, 200)
+                    self.assertIsNone(app.legacy_source_override)
+                    migrated_settings = json.loads((Path(imp["workspace"]) / "settings.json").read_text(encoding="utf-8"))
+                    self.assertEqual(migrated_settings["data_dir"], str(moved_data.resolve()))
+                    self.assertTrue(migrated_settings["requires_rescan"])
+                finally:
+                    server.shutdown(); thread.join(); server.server_close()
+            finally:
+                app.invalidate(); app.lock.close()
+
 
 if __name__ == "__main__":
     unittest.main()

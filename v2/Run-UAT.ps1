@@ -1,10 +1,11 @@
 param([ValidateSet('work','home')][string]$MachineRole='work')
 $ErrorActionPreference='Stop'
-$packageRoot=$PSScriptRoot
+$packageRoot=[IO.Path]::GetFullPath($PSScriptRoot)
+$packagePrefix=$packageRoot.TrimEnd([IO.Path]::DirectorySeparatorChar,[IO.Path]::AltDirectorySeparatorChar)+[IO.Path]::DirectorySeparatorChar
 $manifest=Get-Content -LiteralPath (Join-Path $packageRoot 'manifest.json') -Raw | ConvertFrom-Json
 foreach ($entry in $manifest.files) {
     $candidate=[IO.Path]::GetFullPath((Join-Path $packageRoot $entry.path))
-    if (-not $candidate.StartsWith($packageRoot+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe manifest path' }
+    if (-not $candidate.StartsWith($packagePrefix,[StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe manifest path' }
     $item=Get-Item -LiteralPath $candidate
     if ($item.Length -ne $entry.bytes -or (Get-FileHash -LiteralPath $candidate -Algorithm SHA256).Hash.ToLowerInvariant() -ne $entry.sha256) { throw "Package verification failed: $($entry.path)" }
 }

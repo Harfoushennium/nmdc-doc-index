@@ -151,19 +151,11 @@ def _safe_empty_register(root: Path, review: Mapping[str, Any], extractor, full_
     return True
 
 
-def _rewrite_latest_stage_without_notifications(state_dir: Path, summary: Mapping[str, Any]) -> dict[str, Any]:
-    """Keep Review Flags for actionable anomalies only.
+def _clean_stage_dir_without_notifications(stage_dir: Path, summary: Mapping[str, Any]) -> dict[str, Any]:
+    """Strip non-actionable lifecycle flags from a stage directory atomically before publishing."""
+    from .update_engine import _write_json_atomic
 
-    New/changed/reprocessed-source notifications remain fully visible in Pending
-    Update, dashboard counts, source decisions and Update History. They are not
-    parser findings and therefore must not ask the user for a Review Flags
-    decision.
-    """
     corrected = dict(summary)
-    run_id = str(corrected.get("run_id", ""))
-    if not run_id:
-        return corrected
-    stage_dir = Path(state_dir) / "staging" / run_id
     flags_path = stage_dir / "flags.json"
     summary_path = stage_dir / "summary.json"
     if not flags_path.exists() or not summary_path.exists():
@@ -187,8 +179,26 @@ def _rewrite_latest_stage_without_notifications(state_dir: Path, summary: Mappin
     corrected["review_flags"] = review_count
     corrected["status"] = "REVIEW_REQUIRED" if blocking else "STAGED"
 
-    flags_path.write_text(json.dumps(kept, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
-    summary_path.write_text(json.dumps(corrected, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+    _write_json_atomic(flags_path, kept)
+    _write_json_atomic(summary_path, corrected)
+    return corrected
+
+
+def _rewrite_latest_stage_without_notifications(state_dir: Path, summary: Mapping[str, Any]) -> dict[str, Any]:
+    """Keep Review Flags for actionable anomalies only.
+
+    New/changed/reprocessed-source notifications remain fully visible in Pending
+    Update, dashboard counts, source decisions and Update History. They are not
+    parser findings and therefore must not ask the user for a Review Flags
+    decision.
+    """
+    run_id = str(summary.get("run_id", ""))
+    if not run_id:
+        return dict(summary)
+    stage_dir = Path(state_dir) / "staging" / run_id
+    corrected = _clean_stage_dir_without_notifications(stage_dir, summary)
+    if corrected == dict(summary):
+        return corrected
 
     # Keep the most recent STAGED history row consistent with the corrected
     # summary so dashboard/history counts never disagree with Review Flags.
@@ -199,8 +209,8 @@ def _rewrite_latest_stage_without_notifications(state_dir: Path, summary: Mappin
             for index in range(len(lines) - 1, -1, -1):
                 row = json.loads(lines[index])
                 if str(row.get("event", "")) == "STAGED" and str(row.get("run_id", "")) == run_id:
-                    row["blocking_flags"] = blocking
-                    row["review_flags"] = review_count
+                    row["blocking_flags"] = corrected["blocking_flags"]
+                    row["review_flags"] = corrected["review_flags"]
                     row["status"] = corrected["status"]
                     lines[index] = json.dumps(row, ensure_ascii=False, sort_keys=True)
                     history_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -345,11 +355,16 @@ def install_layout_compatibility() -> None:
         return records, reconciliation, kept_reviews
 
     def clean_stage_update(*args, **kwargs):
-        summary = original_stage_update(*args, **kwargs)
-        state_dir = kwargs.get("state_dir")
-        if state_dir is None:
-            return summary
-        return _rewrite_latest_stage_without_notifications(Path(state_dir), summary)
+        outer_finalize = kwargs.get("finalize_stage")
+        def chained_finalize(stage_dir: Path, summary: Mapping[str, Any]) -> dict[str, Any]:
+            cleaned = _clean_stage_dir_without_notifications(stage_dir, summary)
+            if outer_finalize is not None:
+                updated = outer_finalize(stage_dir, cleaned)
+                if isinstance(updated, Mapping):
+                    return dict(updated)
+            return cleaned
+        kwargs["finalize_stage"] = chained_finalize
+        return original_stage_update(*args, **kwargs)
 
     extractor._is_doc_header = is_doc_header
     extractor._header_candidates = header_candidates

@@ -48,4 +48,32 @@ class ExportAcceptance(unittest.TestCase):
             self.assertEqual(sheet.findall(".//"+NS+"f"),[])
             strings="".join(ET.fromstring(z.read("xl/sharedStrings.xml")).itertext())
             for value in row.values():self.assertIn(value,strings)
+
+    def test_partition_export_manifest_includes_ordered_keys_ranges_hashes_links_and_fields(self):
+        import hashlib, json
+        from v2.launcher import partition_export
+        rows = [
+            {"Event_Key": "E3", "Document Link": r"C:\Project\3.pdf", "Source Workbook Path": r"\\srv\share\3.xlsx"},
+            {"Event_Key": "E1", "Document Link": r"C:\Project\1.pdf", "Source Workbook Path": r"\\srv\share\1.xlsx"},
+            {"Event_Key": "E2", "Document Link": r"C:\Project\2.pdf", "Source Workbook Path": r"\\srv\share\2.xlsx"},
+        ]
+        fields = ["Event_Key", "Document Link", "Source Workbook Path"]
+        archive = partition_export(rows, fields, link_limit=4)
+        with zipfile.ZipFile(io.BytesIO(archive)) as z:
+            self.assertIsNone(z.testzip())
+            manifest = json.loads(z.read("manifest.json").decode("utf-8"))
+            self.assertEqual(manifest["rows"], 3)
+            self.assertEqual(manifest["fields"], fields)
+            expected_keys_hash = hashlib.sha256(json.dumps(["E3", "E1", "E2"], ensure_ascii=False).encode("utf-8")).hexdigest()
+            sorted_keys_hash = hashlib.sha256(json.dumps(["E1", "E2", "E3"], ensure_ascii=False).encode("utf-8")).hexdigest()
+            self.assertEqual(manifest["keys_sha256"], expected_keys_hash)
+            self.assertNotEqual(manifest["keys_sha256"], sorted_keys_hash)
+            self.assertEqual(len(manifest["parts"]), 2)
+            p1, p2 = manifest["parts"]
+            self.assertEqual((p1["start_row"], p1["end_row"], p1["rows"], p1["native_links"]), (1, 2, 2, 4))
+            self.assertEqual((p2["start_row"], p2["end_row"], p2["rows"], p2["native_links"]), (3, 3, 1, 2))
+            for part in (p1, p2):
+                raw = z.read(part["file"])
+                self.assertEqual(part["bytes"], len(raw))
+                self.assertEqual(part["sha256"], hashlib.sha256(raw).hexdigest())
 if __name__=="__main__":unittest.main()

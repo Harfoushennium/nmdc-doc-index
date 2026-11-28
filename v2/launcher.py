@@ -126,14 +126,42 @@ def partition_plan(rows,fields,row_limit=MAX_EXCEL_ROWS,link_limit=MAX_EXCEL_LIN
     if start<len(rows) or not rows:result.append((start,len(rows)))
     return result
 
-def partition_export(rows,fields):
-    parts=partition_plan(rows,fields)
+def _export_row_key(row, fields):
+    for key in ("Event_Key", "Revision Key", "Revision_Key", "Global Document Key", "Global_Document_Key"):
+        value = row.get(key)
+        if value not in (None, ""):
+            return str(value)
+    return json.dumps({k: row.get(k, "") for k in fields}, sort_keys=True, ensure_ascii=False, default=str)
+
+def partition_export(rows, fields, row_limit=MAX_EXCEL_ROWS, link_limit=MAX_EXCEL_LINKS):
+    parts=partition_plan(rows,fields,row_limit=row_limit,link_limit=link_limit)
     if len(parts)<2:raise ValueError("Partitioning is not required")
+    ordered_keys=[_export_row_key(r,fields) for r in rows]
+    manifest_parts=[]
     b=io.BytesIO()
     with zipfile.ZipFile(b,"w",compression=zipfile.ZIP_STORED) as z:
         for i,(start,end) in enumerate(parts,1):
-            z.writestr(f"NMDC_INDEX_{i:03d}.xlsx",export_bytes(rows[start:end],fields,"xlsx"))
-        z.writestr("manifest.json",json.dumps({"rows":len(rows),"parts":[{"file":f"NMDC_INDEX_{i:03d}.xlsx","rows":end-start} for i,(start,end) in enumerate(parts,1)]},indent=2))
+            chunk=rows[start:end]
+            part_bytes=export_bytes(chunk,fields,"xlsx")
+            filename=f"NMDC_INDEX_{i:03d}.xlsx"
+            z.writestr(filename,part_bytes)
+            manifest_parts.append({
+                "file":filename,
+                "rows":end-start,
+                "start_row":start+1,
+                "end_row":end,
+                "bytes":len(part_bytes),
+                "sha256":hashlib.sha256(part_bytes).hexdigest(),
+                "native_links":sum(native_link(r,fields) for r in chunk),
+                "keys_sha256":hashlib.sha256(json.dumps(ordered_keys[start:end],ensure_ascii=False).encode("utf-8")).hexdigest(),
+            })
+        manifest={
+            "rows":len(rows),
+            "fields":list(fields),
+            "keys_sha256":hashlib.sha256(json.dumps(ordered_keys,ensure_ascii=False).encode("utf-8")).hexdigest(),
+            "parts":manifest_parts,
+        }
+        z.writestr("manifest.json",json.dumps(manifest,indent=2))
     return b.getvalue()
 
 def export_bytes(rows, fields, fmt):
@@ -265,14 +293,20 @@ class App:
                     result=unchanged.check(self.state,src,self.config,build)
                 if result is None:
                     before=unchanged.inputs(src,self.config,build)
-                    result=stage_runtime_update(data_dir=src,state_dir=self.state,config_dir=self.config,full_rescan=full,reuse_raw_profiles=True,checkpoint=checkpoint,verify_source_content=True,extraction_workers=min(4,os.cpu_count() or 1))
-                    after=None
-                    try:
-                        after=unchanged.inputs(src,self.config,build)
-                        result["input_proof"]=unchanged.stage_proof(self.state,result["run_id"],before,after,self.config)
-                    except (OSError,ValueError,KeyError,TypeError):
-                        result["input_proof"]=False;result["requires_rescan"]=True
-                    if before!=after:
+                    proof_state={"after":None,"input_proof":False,"requires_rescan":False}
+                    def pre_publish(stage_dir,summary):
+                        try:
+                            after=unchanged.inputs(src,self.config,build)
+                            proof_state["after"]=after
+                            proof_state["input_proof"]=unchanged.stage_proof(self.state,str(summary.get("run_id","") or stage_dir.name),before,after,self.config)
+                        except (OSError,ValueError,KeyError,TypeError):
+                            proof_state["input_proof"]=False;proof_state["requires_rescan"]=True
+                        if before!=proof_state["after"]:
+                            proof_state["requires_rescan"]=True
+                        return summary
+                    result=stage_runtime_update(data_dir=src,state_dir=self.state,config_dir=self.config,full_rescan=full,reuse_raw_profiles=True,checkpoint=checkpoint,verify_source_content=True,extraction_workers=min(4,os.cpu_count() or 1),finalize_stage=pre_publish)
+                    result["input_proof"]=proof_state["input_proof"]
+                    if proof_state["requires_rescan"]:
                         result["requires_rescan"]=True
                 with self.guard:
                     if self.cancel.is_set() and self.job.get("phase")!="Publish proposal":raise ScanCancelled("Cancelled before completing scan")
@@ -334,10 +368,20 @@ class App:
         model=models[scope]
         try:return model.page(query,column,sort,desc,filters,page,group)
         except NotImplementedError:
-            matched=apply_filters(filter_rows(rows,query,column,sort,desc),filters or {},model.fields)
-            counts=Counter(str(r.get(group,"")).casefold() for r in matched) if group else {}
+            if sort and sort not in model.fields:raise ValueError("Unknown sort field")
             if group and group not in model.fields:raise ValueError("Unknown grouping field")
-            return {"count":len(matched),"fields":model.fields,"rows":matched[page*100:(page+1)*100],"groups":[{"value":k,"count":v} for k,v in sorted(counts.items(),key=lambda kv:(-kv[1],kv[0]))[:100]]}
+            matched=apply_filters(filter_rows(rows,query,column),filters or {},model.fields)
+            groups=[]
+            if group:
+                counts=Counter();labels={}
+                for r in matched:
+                    raw=r.get(group,"")
+                    key=str(raw).casefold()
+                    counts[key]+=1
+                    if key not in labels:labels[key]=raw
+                groups=[{"value":labels[k],"count":v} for k,v in sorted(counts.items(),key=lambda kv:(-kv[1],kv[0]))[:100]]
+            if sort:matched.sort(key=lambda r:str(r.get(sort,"")).casefold(),reverse=desc)
+            return {"count":len(matched),"fields":model.fields,"rows":matched[page*100:(page+1)*100],"groups":groups}
     def prepare_views(self):
         # This work belongs to measured startup/promotion, before the UI becomes
         # ready. Queries never construct a cold model after a normal approval.
@@ -484,6 +528,11 @@ class App:
                 fingerprint=manifest.get("config_fingerprint")
                 if fingerprint and fingerprint!=fingerprint_paths([]) and fingerprint!=fingerprint_paths([self.config/"classification_rules.csv",self.config/"project_identity_overrides.csv"]):
                     raise ValueError("Configuration changed")
+                stage_hashes_path=self.state/"staging"/p["run"]/"stage_config_hashes.json"
+                if stage_hashes_path.exists():
+                    staged_hashes=read_json(stage_hashes_path,None)
+                    if not isinstance(staged_hashes,dict) or staged_hashes!=current["config"]:
+                        raise ValueError("Configuration changed")
             except (OSError,ValueError,KeyError,TypeError) as exc:
                 self.settings["requires_rescan"]=True;self.save_settings()
                 raise ValueError("Source or configuration changed; rescan before approval.") from exc
@@ -525,17 +574,45 @@ class App:
         finally:root.destroy()
         if not value:return {"cancelled":True}
         self.legacy_preview=preview_package(value)
+        self.legacy_source_override=None
         return self.legacy_preview
+    def select_migration_source(self,body=None):
+        self.idle()
+        preview=getattr(self,"legacy_preview",None)
+        if not preview:raise ValueError("Preview a legacy package before remapping its DATA folder.")
+        if isinstance(body,dict) and body.get("clear"):
+            self.legacy_source_override=None
+            return {"source_root":"","cleared":True}
+        import tkinter as tk
+        from tkinter import filedialog
+        root=tk.Tk();root.withdraw();root.attributes("-topmost",True)
+        try:value=filedialog.askdirectory(parent=root,title="Select moved NMDC DATA folder for migrated workspace",mustexist=True)
+        finally:root.destroy()
+        if not value:return {"cancelled":True,"source_root":str(getattr(self,"legacy_source_override","") or "")}
+        selected=Path(value).resolve(strict=True)
+        if not selected.is_dir():raise ValueError("Selected source root is not a folder.")
+        if selected==self.root or selected in self.root.parents or self.root in selected.parents:
+            raise ValueError("Selected migration source overlaps active workspace.")
+        self.legacy_source_override=str(selected)
+        return {"source_root":self.legacy_source_override}
     def migrate_legacy(self,body):
         self.idle()
         preview=getattr(self,"legacy_preview",None)
         if body.get("confirm")!="MIGRATE" or not preview or body.get("preview_sha256")!=preview["preview_sha256"]:
             raise ValueError("Preview the legacy package and type MIGRATE to confirm this exact inventory.")
         if preview["blockers"]:raise ValueError("Resolve migration compatibility blockers before import.")
+        source_override=getattr(self,"legacy_source_override",None)
+        requested_source=body.get("source_root") or None
+        if requested_source is not None and not isinstance(requested_source,str):
+            raise ValueError("Invalid remapped DATA folder.")
+        if requested_source!=source_override:
+            raise ValueError("Remapped DATA folder does not match the selected migration source.")
         self.backup("Before side-by-side migration")
         target=self.root.parent/(self.root.name+"-migrated-"+secrets.token_hex(5))
         if self.settings.get("data_dir") and (target==self.source() or self.source() in target.parents):raise ValueError("Migration destination overlaps DATA")
-        return import_package(preview["package"],target,preview["preview_sha256"])
+        result=import_package(preview["package"],target,preview["preview_sha256"],source_root=source_override)
+        self.legacy_source_override=None
+        return result
     def reset(self,body):
         self.idle()
         if body.get("confirm")!="RESET":raise ValueError("Type RESET to confirm clearing active runtime views.")
@@ -730,7 +807,7 @@ def server_for(app):
             self.send_header("X-Content-Type-Options","nosniff"); self.send_header("Referrer-Policy","no-referrer")
             self.send_header("Content-Security-Policy","default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
             if name:self.send_header("Content-Disposition",'attachment; filename="'+name+'"')
-            self.end_headers();self.wfile.write(payload)
+            self.end_headers();self.wfile.write(payload);self.wfile.flush()
         def auth(self,api=True):
             expected="127.0.0.1:"+str(self.server.server_port)
             if self.headers.get("Host")!=expected: raise PermissionError("Host rejected")
@@ -778,6 +855,7 @@ def server_for(app):
                         if fmt=="xlsx":
                             warnings=sum(v["literal_unverified"] for v in link_summary(rows,selected).values())
                             if warnings and (q.get("literal_links")!="confirmed" or q.get("run")!=app.approved()["run_id"]):raise ValueError("Some hyperlink targets must remain literal. Review export preview and confirm.")
+                            if date_exceptions(rows,selected) and (q.get("literal_dates")!="confirmed" or q.get("run")!=app.approved()["run_id"]):raise ValueError("Some date values precede the Excel date system and must remain literal. Review export preview and confirm.")
                         if fmt=="xlsx" and len(partition_plan(rows,selected))>1:
                             if q.get("partition")!="confirmed" or q.get("run")!=app.approved()["run_id"]:raise ValueError("Confirm partitioning for the current approved snapshot.")
                             return self.send(200,partition_export(rows,selected),"application/zip","NMDC_INDEX_PARTS.zip")
@@ -821,6 +899,7 @@ def server_for(app):
                     elif path=="/api/undo":result=app.undo(body)
                     elif path=="/api/reset":result=app.reset(body)
                     elif path=="/api/migration-preview":result=app.preview_legacy()
+                    elif path=="/api/migration-source":result=app.select_migration_source(body)
                     elif path=="/api/migration-import":result=app.migrate_legacy(body)
                     elif path=="/api/backup-policy":
                         keep=body.get("keep")
@@ -828,11 +907,15 @@ def server_for(app):
                         app.idle();app.settings["backup_retention"]=keep;app.save_settings();result={"keep":keep}
                     elif path=="/api/preferences":
                         if body.get("theme") not in ("light","dark"):raise ValueError("Invalid theme")
+                        if "density" in body and body.get("density") not in ("compact","comfortable"):raise ValueError("Invalid density")
                         app.settings["theme"]=body["theme"]
-                        if body.get("density") in ("compact","comfortable"):app.settings["density"]=body["density"]
+                        if "density" in body:app.settings["density"]=body["density"]
                         app.save_settings();result=app.settings
                     elif path=="/api/exit":
-                        app.idle();result={"status":"closing"};threading.Thread(target=self.server.shutdown,daemon=True).start()
+                        app.idle()
+                        self.send(200,{"status":"closing"})
+                        threading.Thread(target=self.server.shutdown,daemon=True).start()
+                        return
                     else:return self.send(404,{"error":"Unknown route"})
                     return self.send(200,result)
             except PermissionError as e:self.send(403,{"error":str(e)})

@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 from pathlib import Path
 
 from v2.migration_preview import preview_package
@@ -77,9 +78,9 @@ def import_package(package, target, confirmed_fingerprint, *, source_root=None):
             payload={"run":translation["run"],"baseline":baseline,"version":1,"dirty":True,"choices":translation["choices"]}
             (stage/"web_draft.json").write_text(json.dumps(payload,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
         config = scratch / "config"
-        shutil.copytree(package / "config", config)
+        _copy_tree_checked(package / "config", config)
         history = package / "config-history"
-        if history.is_dir():shutil.copytree(history, scratch / "config-history")
+        if history.is_dir():_copy_tree_checked(history, scratch / "config-history")
         # Preserve migration inputs that are evidence but not active V2 state.
         evidence = scratch / "migration-evidence"
         for rel in sorted(expected):
@@ -99,7 +100,8 @@ def import_package(package, target, confirmed_fingerprint, *, source_root=None):
         (scratch / "settings.json").write_text(json.dumps(settings, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         manifest = {"version": 1, "preview_sha256": report["preview_sha256"],
                     "source_inventory": expected, "approved_run": report["approved_run"],
-                    "approved_events": report["approved_events"], "imported_at": None}
+                    "approved_events": report["approved_events"],
+                    "imported_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
         (scratch / "migration-manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         expected_copies=set()
         for name,meta in expected.items():
@@ -138,9 +140,17 @@ def _sha256(path):
 
 def _copy_tree_checked(source, target):
     source = Path(source)
-    for path in source.rglob("*"):
-        if path.is_symlink() or _is_reparse(path) or not path.resolve().is_relative_to(source.resolve()):
-            raise ValueError("Unsafe symlink or path in legacy runtime: " + str(path))
+    if source.is_symlink() or _is_reparse(source):
+        raise ValueError("Unsafe symlink or reparse point in legacy runtime: " + str(source))
+    resolved_root = source.resolve()
+    for cur, dirs, files in os.walk(source, followlinks=False):
+        cur_path = Path(cur)
+        if cur_path.is_symlink() or _is_reparse(cur_path) or not cur_path.resolve().is_relative_to(resolved_root):
+            raise ValueError("Unsafe symlink or path in legacy runtime: " + str(cur_path))
+        for name in (*dirs, *files):
+            path = cur_path / name
+            if path.is_symlink() or _is_reparse(path) or not path.resolve().is_relative_to(resolved_root):
+                raise ValueError("Unsafe symlink or path in legacy runtime: " + str(path))
     shutil.copytree(source, target, symlinks=False)
 
 def _is_reparse(path):

@@ -23,20 +23,33 @@ def source_hashes(data):
 
 
 def peak_memory(pid):
-    import ctypes
-    from ctypes import wintypes
-    class Counters(ctypes.Structure):
-        _fields_=[("cb",wintypes.DWORD),("faults",wintypes.DWORD)]+[(name,ctypes.c_size_t) for name in ("peak_working_set","working_set","peak_paged","paged","peak_nonpaged","nonpaged","pagefile","peak_pagefile")]
-    kernel=ctypes.WinDLL("kernel32",use_last_error=True);psapi=ctypes.WinDLL("psapi",use_last_error=True)
-    kernel.OpenProcess.restype=wintypes.HANDLE;kernel.CloseHandle.argtypes=[wintypes.HANDLE]
-    psapi.GetProcessMemoryInfo.argtypes=[wintypes.HANDLE,ctypes.POINTER(Counters),wintypes.DWORD]
-    handle=kernel.OpenProcess(0x410,False,pid)
-    if not handle:return None
+    if os.name=="nt":
+        import ctypes
+        from ctypes import wintypes
+        class Counters(ctypes.Structure):
+            _fields_=[("cb",wintypes.DWORD),("faults",wintypes.DWORD)]+[(name,ctypes.c_size_t) for name in ("peak_working_set","working_set","peak_paged","paged","peak_nonpaged","nonpaged","pagefile","peak_pagefile")]
+        kernel=ctypes.WinDLL("kernel32",use_last_error=True);psapi=ctypes.WinDLL("psapi",use_last_error=True)
+        kernel.OpenProcess.restype=wintypes.HANDLE;kernel.CloseHandle.argtypes=[wintypes.HANDLE]
+        psapi.GetProcessMemoryInfo.argtypes=[wintypes.HANDLE,ctypes.POINTER(Counters),wintypes.DWORD]
+        handle=kernel.OpenProcess(0x410,False,pid)
+        if not handle:return None
+        try:
+            counters=Counters();counters.cb=ctypes.sizeof(counters)
+            if not psapi.GetProcessMemoryInfo(handle,ctypes.byref(counters),counters.cb):return None
+            return counters.peak_working_set
+        finally:kernel.CloseHandle(handle)
+    status_path=Path(f"/proc/{int(pid)}/status")
     try:
-        counters=Counters();counters.cb=ctypes.sizeof(counters)
-        if not psapi.GetProcessMemoryInfo(handle,ctypes.byref(counters),counters.cb):return None
-        return counters.peak_working_set
-    finally:kernel.CloseHandle(handle)
+        for line in status_path.read_text(encoding="utf-8",errors="ignore").splitlines():
+            if line.startswith("VmHWM:"):
+                parts=line.split()
+                if len(parts)>=2 and parts[1].isdigit():
+                    unit=parts[2].lower() if len(parts)>=3 else "kb"
+                    mult={"b":1,"kb":1024,"mb":1024**2,"gb":1024**3}.get(unit,1024)
+                    return int(parts[1])*mult
+    except OSError:
+        return None
+    return None
 
 
 def run(executable, data, output):
@@ -87,7 +100,7 @@ def run(executable, data, output):
                     query={'scope':'events','format':'xlsx'}
                     def export():
                         plan=api('/api/export-plan?'+urlencode(query))
-                        args=dict(query,preview=plan['preview'],run=plan['run'],literal_links='confirmed',partition='confirmed')
+                        args=dict(query,preview=plan['preview'],run=plan['run'],literal_links='confirmed',literal_dates='confirmed',partition='confirmed')
                         content=api('/api/export?'+urlencode(args),raw=True)
                         target=workspace/'measured-export.zip';target.write_bytes(content)
                         assert content[:2]==b'PK';return len(content)

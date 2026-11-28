@@ -62,6 +62,27 @@ class ExportHTTPAcceptance(unittest.TestCase):
         self.assertEqual(self.get('/api/export', q)[0], 200)
         self.assertEqual(self.get('/api/export', {'scope': 'events', 'format': 'json'})[0], 400)
 
+    def test_xlsx_export_requires_server_side_literal_dates_confirmation(self):
+        import io, zipfile
+        q = {'scope': 'events', 'format': 'xlsx'}
+        status, body = self.get('/api/export-plan', q)
+        self.assertEqual(status, 200)
+        plan = json.loads(body)
+        self.assertEqual(len(plan['date_exceptions']), 1)
+        base = dict(q, preview=plan['preview'], run=plan['run'], literal_links='confirmed')
+        # Without literal_dates=confirmed, server must reject with 400.
+        st_missing, err_body = self.get('/api/export', base)
+        self.assertEqual(st_missing, 400, err_body)
+        # Wrong run with literal_dates=confirmed must also reject with 400.
+        st_wrong_run, _ = self.get('/api/export', dict(base, run='stale-run', literal_dates='confirmed'))
+        self.assertEqual(st_wrong_run, 400)
+        # With literal_dates=confirmed and matching run/preview, server returns valid XLSX.
+        st_ok, data = self.get('/api/export', dict(base, literal_dates='confirmed'))
+        self.assertEqual(st_ok, 200, data)
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            self.assertIsNone(z.testzip())
+            self.assertIn('xl/tables/table1.xml', z.namelist())
+
 
 if __name__ == '__main__':
     unittest.main()
